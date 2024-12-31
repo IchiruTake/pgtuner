@@ -1,0 +1,21 @@
+# ======================== BIGT-PROFILE ========================
+[pgtuner_dba.profile.bigt]
+# This profile is for large instances, where workload is intensive. This profile assume that you have 32-128 CPU cores
+# with 128-512 GiB of memory and 50 TiB of database storage (including data files, WAL, and indexes) per instance.
+# This profile is suitable for OLAP systems that serves on 5-30+ regions. This profile uses the general-purpose ratio.
+# The scope scale is similar to the multi e-commerce platform. Multi-tenant applications happen here.
+
+# Memory is used to control the memory usage or database buffering of the database server.
+memory_gib_min = 128
+memory_gib_max = 512
+
+# Logical CPU is used to control the concurrency of the database server.
+cpu_core_min = 32
+cpu_core_max = 128
+
+# Storage is used to estimate the storage capacity of the database server for its sufficient workload
+storage_gib_max = 32768
+
+# Network bandwidth. This bandwidth does not neccessary reflect this optimization context, but it is used to
+# group the list of choices for the network bandwidth.
+network_mbps_max = 30000
