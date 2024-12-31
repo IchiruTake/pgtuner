@@ -1,0 +1,44 @@
+[LOGGER]
+LEVEL = 10                           # Default Level
+
+[LOGGER.PGTUNER_DBA.INFO_FILE_HANDLER]
+ENABLED = false
+ENCODING = "utf-8"
+DELAY = false
+ERRORS = "None"
+LEVEL = 20
+HANDLER_TYPE = "FileHandler"
+LOG_FILE_EXTENSION = "log"
+LOG_FILE_PATH = "log/pgtuner_info"
+LOG_FILEMODE = "a"
+LOG_ROTATE_WITH_DATE_ONLY = true
+LOG_ROTATE_WITH_DATE_TIME = false
+LOG_FORMAT = "[%(name)s-INFOFILE] [%(asctime)s] %(levelname)s: %(message)s"
+# MAX_BYTES = 64 * 1024 * 1024          # 64 MB
+# BACKUP_COUNT = 5
+
+[LOGGER.PGTUNER_DBA.DEBUG_FILE_HANDLER]
+ENABLED = true
+ENCODING = "utf-8"
+DELAY = false
+ERRORS = "None"
+LEVEL = 10
+HANDLER_TYPE = "FileHandler"
+LOG_FILE_EXTENSION = "log"
+LOG_FILE_PATH = "log/pgtuner_debug"
+LOG_FILEMODE = "a"
+LOG_ROTATE_WITH_DATE_ONLY = false
+LOG_ROTATE_WITH_TIME_ONLY = true
+LOG_FORMAT = "[%(name)s-DEBUGFILE] [%(asctime)s] [%(levelname)s] [File=%(pathname)s ; Line=%(lineno)d]: %(message)s"
+
+[LOGGER.PGTUNER_DBA.OUT_STREAM_HANDLER]
+ENABLED = true
+LEVEL = 10
+STREAM = "ext://sys.stdout"
+LOG_FORMAT = "[%(name)s-OUTSTREAM] [%(asctime)s] %(levelname)s: %(message)s"
+
+[LOGGER.PGTUNER_DBA.ERR_STREAM_HANDLER]
+ENABLED = true
+LEVEL = 40
+STREAM = "ext://sys.stderr"
+LOG_FORMAT = "[%(name)s-ERRSTREAM] [%(asctime)s] %(levelname)s: %(message)s"

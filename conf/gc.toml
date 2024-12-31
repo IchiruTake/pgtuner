@@ -1,0 +1,7 @@
+[GC]
+ALLO = 50000
+GEN_0 = 700
+GEN_1 = 100
+DEBUG = false
+CLEANUP_AND_FREEZE = true
+DISABLED = false

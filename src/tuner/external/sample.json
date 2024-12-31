@@ -1,0 +1,171 @@
+{
+  "start_time": "2024-12-25T03:42:46.290541Z",
+  "end_time": "2024-12-25T03:42:46.290541Z",
+  "physical_cpu_count": 4,
+  "logical_cpu_count": 8,
+  "cpu_times": {
+    "user": 4067.796875,
+    "system": 3309.4218749999964,
+    "idle": 15391.296875
+  },
+  "cpu_stats": {
+    "ctx_switches": 74175890,
+    "interrupts": 36625282,
+    "soft_interrupts": 0,
+    "syscalls": 873208349
+  },
+  "mem_virtual": {
+    "total": 16527003648,
+    "available": 3276152832,
+    "percent": 80.2
+  },
+  "mem_swap": {
+    "total": 12348030976,
+    "used": 599916544,
+    "free": 11748114432,
+    "percent": 4.9,
+    "sin": 0,
+    "sout": 0
+  },
+  "disk_partitions": [
+    {
+      "device": "C:\\",
+      "mountpoint": "C:\\",
+      "fstype": "NTFS",
+      "opts": "rw,fixed",
+      "usage": {
+        "path": "C:\\",
+        "total": 252841029632,
+        "used": 226266820608,
+        "free": 26574209024,
+        "percent": 89.5
+      },
+      "io_counter": {
+        "read_count": 1764231,
+        "write_count": 723803,
+        "read_bytes": 43822567424,
+        "write_bytes": 18157411840
+      }
+    }
+  ],
+  "net_io_counters": {
+    "Wi-Fi": {
+      "bytes_sent": 43658013,
+      "bytes_recv": 189167179,
+      "packets_sent": 61210,
+      "packets_recv": 171828,
+      "errin": 0,
+      "errout": 0,
+      "dropin": 0,
+      "dropout": 0
+    },
+    "Loopback Pseudo-Interface 1": {
+      "bytes_sent": 0,
+      "bytes_recv": 0,
+      "packets_sent": 0,
+      "packets_recv": 0,
+      "errin": 0,
+      "errout": 0,
+      "dropin": 0,
+      "dropout": 0
+    },
+    "Microsoft IP-HTTPS Platform Interface": {
+      "bytes_sent": 5731983,
+      "bytes_recv": 11439402,
+      "packets_sent": 17748,
+      "packets_recv": 23479,
+      "errin": 0,
+      "errout": 5,
+      "dropin": 0,
+      "dropout": 0
+    }
+  },
+  "net_if_addrs": {
+    "Wi-Fi": [
+      {
+        "family": -1,
+        "address": "F4-A4-75-D2-F6-95",
+        "netmask": null,
+        "broadcast": null,
+        "ptp": null
+      },
+      {
+        "family": 2,
+        "address": "192.168.0.174",
+        "netmask": "255.255.255.0",
+        "broadcast": null,
+        "ptp": null
+      }
+    ],
+    "Microsoft IP-HTTPS Platform Interface": [
+      {
+        "family": -1,
+        "address": "00-00-00-00-00-00-00-E0",
+        "netmask": null,
+        "broadcast": null,
+        "ptp": null
+      },
+      {
+        "family": 23,
+        "address": "2002:aaf8:e3da:1011:af2e:9031:f7db:a138",
+        "netmask": null,
+        "broadcast": null,
+        "ptp": null
+      },
+      {
+        "family": 23,
+        "address": "2002:aaf8:e3da:1011:a5b7:e659:9f54:a461",
+        "netmask": null,
+        "broadcast": null,
+        "ptp": null
+      },
+      {
+        "family": 23,
+        "address": "fe80::ba16:1357:6a62:c736",
+        "netmask": null,
+        "broadcast": null,
+        "ptp": null
+      }
+    ],
+    "Loopback Pseudo-Interface 1": [
+      {
+        "family": 2,
+        "address": "127.0.0.1",
+        "netmask": "255.0.0.0",
+        "broadcast": null,
+        "ptp": null
+      },
+      {
+        "family": 23,
+        "address": "::1",
+        "netmask": null,
+        "broadcast": null,
+        "ptp": null
+      }
+    ]
+  },
+  "net_if_stats": {
+    "Loopback Pseudo-Interface 1": {
+      "isup": true,
+      "duplex": 2,
+      "speed": 1073,
+      "mtu": 1500,
+      "flags": ""
+    },
+    "Wi-Fi": {
+      "isup": true,
+      "duplex": 2,
+      "speed": 2402,
+      "mtu": 1500,
+      "flags": ""
+    },
+    "Microsoft IP-HTTPS Platform Interface": {
+      "isup": true,
+      "duplex": 2,
+      "speed": 0,
+      "mtu": 1280,
+      "flags": ""
+    }
+  },
+  "boot_time": 1735095319.770328
+}

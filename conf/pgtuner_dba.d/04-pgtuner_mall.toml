@@ -1,0 +1,21 @@
+# ======================= MALL-PROFILE ========================
+[pgtuner_dba.profile.mall]
+# This profile is for large instances, where workload is intensive. This profile assume that you have 12-48 CPU cores
+# with 48-288 GiB of memory and 5 TiB of database storage (including data files, WAL, and indexes) per instance.
+# This profile is suitable for small data warehouses or OLAP systems that serves on 1-5 regions. This profile uses
+# the general-purpose to semi-memory-optimized ratio. The scope scale is similar to the large shopping mall.
+
+# Memory is used to control the memory usage or database buffering of the database server.
+memory_gib_min = 48
+memory_gib_max = 288
+
+# Logical CPU is used to control the concurrency of the database server.
+cpu_core_min = 12
+cpu_core_max = 48
+
+# Storage is used to estimate the storage capacity of the database server for its sufficient workload
+storage_gib_max = 5120
+
+# Network bandwidth. This bandwidth does not neccessary reflect this optimization context, but it is used to
+# group the list of choices for the network bandwidth.
+network_mbps_max = 12500

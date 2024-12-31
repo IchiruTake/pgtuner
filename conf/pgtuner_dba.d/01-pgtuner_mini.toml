@@ -1,0 +1,21 @@
+# ======================== MINI-PROFILE ========================
+[pgtuner_dba.profile.mini]
+# This profile is for small instances, where workload is non-intensive and minimally. This profile assume that you
+# have 1-4 CPU cores with 1-16 GiB of memory and 50 GiB of database storage (including data files, WAL, and indexes).
+# This profile is suitable for small websites, blogs, and small applications. This profile uses the general-purpose
+# ratio. The scope scale is similar to the single-branch store.
+
+# Memory is used to control the memory usage or database buffering of the database server.
+memory_gib_min = 4
+memory_gib_max = 16
+
+# Logical CPU is used to control the concurrency of the database server.
+cpu_core_min = 1
+cpu_core_max = 4
+
+# Storage is used to estimate the storage capacity of the database server for its sufficient workload
+storage_gib_max = 50
+
+# Network bandwidth. This bandwidth does not neccessary reflect this optimization context, but it is used to
+# group the list of choices for the network bandwidth.
+network_mbps_max = 500
