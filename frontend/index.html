@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>PgTuner-DBA</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style type="text/tailwindcss">
+			@layer utilities {
+				.content-auto {
+					content-visibility: auto;
+				}
+			}
+		</style>
+		<script>
+			const testFunction = () => {
+				const text = document.querySelector('#sample').value;
+				console.log('here', text);
+				const options = {
+					method: 'POST',
+					headers: {
+						'X-RapidAPI-Key': '************************************',
+						'X-RapidAPI-Host': 'weatherbit-v1-mashape.p.rapidapi.com',
+					},
+					body: JSON.stringify({ text }),
+				};
+				fetch(
+					'http://localhost:3001/disk', // endpoint here
+					options
+				)
+				.then(response => response.json())
+				.then(data => console.log(data))
+				.catch(error => console.error('Error:', error));
+			};
+		</script>
+	</head>
+	<body class="content-auto min-h-screen w-full flex flex-col">
+		<!-- Nav bar -->
+		<div class="flex justify-between items-center w-full p-3 bg-gray-200">
+			<a href="./index.html">Home</a>
+			<a href="./about-us.html">About Us</a>
+		</div>
+		<!-- <div
+			class="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-w-screen-2xl mx-auto"
+			id="dashboard"
+		>
+			<script>
+				document.addEventListener('DOMContentLoaded', () => {
+					const panels = [
+						{ label: 'Connection', name: 'connection', data: {} },
+						{ label: 'Disks', name: 'disks', data: {} },
+						{ label: 'Items', name: 'items', data: {} },
+						{ label: 'Keywords', name: 'keywords', data: {} },
+						{ label: 'Options', name: 'options', data: {} },
+						{ label: 'OptMode', name: 'optmode', data: {} },
+						{ label: 'Scope', name: 'scope', data: {} },
+						{ label: 'Utils', name: 'utils', data: {} },
+						{ label: 'Workload', name: 'workload', data: {} },
+					];
+					const panelHtml = panels
+						.map(({ label, name }) => {
+							return `<div class="bg-gray-200 w-full aspect-square rounded-lg p-2"><p class="text-yellow-500">${label}</p></div>`;
+						})
+						.join('');
+					document.querySelector('#dashboard').innerHTML = panelHtml;
+				});
+			</script>
+		</div> -->
+		<p>Sample input</p>
+		<div class="flex gap-3 p-3">
+			<input type="text" id="sample" class="border border-red-300 max-w-lg"/>
+			<button onclick="testFunction()">Submit</button>
+		</div>
+	</body>
+</html>
