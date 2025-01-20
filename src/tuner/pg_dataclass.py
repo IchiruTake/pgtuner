@@ -69,7 +69,7 @@ class PG_TUNE_RESPONSE(BaseModel):
                                   exclude_names: list[str] | set[str] = None) -> str:
         content: list[str] = [target.disclaimer(), '\n']
         if backup_settings:
-            content.append(f'# User Options: {request.options.model_dump(exclude={'vm_snapshot'})}\n')
+            content.append(f"# User Options: {request.options.model_dump(exclude={'vm_snapshot'})}\n")
         for idx, (scope, items) in enumerate(self.outcome[target].items()):
             content.append(f'## ============================== SCOPE: {scope} ============================== \n')
             for item_name, item in items.items():
