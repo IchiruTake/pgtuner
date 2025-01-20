@@ -31,7 +31,7 @@ The script includes two parts:
 - Collect and backup the database profile
 - Analyze the profile and generate suggestions
 
-This work may not be there without two great projects:
+This work may not be there without these great projects:
 - PostgreSQL: https://www.postgresql.org/
 - postgresqltuner: https://github.com/jfcoz/postgresqltuner/blob/master/postgresqltuner.pl
 - timescaledb-tune: https://github.com/timescale/timescaledb-tune
@@ -40,61 +40,57 @@ Install with library: pydantic python-dotenv typer "psycopg[binary,pool]" toml p
 
 """
 import os
-import typer
+from pprint import pprint
 from zoneinfo import ZoneInfo
-from pydantic import Field
-from typing import Annotated
-# from src.gtune import gtune as pgtuner_gtune
+import logging
+import logging.handlers
+from typing import Annotated, Literal
 from datetime import datetime
 
-from src.static.c_timezone import PreloadGetUTC
 from src.static.c_toml import LoadAppToml
-from src.static.vars import APP_NAME_LOWER, PRESET_PROFILE_CHECKSUM, DATETIME_PATTERN_FOR_FILENAME, Gi
-from src.utils.checksum import checksum
+from src.static.vars import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR
+from src.tuner.data.scope import PGTUNER_SCOPE
 
-from src import entry
-from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_SYS_SHARED_INFO
+from src import pgtuner
+from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
 
 # ==================================================================================================
 # Metadata
-TIMESTAMP = datetime.now(tz=PreloadGetUTC()[0]).strftime(DATETIME_PATTERN_FOR_FILENAME)
 
-
-# ==================================================================================================
-app = typer.Typer(name=APP_NAME_LOWER, no_args_is_help=True)
-# typer.style(fg=typer.colors.BRIGHT_CYAN, bold=True)  # Tune later
-
-@app.command()
 def validate():
     LoadAppToml(skip_checksum_verification=True)
 
 
-@app.command()
-def backup(
-        request: PG_TUNE_REQUEST,
-        pgtuner_env_file: Annotated[str | None, Field(default=".env", description="The environment file to load")],
-    ):
-    entry.init(request)
-    entry.backup(request, pgtuner_env_file, pgtuner_env_override=False)
-
-    return None
-
-
-@app.command()
-def optimize(
-        request: PG_TUNE_REQUEST,
-        pgtuner_env_file: Annotated[str | None, Field(default=".env", description="The environment file to load")],
-        **kwargs_sys_info,
-    ):
+def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'file', 'conf'] = 'conf'):
     # entry.init(request)
-    entry.optimize(request, pgtuner_env_file, env_override=False, **kwargs_sys_info)
+    response = pgtuner.optimize(request)
 
+    if request.options.enable_sysctl_general_tuning:
+        dt_start = datetime.now(ZoneInfo('UTC'))
+        filepath = f'{PGTUNER_SCOPE.KERNEL_SYSCTL.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
+        result = pgtuner.write(request, response, PGTUNER_SCOPE.KERNEL_SYSCTL, output_format=output_format,
+                               output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
+        pprint(result)
+
+
+    if request.options.enable_database_general_tuning:
+        dt_start = datetime.now(ZoneInfo('UTC'))
+        filepath = f'{PGTUNER_SCOPE.DATABASE_CONFIG.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
+        result = pgtuner.write(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, output_format=output_format,
+                               output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
+        pprint(result)
+
+    # Test the logger of rotation
+    # _logger = logging.getLogger(APP_NAME_UPPER)
+    # for _handlers in _logger.handlers:
+    #     if isinstance(_handlers, (logging.handlers.RotatingFileHandler, logging.handlers.TimedRotatingFileHandler)):
+    #         _handlers.doRollover()
     return None
 
 
 
 if __name__ == "__main__":
-    rq = entry.make_tune_request(is_os_user_managed=False)
-    backup(rq, pgtuner_env_file=None)
-    optimize(rq, pgtuner_env_file=None, vcpu=32, memory=32 * 6.5 * Gi, hyperthreading=True)
+    rq = pgtuner.make_tune_request(vcpu_sample=24, ram_sample=int(128 * Gi), hyperthreading=True)
+    # backup(rq, pgtuner_env_file=None)
+    optimize(rq, output_format='file')
     pass

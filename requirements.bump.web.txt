@@ -1,0 +1,8 @@
+-r requirements.bump.cli.txt
+fastapi[standard]
+orjson
+uvicorn
+httptools
+itsdangerous
+asgiref
+zstandard

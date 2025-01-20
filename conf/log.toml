@@ -1,21 +1,24 @@
 [LOGGER]
-LEVEL = 10                           # Default Level
+LEVEL = 0                           # Default Level
 
-[LOGGER.PGTUNER_DBA.INFO_FILE_HANDLER]
-ENABLED = true
+[LOGGER.PGTUNER_DBA.INFO_ROTATION_FILE_HANDLER]
+ENABLED = false
 ENCODING = "utf-8"
 DELAY = false
 ERRORS = "None"
 LEVEL = 20
-HANDLER_TYPE = "FileHandler"
+HANDLER_TYPE = "TimedRotatingFileHandler"
 LOG_FILE_EXTENSION = "log"
-LOG_FILE_PATH = "log/pgtuner_info"
+LOG_FILE_PATH = "log/pgtunerdba_info_timedrotate"
 LOG_FILEMODE = "a"
-LOG_ROTATE_WITH_DATE_ONLY = true
+LOG_ROTATE_WITH_DATE_ONLY = false
 LOG_ROTATE_WITH_DATE_TIME = false
-LOG_FORMAT = "[%(name)s-INFOFILE] [%(asctime)s] %(levelname)s: %(message)s"
-# MAX_BYTES = 64 * 1024 * 1024          # 64 MB
-# BACKUP_COUNT = 5
+LOG_FORMAT = "[%(name)s-INFO_TIMED_ROTATE] [%(asctime)s] %(levelname)s: %(message)s"
+WHEN = 'd'
+INTERVAL = 1    # 1 day
+BACKUP_COUNT = 14   # Keep for 14 days
+COMPRESSION = 'gzip:6'
+
 
 [LOGGER.PGTUNER_DBA.DEBUG_FILE_HANDLER]
 ENABLED = false
@@ -28,17 +31,12 @@ LOG_FILE_EXTENSION = "log"
 LOG_FILE_PATH = "log/pgtuner_debug"
 LOG_FILEMODE = "a"
 LOG_ROTATE_WITH_DATE_ONLY = false
-LOG_ROTATE_WITH_TIME_ONLY = true
+LOG_ROTATE_WITH_DATE_TIME = true
 LOG_FORMAT = "[%(name)s-DEBUGFILE] [%(asctime)s] [%(levelname)s] [File=%(pathname)s ; Line=%(lineno)d]: %(message)s"
 
-[LOGGER.PGTUNER_DBA.OUT_DEBUG_STREAM_HANDLER]
-ENABLED = false
-LEVEL = 10
-STREAM = "ext://sys.stdout"
-LOG_FORMAT = "[%(name)s-OUTSTREAM] [%(asctime)s] %(levelname)s: %(message)s"
 
-[LOGGER.PGTUNER_DBA.OUT_INFO_STREAM_HANDLER]
-ENABLED = true
+[LOGGER.PGTUNER_DBA.INFO_STREAM_HANDLER]
+ENABLED = false
 LEVEL = 20
 STREAM = "ext://sys.stdout"
 LOG_FORMAT = "[%(name)s-OUTSTREAM] [%(asctime)s] %(levelname)s: %(message)s"

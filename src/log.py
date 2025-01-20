@@ -11,12 +11,12 @@ References:
 """
 
 import logging
-import logging.handlers
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import sys
 import os.path
 from datetime import datetime, date
 from typing import Any
-
+from src._log_compressor import CompressRotatingFileHandler, CompressTimedRotatingFileHandler
 from src.static.c_timezone import GetTimezone
 from src.static.c_toml import TranslateNone
 from src.static.vars import DATE_PATTERN, DATETIME_PATTERN_FOR_FILENAME, APP_NAME_UPPER, Mi
@@ -32,24 +32,24 @@ def _BuildLogFilepath(profile: dict[str, Any], readonly_clogger: logging.Logger)
     log_rotate_with_date_time = profile.get('LOG_ROTATE_WITH_DATE_TIME', False)
 
     assert log_file_path != '', "LOG_FILE_PATH must be provided."
-    assert log_rotate_with_date_only != log_rotate_with_date_time, \
+    assert not all([log_rotate_with_date_only, log_rotate_with_date_time]), \
         "Logging with datetime and date-only are mutually exclusive."
 
-    dt: str = ''
     if log_rotate_with_date_only:
         dt = date.today().strftime(DATE_PATTERN)
+        return f'{log_file_path}.{dt}.{log_file_extension}'
     elif log_rotate_with_date_time:
         dt = datetime.now(tz=GetTimezone()[0]).strftime(DATETIME_PATTERN_FOR_FILENAME)
-    assert isinstance(dt, str), f"Invalid datetime format: {dt}. Expected a Python string."
-    return '.'.join([log_file_path, dt, log_file_extension])
+        return f'{log_file_path}.{dt}.{log_file_extension}'
+    return f'{log_file_path}.{log_file_extension}'
 
 
 def _BuildFileHandler(profile: dict[str, Any], readonly_clogger: logging.Logger) -> (
-        logging.FileHandler | logging.handlers.RotatingFileHandler | None):
+        logging.FileHandler | RotatingFileHandler | TimedRotatingFileHandler | None):
     # [00] Validation and Checkout if the handler is OK to proceed:
     handler_type: str = profile.get('HANDLER_TYPE')
     assert isinstance(handler_type, str), "handler_type must be provided."
-    if handler_type not in ('FileHandler', 'RotatingFileHandler'):
+    if handler_type not in ('FileHandler', 'RotatingFileHandler', 'TimedRotatingFileHandler'):
         return None
 
     encoding: str = profile.get('ENCODING', 'utf-8')
@@ -95,10 +95,27 @@ def _BuildFileHandler(profile: dict[str, Any], readonly_clogger: logging.Logger)
             assert isinstance(backup_count, int) and 0 < backup_count <= 128, \
                 "BACKUP_COUNT must be a positive integer, ranged from 0 to 128."
             if max_bytes == 0:
-                readonly_clogger.warning("MAX_BYTES is set to 0. The log file will not be rotated.")
-
-            h = logging.handlers.RotatingFileHandler(log_file_path, mode=log_filemode, encoding=encoding,
-                                                     delay=log_delay, maxBytes=max_bytes, backupCount=backup_count)
+                readonly_clogger.warning('MAX_BYTES is set to 0. The log file will not be rotated.')
+            compression_algorithm: str = profile.get('COMPRESSION', '')
+            print(f'Compression algorithm for {log_file_path}: {compression_algorithm}')
+            # h = RotatingFileHandler(log_file_path, mode=log_filemode, encoding=encoding,
+            #                         delay=log_delay, maxBytes=max_bytes, backupCount=backup_count)
+            h = CompressRotatingFileHandler(log_file_path, mode=log_filemode, encoding=encoding,
+                                            delay=log_delay, maxBytes=max_bytes, backupCount=backup_count,
+                                            compression_algorithm=compression_algorithm)
+        case 'TimedRotatingFileHandler':
+            when: str = profile.get('WHEN', 'D').lower()
+            interval: int = profile.get('INTERVAL', 1)
+            backup_count: int = profile.get('BACKUP_COUNT', 5)
+            assert isinstance(backup_count, int) and 0 < backup_count <= 128, \
+                'BACKUP_COUNT must be a positive integer, ranged from 0 to 128.'
+            compression_algorithm: str = profile.get('COMPRESSION', '')
+            print(f'Compression algorithm for {log_file_path}: {compression_algorithm}')
+            # h = TimedRotatingFileHandler(log_file_path, when=when, interval=interval, encoding=encoding,
+            #                              backupCount=backup_count, delay=log_delay, utc=False, atTime=None)
+            h = CompressTimedRotatingFileHandler(log_file_path, when=when, interval=interval, encoding=encoding,
+                                                 backupCount=backup_count, delay=log_delay, utc=False, atTime=None,
+                                                 compression_algorithm=compression_algorithm)
         case _:
             raise ValueError("Invalid handler_type value. Please check the value again.")
     formatter = logging.Formatter(log_format)
@@ -173,14 +190,17 @@ def BuildLogger(cfg: dict[str, Any]) -> logging.Logger:
 
     c_logger.setLevel(logger_level)
     c_handlers = list(c_logger.handlers)
+    _file_handlers = (logging.FileHandler, RotatingFileHandler, TimedRotatingFileHandler,
+                      CompressTimedRotatingFileHandler, CompressRotatingFileHandler)
     for c_handler in c_handlers:
-        if isinstance(c_handler, (logging.FileHandler, logging.handlers.RotatingFileHandler)):
+        if isinstance(c_handler, _file_handlers):
             c_logger.removeHandler(c_handler)
         if isinstance(c_handler, logging.StreamHandler):
             c_logger.removeHandler(c_handler)
 
     for h in _BuildHandlers(cfg[logger_name], readonly_clogger=c_logger):
         c_logger.addHandler(h)
+
 
     c_logger.info(f"Logger {logger_name} is created and initialized.")
     return c_logger

@@ -42,12 +42,11 @@ from psutil import (CONN_ESTABLISHED, CONN_SYN_SENT, CONN_SYN_RECV, CONN_FIN_WAI
                     NIC_DUPLEX_HALF, NIC_DUPLEX_UNKNOWN)
 from pydantic import BaseModel, Field, ByteSize
 from datetime import datetime, timezone
-import json
-from pydantic_core import from_json
-
-__all__ = ["SERVER_SNAPSHOT"]
-
 from src.static.vars import Gi
+
+__all__ = ['SERVER_SNAPSHOT', 'snapshot_sample']
+
+
 
 
 # ==================================================================================================
@@ -185,7 +184,7 @@ class SERVER_SNAPSHOT(BaseModel):
                              description="The system boot time expressed in seconds since the epoch", )
 
     @staticmethod
-    def take():
+    def profile_current_server():
         start_time: datetime = datetime.now(tz=timezone.utc)
         # CPU: https://psutil.readthedocs.io/en/latest/#psutil.cpu_times
         cpu_times: namedtuple = psutil.cpu_times(percpu=False)
@@ -239,19 +238,26 @@ class SERVER_SNAPSHOT(BaseModel):
             net_if_stats={nic: _NET_IF_STAT(**stat) for nic, stat in net_if_stats.items()}
         )
 
-    @staticmethod
-    def sample(vcpu: int = 4, memory: int = 16 * Gi, hyperthreading: bool = False):
+# ==================================================================================================
+_sample_cache: SERVER_SNAPSHOT | None = None
+
+def snapshot_sample(vcpu: int = 4, memory: ByteSize | int = 16 * Gi, hyperthreading: bool = False) -> SERVER_SNAPSHOT:
+    global _sample_cache
+    if _sample_cache is None:
         # Get the sample of the server snapshot, read as JSON and put as Pydantic model in SERVER_SNAPSHOT
         sample_jsonpath = os.path.abspath(os.path.join(os.path.dirname(__file__), 'sample.json'))
         if not os.path.exists(sample_jsonpath):
             raise FileNotFoundError(f"Sample JSON file not found at {sample_jsonpath}")
-
+        import json
         with open(sample_jsonpath, 'r') as f:
             data = json.load(f)
-            # SERVER_SNAPSHOT.model_validate(data)
-            snapshot = SERVER_SNAPSHOT(**data)
-            snapshot.physical_cpu_count = vcpu if not hyperthreading else vcpu // 2
-            snapshot.logical_cpu_count = vcpu
-            snapshot.mem_virtual.total = ByteSize(memory)
-            snapshot.mem_virtual.available = ByteSize(int(memory * snapshot.mem_virtual.percent))
-            return snapshot
+            _sample_cache = SERVER_SNAPSHOT(**data)
+
+    snapshot: SERVER_SNAPSHOT = _sample_cache.model_copy(deep=True)
+    snapshot.physical_cpu_count = vcpu if not hyperthreading else vcpu // 2
+    snapshot.logical_cpu_count = vcpu
+    snapshot.mem_virtual.total = ByteSize(memory)
+    # snapshot.mem_virtual.available = ByteSize(int(memory * snapshot.mem_virtual.percent))
+    # We used swap here to prevent incorrect error log
+    snapshot.mem_swap.total = ByteSize(max(memory // 4, 4 * Gi))
+    return snapshot

@@ -1,22 +1,8 @@
 # ======================== LARGE-PROFILE ========================
 [pgtuner_dba.profile.large]
-# This profile is for large instances, where workload is intensive. This profile assume that you have 6-16 CPU cores
-# with 24-64 GiB of memory and 1 TiB of database storage (including data files, WAL, and indexes) per instance.
-# This profile is suitable for small data warehouses and a mix use of OLTP/OLAP systems that serves on one country.
-# This profile uses the general-purpose to semi-memory-optimized ratio. The scope scale is similar to the small
-# shopping mall. Multi-tenant applications may happen here.
-
-# Memory is used to control the memory usage or database buffering of the database server.
 memory_gib_min = 24
-memory_gib_max = 96
-
-# Logical CPU is used to control the concurrency of the database server.
+memory_gib_max = 64
 cpu_core_min = 6
 cpu_core_max = 16
-
-# Storage is used to estimate the storage capacity of the database server for its sufficient workload
 storage_gib_max = 1024
-
-# Network bandwidth. This bandwidth does not neccessary reflect this optimization context, but it is used to
-# group the list of choices for the network bandwidth.
 network_mbps_max = 5000

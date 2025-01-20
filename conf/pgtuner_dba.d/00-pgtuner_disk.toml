@@ -28,9 +28,7 @@ ssdv1 = 350
 ssdv2 = 500
 ssdv3 = 525
 ssdv4 = 550
-ssdv5 = 550
-ssdv6 = 550
-ssdv7 = 550
+
 
 # We don't make custom value of NVME SSD such as PCIe 3.0/4.0 x8 or 3.0/4.0 x16, as it's extremely rare to nothing.
 # Also, if you have that drive, it is best that you should think as RAID 0/10 and scale the number instead of having
@@ -68,9 +66,6 @@ ssdv1 = 20000
 ssdv2 = 30000
 ssdv3 = 40000
 ssdv4 = 50000
-ssdv5 = 65000
-ssdv6 = 80000
-ssdv7 = 90000
 
 nvmepciev3x4v1 = 150000
 nvmepciev3x4v2 = 200000

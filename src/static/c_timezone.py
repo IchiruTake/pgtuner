@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from functools import lru_cache
 
 # ==================================================================================================
-__ZONE: str = "Europe/Paris"  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'
+__ZONE: str = "Asia/Saigon"  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'
 __TIMEZONE: ZoneInfo = ZoneInfo(__ZONE)  # ZoneInfo('UTC') or ZoneInfo('Europe/Paris')
 
 
@@ -21,7 +21,6 @@ def SwitchTimezone(zone: str) -> None:
     try:
         timezone = ZoneInfo(zone)
     except Exception as e:
-        
         print(f"{e} Invalid timezone: {zone}")
         return None
     __ZONE = zone

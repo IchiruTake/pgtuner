@@ -23,7 +23,7 @@ except ImportError as e:
     print(f"Failed to import rich: {e}")
 
 
-__all__ = ["TranslateNone", "LoadAppToml"]
+__all__ = ['TranslateNone', 'LoadAppToml']
 _logger = logging.getLogger(APP_NAME_UPPER)
 _max_depth: int = 6
 
@@ -114,7 +114,7 @@ def LoadAppToml(force: bool = False, expiry_seconds: int = 0, perform_checksum: 
         if expiry_seconds == 0:
             return __APP_CACHE[APP_NAME_LOWER + '-final'][1]
         if expiry_seconds < 0:
-            message = f"Invalid expiry_seconds value: {expiry_seconds}, expected a positive integer."
+            message = f'Invalid expiry_seconds value: {expiry_seconds}, expected a positive integer.'
             _logger.error(message)
             raise ValueError(message)
         for _, (cache_dt, _) in __APP_CACHE.items():

@@ -1,0 +1,26 @@
+[LOGGER]
+LEVEL = 10                           # Default Level
+
+[LOGGER.PGTUNER_DBA.WARN_ROTATION_FILE_HANDLER]
+ENABLED = false
+ENCODING = "utf-8"
+DELAY = false
+ERRORS = "None"
+LEVEL = 30
+HANDLER_TYPE = "TimedRotatingFileHandler"
+LOG_FILE_EXTENSION = "log"
+LOG_FILE_PATH = "log/pgtunerdba_web_warn"
+LOG_FILEMODE = "a"
+LOG_ROTATE_WITH_DATE_ONLY = false
+LOG_ROTATE_WITH_DATE_TIME = false
+LOG_FORMAT = "[%(name)s] [%(asctime)s] %(levelname)s: %(message)s"
+WHEN = 'd'
+INTERVAL = 1    # 1 day
+BACKUP_COUNT = 14   # Keep for 14 days
+COMPRESSION = 'gzip:9'
+
+[LOGGER.PGTUNER_DBA.OUT_STREAM_HANDLER]
+ENABLED = true
+LEVEL = 35
+STREAM = "ext://sys.stdout"
+LOG_FORMAT = "[%(name)s] [%(asctime)s] %(levelname)s: %(message)s"

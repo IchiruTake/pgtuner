@@ -1,6 +1,5 @@
 import gc
 import toml
-from pprint import pprint
 from src.static.vars import LOG_FILE_PATH, GC_FILE_PATH
 from src.log import BuildLogger
 
@@ -22,15 +21,17 @@ def optimize_garbage_scheduler() -> None:
 
     return None
 
+def build_logger():
+    with open(LOG_FILE_PATH, 'r') as f:
+        _content = toml.load(f)['LOGGER']
+        if __debug__:
+            from pprint import pprint
+            pprint(_content)
+        return BuildLogger(_content)
+
 # ==================================================================================================
-print("Optimizing garbage collector...")
+print('Optimizing garbage collector and build logger...')
 optimize_garbage_scheduler()
-print("Garbage collector is optimized.")
-
-with open(LOG_FILE_PATH, 'r') as f:
-    print("Building logger...")
-    _content = toml.load(f)['LOGGER']
-    pprint(_content)
-
-    LOGGER = BuildLogger(_content)
-    print("Logger is built.")
+print('Garbage collector is optimized.')
+build_logger()
+print('Logger is built.')

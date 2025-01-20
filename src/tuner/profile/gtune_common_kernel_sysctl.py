@@ -23,9 +23,7 @@ _<Scope>_<Description>_PROFILE = {
 from src.static.vars import Ki, K10, Mi
 from src.tuner.data.scope import PG_SCOPE
 
-
 __all__ = ["KERNEL_SYSCTL_PROFILE"]
-
 
 # =============================================================================
 # Kernel tuning profiles for the filesystem
@@ -317,11 +315,11 @@ _KERNEL_NETIPV4_PROFILE = {
 
     },
     "net.ipv4.tcp_keepalive_time": {
-        "default": 1800,
+        "default": 3600,
         "comment": "The number of seconds a connection needs to be idle before TCP begins sending out keep-alive "
-                   "probes. Keep-alives are only sent when the SO_KEEPALIVE socket option is enabled. The default value "
-                   "is 1800 seconds (30 mins). An idle connection is terminated after approximately an additional "
-                   "5.25 minutes (7 probes an interval of 45 seconds apart) when keep-alive is enabled.",
+                   "probes. Keep-alives are only sent when the SO_KEEPALIVE socket option is enabled. Our default "
+                   "value is 3600 seconds (1 hours). An idle connection is terminated after approximately an "
+                   "additional 5.25 minutes (7 probes an interval of 45 seconds apart) when keep-alive is enabled.",
     },
 }
 
@@ -406,9 +404,8 @@ _KERNEL_VM_PROFILE = {
 }
 
 KERNEL_SYSCTL_PROFILE = {
-    'fs-00': (PG_SCOPE.FILESYSTEM, _KERNEL_FS_PROFILE, 'disk'),
-    'net-00': (PG_SCOPE.NETWORK, _KERNEL_NETCORE_PROFILE, 'net'),
-    'net-01': (PG_SCOPE.NETWORK, _KERNEL_NETIPV4_PROFILE, 'net'),
-    'vm-00': (PG_SCOPE.VM, _KERNEL_VM_PROFILE, 'cpu')
+    'fs-00': (PG_SCOPE.FILESYSTEM, _KERNEL_FS_PROFILE, {'hardware_scope': 'disk'}),
+    'net-00': (PG_SCOPE.NETWORK, _KERNEL_NETCORE_PROFILE, {'hardware_scope': 'net'}),
+    'net-01': (PG_SCOPE.NETWORK, _KERNEL_NETIPV4_PROFILE, {'hardware_scope': 'net'}),
+    'vm-00': (PG_SCOPE.VM, _KERNEL_VM_PROFILE, {'hardware_scope': 'cpu'})
 }
-

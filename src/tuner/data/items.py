@@ -1,8 +1,9 @@
 import string
+from enum import Enum, auto, verify, CONTINUOUS
 from pprint import pformat
 from typing import Any, Callable
+
 from pydantic import BaseModel, Field
-from enum import Enum, auto, verify, CONTINUOUS
 
 __all__ = ["PG_TUNE_ITEM"]
 
@@ -16,25 +17,32 @@ class OUTPUT_MODE(int, Enum):
     FORCE = auto()
     FORCE_WITH_COMMENT = auto()
 
+
 class PG_TUNE_ITEM(BaseModel):
     key: str = Field(..., description="The key of the sysctl configuration", frozen=True)
     before: Any = Field(..., description="The system information value before tuning", frozen=True)
     after: Any = Field(..., description="The system information value after tuning", frozen=False)
     comment: str | None = Field(None, description="The comment about the tuning process", frozen=True)
+
+    # Custom-reserved variables for developers
     style: str | None = Field(
         default="$1 = '$2'", frozen=True,
         description="The style of the tuning process. This is used to determine the style of the tuning"
     )
-
-    # Custom-reserved variables for developers
-    prefix: str | None = Field(None, description="The prefix for the syntax", frozen=True)
     trigger: Any = Field(description="The function that has been used to trigger the tuning for re-try", frozen=True)
     partial_func: Callable | None = (
         Field(default=None, frozen=True,
-              description="The partial function to output the result after finish the tuning")
+              description="The partial function to output the result after finish the tuning. This override the "
+                          "output format on the `after` field.")
+    )
+    hardware_scope: tuple[str, str] = (
+        Field(frozen=True,
+              description="The hardware scope of the tuning. The first value is the hardware type, the second value is "
+                          "its associated level (mini, medium, large, mall, bigt, ...)")
     )
 
-    def out(self, output_if_difference_only: bool = False, include_comment: bool = False) -> str:
+    def out(self, output_if_difference_only: bool = False, include_comment: bool = False,
+            custom_style: str | None = None) -> str:
         if output_if_difference_only and self.before == self.after:
             return ''
         texts = []
@@ -42,10 +50,8 @@ class PG_TUNE_ITEM(BaseModel):
             comment = str(pformat(self.comment)).replace('\n', '\n# ')
             texts.append(f"# {comment}")
 
-        style = self.style or "$1 = $2"
+        style = custom_style or self.style or "$1 = $2"
         assert "$1" in style and "$2" in style, f"Invalid style configuration: {style} due to missing $1 and $2"
-        if self.prefix:
-            style = ' '.join((self.prefix, style))
         if '  ' in style:
             style = ' '.join(style.split())
         after: str = self.out_display()
@@ -53,15 +59,24 @@ class PG_TUNE_ITEM(BaseModel):
         texts.append(f'\n{style}' if texts else style)
         return ''.join(texts)
 
-    def out_display(self) -> str:
+    def out_display(self, override_value = None) -> str:
         after = self.after
-        if self.partial_func is not None:
+        if override_value is not None:
+            after = override_value
+
+        if self.partial_func is not None:  # This function is used when we have hard-coded the output format already
             after = self.partial_func(after)
-        if isinstance(after, float):
+        elif isinstance(after, float):
             precision = self.float_precision()
             after = f'{round(after, precision):.{precision}f}'
-        if not isinstance(after, str):
+        if not isinstance(after, str):  # Force to be the string for easy text wrap-up
             after = str(after)
+        if '.' in after:
+            # Remove un-necessary whitespace and trailing zeros to beautify the output if it is a float
+            after = after.strip().rstrip('0')
+            if after.endswith('.'):  # We have over-stripped the trailing zero, add one 'zero' back
+                after = f'{after}0'
+
         # Wrap the text
         if isinstance(self.after, str) and (' ' in after or any(char in string.punctuation for char in after)):
             after = f"'{after}'"
@@ -70,11 +85,6 @@ class PG_TUNE_ITEM(BaseModel):
     @staticmethod
     def float_precision() -> int:
         return 4
-
-    @staticmethod
-    def cast(value: float) -> float:
-        precision = PG_TUNE_ITEM.float_precision()
-        return round(value, precision)
 
     def transform_keyname(self) -> str:
         # Text Transformation: Remove underscores to whitespace and capitalize the first character of each letter

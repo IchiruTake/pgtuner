@@ -27,7 +27,7 @@ from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.external.psutil_api import SERVER_SNAPSHOT
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_SYS_SHARED_INFO
-from src.tuner.profile.stune_db_config import stune_db_config
+from src.tuner.profile.stune_db_config import correction_tune
 from src.utils.env import GetEnvVar
 
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -260,7 +260,7 @@ def _tune_pgdb(request: PG_TUNE_REQUEST, sys_info: PG_SYS_SHARED_INFO):
         found_tuning = True
 
     if request.options.enable_database_correction_tuning:
-        stune_db_config(request, sys_info)
+        correction_tune(request, sys_info)
         found_tuning = True
 
     if not found_tuning:
@@ -273,7 +273,7 @@ def _tune_pgdb(request: PG_TUNE_REQUEST, sys_info: PG_SYS_SHARED_INFO):
     with open(os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), 'w') as f:
         f.write(f"# {APP_NAME_UPPER}: Tuning started at {dt_start} --> Completed at {dt_end}\n")
         f.write(f'# HOWTO: Apply the tuning result by copy the file under the /etc/postgresql/* directory or inside '
-                f'\n#the $PGDATA/conf/* or $PGDATA/* directory depending on how you start the PostgreSQL server.\n')
+                f'\n# the $PGDATA/conf/* or $PGDATA/* directory depending on how you start the PostgreSQL server.\n')
         f.write(f'# DISCLAIMER: The tuning result is based on the {APP_NAME_UPPER} application, and there is no '
                 f'\n# guarantee that the tuning result is the best for your system. Please consult with your system '
                 f'\n# administrator or the system engineer or DBA before applying the tuning result.\n')

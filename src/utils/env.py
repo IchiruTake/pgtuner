@@ -1,7 +1,7 @@
 import os
 from typing import Any, Callable
 
-__all__ = ["GetEnvVar", ]
+__all__ = ['GetEnvVar', ]
 
 def GetEnvVar(var_names: list[str] | None, default: Any,
               input_message_string: str = None,

@@ -1,7 +1,6 @@
 import os
-from typing import Any, Callable
 
-__all__ = ["SecureFileCheck", ]
+__all__ = ['SecureFileCheck', ]
 
 def SecureFileCheck(filename: str, directory: str = '~') -> str:
     """

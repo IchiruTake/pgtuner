@@ -1,21 +1,8 @@
 # ======================== MEDIUM-PROFILE ========================
 [pgtuner_dba.profile.medium]
-# This profile is for medium instances, where workload is moderate. This profile assume that you have 2-8 CPU cores
-# with 8-32 GiB of memory and 300 GiB of database storage (including data files, WAL, and indexes) per instance.
-# This is the profile of most of the PostgreSQL instances. This profile uses the general-purpose ratio. The scope scale
-# is similar to the multi-branch store.
-
-# Memory is used to control the memory usage or database buffering of the database server.
 memory_gib_min = 8
 memory_gib_max = 32
-
-# Logical CPU is used to control the concurrency of the database server.
 cpu_core_min = 2
 cpu_core_max = 8
-
-# Storage is used to estimate the storage capacity of the database server for its sufficient workload
 storage_gib_max = 300
-
-# Network bandwidth. This bandwidth does not neccessary reflect this optimization context, but it is used to
-# group the list of choices for the network bandwidth.
 network_mbps_max = 1000
