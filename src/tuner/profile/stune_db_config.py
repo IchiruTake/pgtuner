@@ -804,10 +804,10 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
         _logger.info(''.join(texts))
 
     _show_tuning_result('Result (before): ')
-    _logger.info(f'The working memory usage based on memory profile on all profiles are {
+    _logger.info(f"The working memory usage based on memory profile on all profiles are {
         '; '.join([f'{scope}={bytesize_to_hr(func(ro=request.options, si=response))}' 
                    for scope, func in _get_wrk_mem_func().items()])
-    }.')
+    }.")
 
     # Trigger the tuning
     _logger.debug(f'Expected maximum memory usage in normal condition: {stop_point * 100:.2f} (%) of {srv_mem_str}')
@@ -818,12 +818,12 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     working_memory = _get_wrk_mem(request.options.opt_memory_precision, request.options, response)
     working_memory_ratio = working_memory / usable_ram_noswap
     if working_memory_ratio < rollback_point:
-        _logger.info(f'''
+        _logger.info(f"""
 Your working memory usage based on memory profile is {working_memory_ratio * 100:.2f} (%) of the PostgreSQL usable 
 memory {srv_mem_str} or {bytesize_to_hr(working_memory)} which is less than the user-defined threshold. Proceed 
 to tune the shared_buffers, temp_buffers, work_mem, wal_buffers evenly with boost rate: {boost_ratio:.6f} under profile 
 mode = {request.options.opt_memory_precision}.
-''')
+""")
 
     # Save state before to stop if convergent is not met
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
