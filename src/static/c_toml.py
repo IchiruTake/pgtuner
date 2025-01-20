@@ -76,7 +76,7 @@ __APP_CACHE: dict[str, tuple[datetime, dict[str, typing.Any]]] = {
 
 }
 def LoadAppToml(force: bool = False, expiry_seconds: int = 0, perform_checksum: bool = True,
-                skip_checksum_verification: bool = False, verbose: bool = False) -> dict:
+                skip_checksum_verification: bool = True, verbose: bool = False) -> dict:
     """
     This function would load all the TOML files used for this application and saved it into our internal cache.
     If the :arg:`force` is set to True, the cache would be ignored and the TOML files would be reloaded. The
@@ -137,7 +137,9 @@ def LoadAppToml(force: bool = False, expiry_seconds: int = 0, perform_checksum: 
                           f'\n-> Current : {current_checksum}'
                           f'\n-> Matched : {current_checksum == preset_checksum}')
             if current_checksum != preset_checksum and not skip_checksum_verification:
-                message = f"\nThe expected TOML file {filepath} has been modified as the checksum is not matched."
+                message = (f"\nThe expected TOML file {filepath} has been modified as the checksum is not matched. "
+                           f"\n-> Expected: {preset_checksum}"
+                           f"\n-> Current : {current_checksum}")
                 _logger.warning(message)
                 raise ValueError(message)
 
