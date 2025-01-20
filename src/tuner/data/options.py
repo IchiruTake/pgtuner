@@ -368,7 +368,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                 self.base_monitoring_memory_usage = ByteSize(64 * Mi)
             elif self.operating_system in ('PaaS', 'DBaaS'):
                 self.base_monitoring_memory_usage = ByteSize(0 * Mi)
-            _logger.debug(f'Set the monitoring memory usage to {self.base_monitoring_memory_usage.human_readable(separator=' ')}')
+            _logger.debug(f"Set the monitoring memory usage to {self.base_monitoring_memory_usage.human_readable(separator=' ')}")
 
         if self.base_kernel_memory_usage == -1:
             self.base_kernel_memory_usage = ByteSize(768 * Mi)
@@ -378,7 +378,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                 self.base_kernel_memory_usage = ByteSize(2 * Gi)
             elif self.operating_system in ('PaaS', 'DBaaS'):
                 self.base_kernel_memory_usage = ByteSize(0 * Mi)
-            _logger.debug(f'Set the kernel memory usage to {self.base_kernel_memory_usage.human_readable(separator=' ')}')
+            _logger.debug(f"Set the kernel memory usage to {self.base_kernel_memory_usage.human_readable(separator=' ')}")
 
         # Check the database version is in the supported version
         if self.pgsql_version not in SUPPORTED_POSTGRES_VERSIONS:
