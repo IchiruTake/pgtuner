@@ -142,8 +142,7 @@ async def root_min():
 
 @app.get('/_health', status_code=status.HTTP_200_OK)
 async def health():
-    return ORJSONResponse(content={'status': 'HEALTHY'}, status_code=status.HTTP_200_OK,
-                          headers={'Cache-Control': 'max-age=60'})
+    return {'status': 'HEALTHY'}
 
 
 @app.get('/_version', status_code=status.HTTP_200_OK)
