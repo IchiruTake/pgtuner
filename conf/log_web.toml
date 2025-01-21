@@ -21,6 +21,6 @@ COMPRESSION = 'gzip:9'
 
 [LOGGER.PGTUNER_DBA.OUT_STREAM_HANDLER]
 ENABLED = true
-LEVEL = 20
+LEVEL = 40
 STREAM = "ext://sys.stdout"
 LOG_FORMAT = "[%(name)s] [%(asctime)s] %(levelname)s: %(message)s"

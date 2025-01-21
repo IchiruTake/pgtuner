@@ -75,7 +75,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         if backup_settings:
             content.append(f"# User Options: {request.options.model_dump()}\n")
         for idx, (scope, items) in enumerate(self.outcome[target].items()):
-            content.append(f'## ============================== SCOPE: {scope} ============================== \n')
+            content.append(f'## =============== SCOPE: {scope} =============== \n')
             for item_name, item in items.items():
                 if exclude_names is None or item_name not in exclude_names:
                     content.append(item.out(request.output_if_difference_only, request.include_comment,

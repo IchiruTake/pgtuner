@@ -9,7 +9,8 @@ from typing import Callable, Any
 from pydantic import ValidationError, ByteSize
 
 from src.static.c_toml import LoadAppToml
-from src.static.vars import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, SECOND
+from src.static.vars import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, \
+    SECOND, WEB_MODE
 from src.tuner.data.disks import network_disk_performance
 from src.tuner.data.options import backup_description, PG_TUNE_USR_OPTIONS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
@@ -80,9 +81,9 @@ def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQU
                 t_itm.after = t_itm.trigger(managed_cache, managed_cache, request.options, response)
                 managed_cache[key] = t_itm.after
                 if old_result != t_itm.after:
-                    change_list.append(key)
+                    change_list.append((key, t_itm.after))
     if change_list:
-        _logger.info(f'The following items are updated: {', '.join(change_list)}')
+        _logger.info(f'The following items are updated: {change_list}')
     else:
         _logger.warning('No change is detected in the trigger tuning.')
     return None
@@ -172,7 +173,7 @@ def _mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
                                                            *pairs[request.options.opt_memory])
     if before_effective_cache_size_available_ratio != after_effective_cache_size_available_ratio:
         kwargs.effective_cache_size_available_ratio = after_effective_cache_size_available_ratio
-        _logger.info(f'The effective_cache_size_heuristic_percentage is updated from '
+        _logger.info(f'The after_effective_cache_size_available_ratio is updated from '
                      f'{before_effective_cache_size_available_ratio} to {after_effective_cache_size_available_ratio}')
         _trigger_tuning({
             PG_SCOPE.MEMORY: ('shared_buffers',),
@@ -824,13 +825,6 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
 
     working_memory = _get_wrk_mem(request.options.opt_memory_precision, request.options, response)
     working_memory_ratio = working_memory / usable_ram_noswap
-    if working_memory_ratio < rollback_point:
-        _logger.info(f"""
-Your working memory usage based on memory profile is {working_memory_ratio * 100:.2f} (%) of the PostgreSQL usable 
-memory {srv_mem_str} or {bytesize_to_hr(working_memory)} which is less than the user-defined threshold. Proceed 
-to tune the shared_buffers, temp_buffers, work_mem, wal_buffers evenly with boost rate: {boost_ratio:.6f} under profile 
-mode = {request.options.opt_memory_precision}.
-""")
 
     # Save state before to stop if convergent is not met
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
@@ -878,7 +872,7 @@ mode = {request.options.opt_memory_precision}.
         if count == 1 or count % 4 == 0:
             _show_tuning_result(f'Result (Iteration #{count}): ')
 
-        # If we has been capped by the algorithm during the general tuning phase
+        # If we have been capped by the algorithm during the general tuning phase
         new_state = (managed_cache['shared_buffers'], managed_cache['temp_buffers'], managed_cache['work_mem'])
         if all(old == new for old, new in zip(state, new_state)):
             _logger.warning('The shared_buffers and work_mem are not increased as the convergence is met -> Stop ...')
@@ -1039,7 +1033,6 @@ def _logger_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     _item_tuning(key='track_wal_io_timing', after='on' if managed_cache['wal_level'] != 'minimal' else 'off',
                  scope=PG_SCOPE.QUERY_TUNING, response=response)
     _item_tuning(key='auto_explain.log_timing', after='on', scope=PG_SCOPE.EXTRA, response=response)
-
     return None
 
 
@@ -1052,15 +1045,8 @@ def _analyze(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
                  f'cache or {pgmem_remaining / request.options.usable_ram_noswap * 100:.2f} (%) of usable RAM capacity '
                  f'or {pgmem_remaining / request.options.ram_noswap * 100:.2f} (%) of total RAM capacity.')
 
-    max_normal_memory = response.mem_test(options=request.options, use_full_connection=True, ignore_report=False)[1]
-    _logger.info(f'In maximum normal working condition, the PostgreSQL server uses {bytesize_to_hr(max_normal_memory)} '
-                 f'which associated to {max_normal_memory /  request.options.usable_ram_noswap * 100:.2f} (%) of '
-                 f'usable RAM capacity or {max_normal_memory / request.options.ram_noswap * 100:.2f} (%) of total RAM '
-                 f'capacity.')
-    normal_memory = response.mem_test(options=request.options, use_full_connection=False, ignore_report=False)[1]
-    _logger.info(f'In normal working condition, the PostgreSQL server uses {bytesize_to_hr(normal_memory)} '
-                 f'which associated to {normal_memory /  request.options.usable_ram_noswap * 100:.2f} (%) of usable '
-                 f'RAM capacity or {normal_memory / request.options.ram_noswap * 100:.2f} (%) of total RAM capacity.')
+    response.mem_test(options=request.options, use_full_connection=True, ignore_report=False)
+    response.mem_test(options=request.options, use_full_connection=False, ignore_report=False)
     _logger.info('\n================================================================================================= ')
     return None
 
@@ -1091,5 +1077,6 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     _wrk_mem_tune(request, response)
     _wrk_mem_tune_final(request, response)
 
-    _analyze(request, response)
+    if not WEB_MODE:
+        _analyze(request, response)
     return None

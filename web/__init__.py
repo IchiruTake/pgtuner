@@ -13,9 +13,10 @@ from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import pgtuner
-from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR
+from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, Ki
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
+from web.middlewares.compressor import CompressMiddleware
 from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware
 from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
 
@@ -112,9 +113,10 @@ app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True,
                    allow_methods=['GET', 'POST'], allow_headers=[], max_age=600)
 app.add_middleware(GlobalRateLimitMiddleware, max_requests=50, interval_by_second=1)
 app.add_middleware(HeaderManageMiddleware)
+app.add_middleware(CompressMiddleware, minimum_size=(Ki >> 1), compress_level=3)
 _logger.info('The middlewares have been added to the application ...')
 
-_logger.info('Adding the static files to the application ...')
+_logger.info('Mounting the static files to the application ...')
 try:
     app.mount('/static', StaticFiles(directory='./web/ui/static'), name='static')
     _logger.info('The static files have been added to the application ...')
@@ -126,42 +128,34 @@ except (FileNotFoundError, RuntimeError) as e:
 
 @app.get('/', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 async def root():
-    return RedirectResponse(url='/static/index.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse(url='/static/index.min.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
 
 @app.get('/min', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 async def root_min():
     return RedirectResponse(url='/static/index.min.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
+@app.get('/dev', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+async def root_min():
+    return RedirectResponse(url='/static/index.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
 @app.get('/_health', status_code=status.HTTP_200_OK)
 async def health():
-    return {'status': 'HEALTHY'}
+    return ORJSONResponse(content={'status': 'HEALTHY'}, status_code=status.HTTP_200_OK,
+                          headers={'Cache-Control': 'max-age=60'})
 
 
 @app.get('/_version', status_code=status.HTTP_200_OK)
 async def version():
-    return {'frontend': __version__, 'backend': backend_version}
-
-
-@app.post('/send')
-async def send(user_options: PG_WEB_TUNE_USR_OPTIONS):
-    try:
-        backend_request = user_options.to_backend()
-    except ValidationError as err:
-        return ORJSONResponse(content={'message': 'Invalid Request', 'detail': err.errors()},
-                              status_code=status.HTTP_400_BAD_REQUEST)
-
-    return user_options
-
+    return ORJSONResponse(content={'frontend': __version__, 'backend': backend_version}, status_code=status.HTTP_200_OK,
+                          headers={'Cache-Control': 'max-age=360'})
 
 @app.post('/tune', status_code=status.HTTP_200_OK, response_class=ORJSONResponse)
-async def trigger_tune(
-        request: PG_WEB_TUNE_REQUEST,
-):
+async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     # Main website
-    print(f'Alter: {request.alter_style}, Backup: {request.backup_settings}, Output: {request.output_format}')
     try:
         backend_request = request.to_backend()
-        print(backend_request.options.ram_noswap, backend_request.options.usable_ram_noswap)
     except ValidationError as err:
         return ORJSONResponse(
             content={'message': 'Invalid Request', 'detail': err.errors()},
@@ -174,7 +168,9 @@ async def trigger_tune(
                                         output_format=request.output_format, backup_settings=request.backup_settings,
                                         exclude_names=exclude_names)
     if isinstance(content, dict):
-        return ORJSONResponse(content=content, status_code=status.HTTP_200_OK)
-    return PlainTextResponse(content=content, status_code=status.HTTP_200_OK)
+        mem_report = response.mem_test(backend_request.options, use_full_connection=False, ignore_report=True)[0]
+        return ORJSONResponse(content={'mem_report': mem_report, 'config': content},
+                              status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
+    return PlainTextResponse(content=content, status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
 
 

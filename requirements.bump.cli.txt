@@ -1,4 +1,3 @@
-psutil
 pydantic
 rich
 toml

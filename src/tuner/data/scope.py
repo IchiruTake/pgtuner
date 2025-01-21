@@ -24,15 +24,15 @@ class PG_SCOPE(Enum):
 
 
 class PGTUNER_SCOPE(Enum):
-    KERNEL_SYSCTL = "kernel_sysctl"
-    KERNEL_BOOT = "kernel_boot"
-    DATABASE_CONFIG = "database_config"
+    KERNEL_SYSCTL = 'kernel_sysctl'
+    KERNEL_BOOT = 'kernel_boot'
+    DATABASE_CONFIG = 'database_config'
 
     def disclaimer(self) -> str:
         dt = datetime.now(GetTimezone()[0])
         if self == PGTUNER_SCOPE.KERNEL_SYSCTL:
             return f"""# Read this disclaimer before applying the tuning result
-# ======================================================================================================
+# ============================================================
 # {APP_NAME_UPPER}-v{__VERSION__}: The tuning is started at {dt} 
 # -> Target Scope: {PGTUNER_SCOPE.KERNEL_SYSCTL}
 # DISCLAIMER: The kernel tuning options is based on our experience, and should not be applied directly 
@@ -42,11 +42,11 @@ class PGTUNER_SCOPE(Enum):
 # HOWTO: It is recommended to apply the tuning result by copying the file and pasting it under the 
 # /etc/sysctl.d/* directory. Please DO NOT apply the tuning result directly to the system by any means.
 # Ensure that the system is capable of rolling back the changes if the system is not working as expected. 
-# ======================================================================================================
+# ============================================================
 """
         elif self == PGTUNER_SCOPE.DATABASE_CONFIG:
             return f"""# Read this disclaimer before applying the tuning result
-# ======================================================================================================
+# ============================================================
 # {APP_NAME_UPPER}-v{__VERSION__}: The tuning is started at {dt} 
 # -> Target Scope: {PGTUNER_SCOPE.DATABASE_CONFIG}
 # DISCLAIMER: The kernel tuning options is based on our experience, and should not be applied directly 
@@ -62,6 +62,6 @@ class PGTUNER_SCOPE(Enum):
 # extension or external configuration from 3rd-party tools, ...), it is NOT recommended to apply the
 # tuning result directly to the system without a proper backup and testing.
 # Ensure that the system is capable of rolling back the changes if the system is not working as expected.
-# ======================================================================================================
+# ============================================================
 """
         return ""
