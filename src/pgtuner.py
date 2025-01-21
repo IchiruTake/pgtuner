@@ -14,7 +14,6 @@ from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
-from src.tuner.external.psutil_api import SERVER_SNAPSHOT
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
 from src.tuner.profile.stune_db_config import correction_tune
 from src.utils.timing import time_decorator
@@ -177,11 +176,8 @@ def make_tune_request(
         base_kernel_memory_usage: _SIZING = -1,
         base_monitoring_memory_usage: _SIZING = -1,
         tuning_keywords: PG_TUNE_USR_KWARGS = make_tuning_keywords(),
-        vcpu_sample: int = 4,
+        logical_cpu: int = 4,
         ram_sample: _SIZING = 16 * Gi,
-        hyperthreading: bool = True,
-        sample_hardware: bool = True,
-        vm_snapshot: SERVER_SNAPSHOT = None,
 
         ## PostgreSQL Data Integrity
         opt_transaction_lost: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.NONE,
@@ -192,7 +188,6 @@ def make_tune_request(
         max_num_logical_replicas_on_primary: PositiveInt = 0,
         max_backup_replication_tool: str = 'pg_basebackup',
         offshore_replication: bool = False,
-        attempt_zero_commit_delay: bool = False,
 
         ## How to output item
         output_if_difference_only: bool = False,
@@ -220,8 +215,7 @@ def make_tune_request(
         workload_type=workload_type, opt_memory=opt_memory, operating_system=operating_system,
         add_system_reserved_memory_into_ram=add_system_reserved_memory_into_ram,
         base_kernel_memory_usage=base_kernel_memory_usage, base_monitoring_memory_usage=base_monitoring_memory_usage,
-        tuning_kwargs=tuning_keywords, vcpu_sample=vcpu_sample, ram_sample=ram_sample, hyperthreading=hyperthreading,
-        sample_hardware=sample_hardware, vm_snapshot=vm_snapshot,
+        tuning_kwargs=tuning_keywords, vcpu=logical_cpu, ram_sample=ram_sample,
         opt_memory_precision=opt_memory_precision,
 
         ## PostgreSQL Data Integrity

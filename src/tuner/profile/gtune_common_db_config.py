@@ -12,10 +12,6 @@ _<Scope>_<Description>_PROFILE = {
             "*": Callable(),               # Optional, used to define the function to calculate the value
         }
 
-        # Post-condition is to validate the tuning item after the tuning is applied
-        "post-condition": Callable(),
-        "post-condition-group": Callable(),
-        "post-condition-all": Callable(),
     }
 }
 
@@ -28,53 +24,24 @@ from math import ceil
 from pydantic import ByteSize
 
 from src.static.vars import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
-    WAL_SEGMENT_SIZE, SECOND, PG_LOG_DIR
+    SECOND, PG_LOG_DIR
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
-from src.utils.pydantic_utils import bytesize_to_postgres_string, bytesize_to_postgres_unit, bytesize_to_hr
+from src.utils.pydantic_utils import (bytesize_to_postgres_string, bytesize_to_postgres_unit, bytesize_to_hr,
+                                      realign_value_to_unit, cap_value)
 from src.tuner.profile.gtune_common import merge_extra_info_to_profile, type_validation
 
-__all__ = ['DB_CONFIG_PROFILE',
-           'cap_value', "_is_out_range",
-           'realign_value_to_unit',
-           'calculate_maximum_mem_in_use',
-           'bytesize_to_postgres_string',
-           'bytesize_to_postgres_unit']
+__all__ = ['DB_CONFIG_PROFILE',]
 
 _SIZING = ByteSize | int | float
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 # We don't support other value as it does not bring benefit on all cases
 if DB_PAGE_SIZE != 8 * Ki:
-    raise ValueError("The database page size is not 8 KiB. The PostgreSQL server don't use any page size differed "
+    raise ValueError("The database page size is not 8 KiB. The PostgreSQL server do not use any page size differed "
                      "8 KiB or 8192 bytes")
-
-
-# if WAL_SEGMENT_SIZE != 16 * Mi:
-#     raise ValueError("The WAL segment size is not 16 MiB. The PostgreSQL server don't use any WAL segment size "
-#                      "differed 16 MiB or 16777216 bytes")
-
-
-def realign_value_to_unit(value: int | ByteSize, page_size: int = DB_PAGE_SIZE) -> tuple[int, int]:
-    # This function is used to ensure we re-align the :var:`value` to the nearest page size
-    d, m = divmod(int(value), page_size)
-    return d * page_size, (d + (1 if m > 0 else 0)) * page_size
-
-
-def cap_value(cvar: _SIZING, min_value: _SIZING, max_value: _SIZING,
-              redirect_number: tuple[_SIZING, _SIZING] = None) -> _SIZING:
-    if redirect_number is not None and len(redirect_number) == 2 and cvar == redirect_number[0]:
-        cvar = redirect_number[1]
-    return min(max(ByteSize(cvar) if isinstance(cvar, (ByteSize, int)) else cvar, min_value), max_value)
-
-
-def _is_out_range(cvar: _SIZING, min_value: _SIZING, max_value: _SIZING,
-                  redirect_number: tuple[_SIZING, _SIZING] = None) -> bool:
-    if redirect_number is not None and len(redirect_number) == 2 and cvar == redirect_number[0]:
-        cvar = redirect_number[1]
-    return not min_value <= ByteSize(cvar) <= max_value
 
 
 # =============================================================================
@@ -136,27 +103,6 @@ def __get_mem_connections(
     return int(num_conns * mem_conn_overhead)
 
 
-def calculate_maximum_mem_in_use(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
-                                 use_reserved_connection: bool = False, use_full_connection: bool = False) -> int:
-    managed_cache = response.get_managed_cache(PGTUNER_SCOPE.DATABASE_CONFIG)
-    mem_in_use = managed_cache['shared_buffers'] * options.tuning_kwargs.shared_buffers_fill_ratio
-
-    # We don't use max_parallel_workers_per_gather here as it leads to wrong thought that work_mem always use
-    # parallelism. We already added max_work_buffer_ratio into the work_mem calculation.
-    available_connections = __get_num_connections(options, response, use_reserved_connection, use_full_connection)
-    mem_in_use += (available_connections * managed_cache['work_mem'] * managed_cache['hash_mem_multiplier'])
-    mem_in_use += (available_connections * managed_cache['temp_buffers'])
-
-    # WAL buffers is added here for maximum memory estimation, to corporate high burst of data write in the
-    # correction tuning phase. Whilst the 'minimal' WAL level does not use too much memory, I think we should
-    # put it in here for a good estimation.
-    mem_in_use += managed_cache['wal_buffers']
-
-    _mem_conns = __get_mem_connections(options, response, use_reserved_connection, use_full_connection)
-    mem_in_use += int(_mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio)
-    return mem_in_use
-
-
 def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
     shared_buffers_ratio = options.tuning_kwargs.shared_buffers_ratio
     if shared_buffers_ratio < 0.25:
@@ -170,15 +116,11 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
         shared_buffers = cap_value(shared_buffers, 128 * Mi, 8 * Gi)
 
     if shared_buffers == 128 * Mi:
-        _logger.warning("No benefit is found on tuning this variable")
+        _logger.warning('No benefit is found on tuning this variable')
 
     # If these two met conditions meant that your database server is hard to get any better performance
     if shared_buffers > options.usable_ram_noswap:
-        _logger.error("The memory used for PostgreSQL or database would exceed the total memory. ")
-
-    if shared_buffers > options.usable_ram_noswap + options.vm_snapshot.mem_swap.total:
-        _logger.critical('The memory used for PostgreSQL or database would exceed the total memory and swap memory. '
-                         "For best performance, please consider increase the physical RAM memory")
+        _logger.error('The memory used for PostgreSQL or database would exceed the total memory.')
 
     # Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
     # probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
@@ -239,10 +181,9 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     max_cap: int = 256 * Mi
     if options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
         max_cap = 64 * Mi
-    if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP):
-        max_cap = 3 * Gi // 4
-    if options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.TSR_OLAP, PG_WORKLOAD.DATA_WAREHOUSE,
-                                 PG_WORKLOAD.DATA_LAKE):
+    if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.OLAP, PG_WORKLOAD.TSR_OLAP,
+                                 PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE):
+        # I don't think I will make risk beyond this number
         max_cap = 3 * Gi // 2
 
     temp_buffer_ratio = options.tuning_kwargs.temp_buffers_ratio
@@ -281,10 +222,10 @@ def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, response:
 
     allowed_connections: int = options.vcpu * __SCALE_FACTOR_CPU_TO_CONNECTION
     if allowed_connections <= 2 * total_reserved_connections:
-        _logger.warning("The number of connections is too low. Please consider increasing the number of connections.")
+        _logger.warning('The number of connections is too low. Please consider increasing the number of connections.')
     max_connections = cap_value(allowed_connections + total_reserved_connections,
                                 max(minimum, 2 * total_reserved_connections), maximum)
-    _logger.debug(f"max_connections: {max_connections}")
+    _logger.debug(f'max_connections: {max_connections}')
     return max_connections
 
 
@@ -383,10 +324,7 @@ _DB_CONN_PROFILE = {
                    "hundred of users query the on multiple different tables, with different queries access to pages "
                    "independently with different application purposes on different data files with short "
                    "query/transaction time, then you can increase more. However, that scenario is typically rare even"
-                   "even on OLTP/OLAP, Power Bi workload, and not a real-world scenario. The minimum of 25 connections "
-                   "are there to ensure you don't mess those up, even on the small instance",
-        'post-condition-group': lambda value, cache, response: value > 2 * (
-                cache['reserved_connections'] + cache['superuser_reserved_connections'])
+                   "even on OLTP/OLAP, Power Bi workload, and not a real-world scenario.",
     },
     'listen_addresses': {
         'default': '*', # '127.0.0.1/32, ::1/128, 192.168.0.0/16, 172.18.0.0/12, 10.0.0.0/8, 127.0.0.0/8',
@@ -478,11 +416,11 @@ _DB_VACUUM_PROFILE = {
         'instructions': {
             'mini_default': 1,
             'medium_default': 2,
-            'large': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 4, 3, 5),
+            'large': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 4, 2, 5),
             'mall': lambda group_cache, global_cache, options, response: cap_value(int(options.vcpu / 3.5), 3, 6),
-            'bigt': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 3, 3, 7),
+            'bigt': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 3, 3, 8),
         },
-        'default': 3,
+        'default': 2,
         'hardware_scope': 'cpu',
         'comment': "Specifies the maximum number of autovacuum worker processes that may be running at any one time. "
                    "The default is 3. Best options should be less than the number of CPU cores. Increase this if "
@@ -655,9 +593,6 @@ _DB_BGWRITER_PROFILE = {
                    "dedicated auxiliary process, are unaffected.) The default value is 300 pages on small servers "
                    "and max 500 pages on large servers. On strong servers, especially with SSD, we can have "
                    "a stronger write here.",
-        # Make it write less than 24 MiB/s to ensure the worst case on weak HDD
-        'post-condition-group':
-            lambda value, cache, options: value * DB_PAGE_SIZE * (int(cache['bgwriter_delay']) / 1000) < 24 * Mi,
     },
     'bgwriter_lru_multiplier': {
         'default': 2.0,
@@ -685,7 +620,7 @@ _DB_BGWRITER_PROFILE = {
 }
 
 _DB_ASYNC_DISK_PROFILE = {
-    "effective_io_concurrency": {
+    'effective_io_concurrency': {
         'default': 16,
         'comment': "Sets the number of concurrent disk I/O operations that PostgreSQL expects can be executed "
                    "simultaneously. Raising this value will increase the number of I/O operations that any individual "
@@ -703,32 +638,28 @@ _DB_ASYNC_DISK_PROFILE = {
                    "512 or above (but it is limited by PostgreSQL constraint). If you think these values are bad "
                    "during bitmap heap scan, disable it by setting it to 0. Note that this parameter is only beneficial "
                    "for the bitmap heap scan and not a big gamechanger. ",
-        'partial_func': lambda value: f"{value}",
     },
-    "maintenance_io_concurrency": {
+    'maintenance_io_concurrency': {
         'default': 10,
         'comment': "Similar to :var:`effective_io_concurrency`, but used for maintenance work that is done on behalf "
                    "of many client sessions. The default is 10 on supported systems, otherwise 0. During maintenance, "
                    "since the operation is mostly involved in sequential disk read and write during vacuuming and "
                    "index creation; thus, increasing this value may not benefit much.",
-        'partial_func': lambda value: f"{value}",
     },
 }
 
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            cap_value(int(options.vcpu * 1.5), 4, 1024),
+            cap_value(int(options.vcpu * 1.5), 4, 512),
         'default': 8,
         'comment': "Sets the maximum number of background processes that the system can support. The supported range "
-                   "is [4, 1024], with default to 1.5x of the logical CPU count (8 by official documentation).",
+                   "is [4, 512], with default to 1.5x of the logical CPU count (8 by official documentation).",
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            min(cap_value(int(options.vcpu * 1), 4, 1024), group_cache['max_worker_processes']),
+            min(cap_value(int(options.vcpu * 1), 4, 512), group_cache['max_worker_processes']),
         'default': 8,
-        'post-condition': lambda value: value > 0,
-        'post-condition-group': lambda value, cache, options: value <= cache['max_worker_processes'],
         'comment': "Sets the maximum number of workers that the cluster can support for parallel operations. The "
                    "supported range is [4, 1024], with default to 1.0x of the logical CPU count (8 by official "
                    "documentation). The number of parallel workers that default value is 8. When increasing or "
@@ -890,7 +821,6 @@ _DB_WAL_PROFILE = {
     },
     'wal_writer_flush_after': {
         'default': 1 * Mi,
-        "post-condition": lambda value: value >= 0 and value % DB_PAGE_SIZE == 0,
         'comment': 'Specifies how often the WAL writer flushes WAL, in volume terms. If the last flush happened less '
                    'than :var:`wal_writer_delay` ago and less than :var:`wal_writer_flush_after` worth of WAL has been '
                    'produced since, then WAL is only written to the operating system, not flushed to disk. If '
@@ -947,12 +877,8 @@ _DB_WAL_PROFILE = {
     },
     # ============================== WAL SIZE ==============================
     'min_wal_size': {
-        'instructions': {
-            'mall_default': 160 * Mi,
-            'bigt_default': 160 * Mi,
-        },
+        'tune_op': lambda group_cache, global_cache, options, response: 10 * options.tuning_kwargs.wal_segment_size,
         'default': 80 * Mi,
-        'post-condition': lambda value: value >= 0 and value % WAL_SEGMENT_SIZE == 0,
         'comment': 'As long as WAL disk usage stays below this setting, old WAL files are always recycled for future '
                    'use at a checkpoint, rather than removed. This can be used to ensure that enough WAL space is '
                    'reserved to handle spikes in WAL usage, for example when running large batch jobs. If this value '
@@ -962,14 +888,13 @@ _DB_WAL_PROFILE = {
     },
     'max_wal_size': {
         'instructions': {
-            "mini_default": 2 * Gi,
-            "medium_default": 8 * Gi,
-            "large_default": 24 * Gi,
-            "mall_default": 40 * Gi,
-            "bigt_default": 64 * Gi,
+            'mini_default': 2 * Gi,
+            'medium_default': 8 * Gi,
+            'large_default': 24 * Gi,
+            'mall_default': 40 * Gi,
+            'bigt_default': 64 * Gi,
         },
         'default': 8 * Gi,
-        'post-condition': lambda value: value >= 0 and value % WAL_SEGMENT_SIZE == 0,
         'comment': 'Maximum size to let the WAL grow during automatic checkpoints (soft limit only); WAL size can '
                    'exceed :var:`max_wal_size` under special circumstances such as heavy load, a failing '
                    ':var:`archive_command` or :var:`archive_library`, or a high :var:`wal_keep_size` setting.',
@@ -1139,17 +1064,16 @@ _DB_REPLICATION_PROFILE = {
     },
     'wal_keep_size': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(max(global_cache['max_wal_size'] // 8, global_cache['min_wal_size']),
-                                  page_size=WAL_SEGMENT_SIZE)[0],
+            realign_value_to_unit(max(global_cache['max_wal_size'] // 10, 10 * options.tuning_kwargs.wal_segment_size),
+                                  page_size=options.tuning_kwargs.wal_segment_size)[0],
         'default': 80 * Mi,
-        'post-condition': lambda value: value >= 0 and value % WAL_SEGMENT_SIZE == 0,
         'comment': 'Specifies the minimum size of past WAL files kept in the pg_wal directory, in case a standby '
                    'server needs to fetch them for streaming replication. If a standby server connected to the '
                    'sending server falls behind by more than wal_keep_size megabytes, the sending server might '
                    'remove a WAL segment still needed by the standby, in which case the replication connection '
                    'will be terminated. Downstream connections will also eventually fail as a result. (However, '
                    'the standby server can recover by fetching the segment from archive, if WAL archiving is in use). '
-                   'We set this value to be 12.5% of the max_wal_size, minimum at min_wal_size instead of zero '
+                   'We set this value to be 10% of the max_wal_size instead of zero '
                    'in official PostgreSQL documentation.',
         'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi)}MB',
     },
@@ -1234,7 +1158,6 @@ _DB_QUERY_PROFILE = {
     'effective_cache_size': {
         'tune_op': __effective_cache_size,
         'default': 4 * Gi,
-        "post-condition": lambda value: value > 0 and value % DB_PAGE_SIZE == 0,
         'comment': "Sets the planner's assumption about the effective size of the disk cache that is available to a "
                    "single query. This is factored into estimates of the cost of using an index; a higher value makes "
                    "it more likely index scans will be used, a lower value makes it more likely sequential scans will "
@@ -1261,7 +1184,7 @@ _DB_QUERY_PROFILE = {
     # Parallelism
     'parallel_setup_cost': {
         'instructions': {
-            "mall_default": 500,
+            'mall_default': 750,
             "bigt_default": 500,
         },
         'default': 1000,
@@ -1286,9 +1209,9 @@ _DB_QUERY_PROFILE = {
     # Commit Behaviour
     'commit_delay': {
         'instructions': {
-            "large_default": 500,
-            "mall_default": 500,
-            "bigt_default": 200,
+            'large_default': 500,
+            'mall_default': 500,
+            'bigt_default': 200,
         },
         'default': 1 * K10,
         'hardware_scope': 'overall',
@@ -1720,16 +1643,14 @@ _DB_LIB_PROFILE = {
     },
 }
 
-# ========================= #
+
 # Validate and remove the invalid library configuration
 preload_libraries = set(_DB_LIB_PROFILE['shared_preload_libraries']['default'].split(','))
 for key in list(_DB_LIB_PROFILE.keys()):
     if '.' in key and key.split('.')[0] not in preload_libraries:
         _DB_LIB_PROFILE.pop(key)
 
-
-# Even the scope is the same here, but different profile would make 'post-condition-group' is not reachable to
-# the other profile(s).
+# ========================= #
 DB_CONFIG_PROFILE = {
     'connection': (PG_SCOPE.CONNECTION, _DB_CONN_PROFILE, {'hardware_scope': 'cpu'}),
     'memory': (PG_SCOPE.MEMORY, _DB_RESOURCE_PROFILE, {'hardware_scope': 'mem'}),

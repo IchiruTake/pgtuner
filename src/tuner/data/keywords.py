@@ -1,9 +1,7 @@
 import logging
-from typing import Any
-
 from pydantic import BaseModel, Field
 from pydantic.types import PositiveFloat, PositiveInt, ByteSize
-from src.static.vars import APP_NAME_UPPER, K10, WAL_SEGMENT_SIZE, Mi, Ki, Gi, Ti
+from src.static.vars import APP_NAME_UPPER, K10, BASE_WAL_SEGMENT_SIZE, Mi, Ki, Gi, Ti
 
 __all__ = ["PG_TUNE_USR_KWARGS", ]
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -50,9 +48,9 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'It is recommended to set this value to at least 0.98 or higher.')
     )
     shared_buffers_ratio: PositiveFloat = (
-        Field(default=0.25, ge=0.15, lt=0.80,
+        Field(default=0.25, ge=0.15, lt=0.60,
               description='The ratio of shared_buffers ratio to the total non-database memory. The supported range '
-                          'is [0.15, 0.80), default is 0.25. If you have or prioritize the *simple* query that perform '
+                          'is [0.15, 0.60), default is 0.25. If you have or prioritize the *simple* query that perform '
                           'more READ (SELECT) than WRITE (INSERT/UPDATE/DELETE) between two WRITE interval in the '
                           '*same* table, than you can think of increasing **slowly** this value (1-2% increment change) '
                           'with consideration. However, we recommend that this value should be below 0.40 to prevent '
@@ -67,10 +65,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'your server still have 40.96 MiB of shared_buffers.')
     )
     max_work_buffer_ratio: PositiveFloat = (
-        Field(default=0.15, gt=0, le=0.75,
+        Field(default=0.075, gt=0, le=0.50,
               description='The ratio of the maximum PostgreSQL available memory (excluding shared_buffers and others) '
                           'to be used in the session-based variable: temp_buffers and work_mem (globally managed). The '
-                          'supported range is (0, 0.75], default is 0.15. The algorithm is temp_buffers + work_mem = '
+                          'supported range is (0, 0.50], default is 0.075. The algorithm is temp_buffers + work_mem = '
                           '(pgmem_available * max_work_buffer_ratio) / active_user_connections.')
     )
     effective_connection_ratio: PositiveFloat = (
@@ -91,20 +89,21 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'it is better to decrease this value (1-3% decrement is recommended).')
     )
     work_mem_scale_factor: PositiveFloat = (
-        Field(default=1.0, gt=0, le=3.0,
+        Field(default=1.0, gt=0.0, le=5.0,
               description='The scale factor of the work_mem. This property should only be changed if the result of '
                           'our global formula does not meet your expectation, and it is dedicated to the work_mem only. '
                           'Note that setting this attribute over 1.0 would make sum(temp_buffers + work_mem) with '
                           'the active_user_connections exceed the defined max_work_buffer_ratio. The supported range '
-                          'is (0, 3.0], default is 1.0. Only change it if you push the HASH, SORT, JOIN, or MERGE '
-                          'managed by the database instead of the application.')
+                          'is (0, 5.0], default is 1.0. Only change it if you push the HASH, SORT, JOIN, or MERGE '
+                          'managed by the database instead of the application. If you intend to have large work_mem '
+                          'without impacting the temp_buffers, then increase this scale factor and reduce the pool')
     )
     # These are used for memory_precision_tuning
     max_normal_memory_usage: PositiveFloat = (
-        Field(default=0.60, ge=0.35, le=0.85,
+        Field(default=0.45, ge=0.35, le=0.85,
               description='The maximum memory usage under normal PostgreSQL operation over the usable memory. This '
                           'holds as the upper bound to increase the variable before reaching the limit. The supported '
-                          'range is [0.35, 0.85], default is 0.60. Increase this ratio meant you are expecting your '
+                          'range is [0.35, 0.85], default is 0.45. Increase this ratio meant you are expecting your '
                           'server would have more headroom for the tuning and thus for database workload. It is '
                           'not recommended to set this value too high, as there are multiple constraints that prevent '
                           'further tuning to keep your server function properly without unknown incident such as '
@@ -142,8 +141,8 @@ class PG_TUNE_USR_KWARGS(BaseModel):
 
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
     wal_segment_size: PositiveInt = (
-        Field(default=WAL_SEGMENT_SIZE, ge=WAL_SEGMENT_SIZE, le=128 * WAL_SEGMENT_SIZE, frozen=True,
-              multiple_of=WAL_SEGMENT_SIZE,
+        Field(default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=128 * BASE_WAL_SEGMENT_SIZE, frozen=True,
+              multiple_of=BASE_WAL_SEGMENT_SIZE,
               description='The WAL segment size in PostgreSQL (in MiB). The supported range is [16, 2048] in MiB. '
                           'Whilst the tuning of this value is not recommended as mentioned in [36-39] due to some '
                           'hard-coded in 3rd-party tools, and benefits of WAL recovering, archiving, and transferring; '

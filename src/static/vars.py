@@ -62,7 +62,7 @@ E10: int = K10 ** 6
 Ei: int = Ki ** 6
 
 DB_PAGE_SIZE: int = 8 * Ki              # This is already hard-coded in the PostgreSQL source code
-WAL_SEGMENT_SIZE: int = 16 * Mi         # This is already hard-coded in the PostgreSQL source code
+BASE_WAL_SEGMENT_SIZE: int = 16 * Mi     # This is already hard-coded in the PostgreSQL source code
 # ==================================================================================================
 # SHA3-512
 RANDOM_IOPS: str = 'random_iops'
@@ -72,11 +72,11 @@ SUPPORTED_ALGORITHMS = Literal['shake_256', 'sha384', 'sha224', 'sha3_512', 'sha
 PRESET_PROFILE_CHECKSUM: tuple[tuple[str, SUPPORTED_ALGORITHMS, str], ...] = (
     (PGTUNER_PROFILE_FILE_PATH, 'sha3_512', '78076083d2429a01026015305e6299aed2ac75e804a01618f32218e533ec4e87414eb5988f7c62cdea83348b4a377131a1b61139dd6fa59a2a2f1ae042c1aced'),
     (f'{PGTUNER_PROFILE_DIR_PATH}/00-pgtuner_disk.toml', 'sha3_512', '151aec6e4de49fb27e1c16ca0eb821fa5d6eb5c41d7281d9c06bcf283a6be50bd3e00a1967a544723b2c070396d41bfe1ccc4cdeb67841a102f3e5550a55cb5d'),
-    (f'{PGTUNER_PROFILE_DIR_PATH}/01-pgtuner_mini.toml', 'sha3_512', 'd51b38243ce5ac6ef4624883831ea3a3f4e3cac85d1fcddc218e3c4062e95d0e5f9f4dbdc74d86fdc6488c9f50284eb6f16a41df8552199d5cb9a1c045f79b8a'),
-    (f'{PGTUNER_PROFILE_DIR_PATH}/02-pgtuner_medium.toml', 'sha3_512', '7c76060245dc0575ba9fc6f3bbe6d1bd94dff71c17428f3ab0f84e3556fdab5b97571173a68a0a6d4dd1892af326c300ded162ed970ab43a392431f93fb05e0a'),
-    (f'{PGTUNER_PROFILE_DIR_PATH}/03-pgtuner_large.toml', 'sha3_512', '87b7e76cee850fd2b961398f53875bff1c759b2d60018fb9042da49f028a500ce1d46f0e4eaf74a5f45957842b4214854ba90b3c881da2490411bfcedc599ef5'),
-    (f'{PGTUNER_PROFILE_DIR_PATH}/04-pgtuner_mall.toml', 'sha3_512', '1ea1d466880b920f0d7e268f0456654f474bf8c8c8bfcb741973b5c8ff6483513e275437373b703201a7ae6fdf4b0c8515e75e179e5376d9e62008498b2d98b9'),
-    (f'{PGTUNER_PROFILE_DIR_PATH}/05-pgtuner_bigt.toml', 'sha3_512', '5ec631f93963fde436d7f8c2ecbe4503baf734232d7196fa81d4a425b931cbb1b8a340a3fee68ab0a78f27f66416fa145b847cd4552d182991382bd1bc73497c'),
+    # (f'{PGTUNER_PROFILE_DIR_PATH}/01-pgtuner_mini.toml', 'sha3_512', 'd51b38243ce5ac6ef4624883831ea3a3f4e3cac85d1fcddc218e3c4062e95d0e5f9f4dbdc74d86fdc6488c9f50284eb6f16a41df8552199d5cb9a1c045f79b8a'),
+    # (f'{PGTUNER_PROFILE_DIR_PATH}/02-pgtuner_medium.toml', 'sha3_512', '7c76060245dc0575ba9fc6f3bbe6d1bd94dff71c17428f3ab0f84e3556fdab5b97571173a68a0a6d4dd1892af326c300ded162ed970ab43a392431f93fb05e0a'),
+    # (f'{PGTUNER_PROFILE_DIR_PATH}/03-pgtuner_large.toml', 'sha3_512', '87b7e76cee850fd2b961398f53875bff1c759b2d60018fb9042da49f028a500ce1d46f0e4eaf74a5f45957842b4214854ba90b3c881da2490411bfcedc599ef5'),
+    # (f'{PGTUNER_PROFILE_DIR_PATH}/04-pgtuner_mall.toml', 'sha3_512', '1ea1d466880b920f0d7e268f0456654f474bf8c8c8bfcb741973b5c8ff6483513e275437373b703201a7ae6fdf4b0c8515e75e179e5376d9e62008498b2d98b9'),
+    # (f'{PGTUNER_PROFILE_DIR_PATH}/05-pgtuner_bigt.toml', 'sha3_512', '5ec631f93963fde436d7f8c2ecbe4503baf734232d7196fa81d4a425b931cbb1b8a340a3fee68ab0a78f27f66416fa145b847cd4552d182991382bd1bc73497c'),
 )
 
 

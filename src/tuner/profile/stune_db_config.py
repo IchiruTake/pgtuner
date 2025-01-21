@@ -9,17 +9,16 @@ from typing import Callable, Any
 from pydantic import ValidationError, ByteSize
 
 from src.static.c_toml import LoadAppToml
-from src.static.vars import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, WAL_SEGMENT_SIZE, SECOND
+from src.static.vars import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, SECOND
 from src.tuner.data.disks import network_disk_performance
 from src.tuner.data.options import backup_description, PG_TUNE_USR_OPTIONS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
-from src.tuner.profile.gtune_common_db_config import cap_value, calculate_maximum_mem_in_use, realign_value_to_unit
 from src.utils.pydantic_utils import bytesize_to_hr
 from src.utils.timing import time_decorator
-
+from src.utils.pydantic_utils import realign_value_to_unit, cap_value
 
 __all__ = ['correction_tune']
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -27,8 +26,6 @@ _MIN_USER_CONN_FOR_ANALYTICS = 10
 _MAX_USER_CONN_FOR_ANALYTICS = 40
 _DEFAULT_WAL_SENDERS: tuple[int, int, int] = (3, 5, 7)
 _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
-
-
 
 # =============================================================================
 def _calculate_pgmem_worst_case_remaining(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> int:
@@ -655,6 +652,9 @@ def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     _item_tuning(key=max_wal_size, after=after_max_wal_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, before=managed_cache[max_wal_size])
     assert managed_cache[max_wal_size] <= int(_wal_disk_size), 'The max_wal_size is greater than the WAL disk size'
+    _trigger_tuning({
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE: ('wal_keep_size', )
+    }, request, response)
 
     # Tune the min_wal_size as these are not specifically related to the max_wal_size. This is the top limit of the
     # the WAL partition so that if the disk usage beyond the threshold (disk capacity - min_wal_size), the WAL file
@@ -665,7 +665,7 @@ def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     # sure those must be smaller than the WAL disk size)
     # Don't worry as this value is not important and only set as reserved boundary to prevent issue.
     min_wal_size = 'min_wal_size'
-    after_min_wal_size = max(min(5 * _kwargs.wal_segment_size, _wal_disk_size),
+    after_min_wal_size = max(min(10 * _kwargs.wal_segment_size, _wal_disk_size),
                              int((_wal_disk_size - managed_cache[max_wal_size]) * _kwargs.min_wal_ratio_scale))
     after_min_wal_size = realign_value_to_unit(after_min_wal_size, _kwargs.wal_segment_size)[1]
     _item_tuning(key=min_wal_size, after=after_min_wal_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
@@ -678,11 +678,11 @@ def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     # Tune the checkpoint timeout: This is hard to tune as it mostly depends on the amount of data change
     # (workload_profile), disk strength (IO), expected RTO.
     # In general, this is more on the DBA and business strategies. So I think the general tuning phase is good enough
-    if _kwargs.wal_segment_size > WAL_SEGMENT_SIZE:
+    if _kwargs.wal_segment_size > BASE_WAL_SEGMENT_SIZE:
         _logger.info('Start tuning the archive_timeout and checkpoint_timeout of the PostgreSQL database server based '
                      'on the WAL disk sizing')
         base_timeout: int = 5 * MINUTE
-        _wal_segment_size_scale = sqrt(_kwargs.wal_segment_size // WAL_SEGMENT_SIZE)
+        _wal_segment_size_scale = sqrt(_kwargs.wal_segment_size // BASE_WAL_SEGMENT_SIZE)
 
         # 30-seconds of precision
         archive_timeout = 'archive_timeout'
@@ -729,11 +729,19 @@ def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
 # =============================================================================
 # Tune the memory usage based on specific workload
 def _get_wrk_mem_func():
+    def _func_v1(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
+        return response.mem_test(options, use_full_connection=True, ignore_report=True)[1]
+
+    def _func_v2(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
+        return response.mem_test(options, use_full_connection=False, ignore_report=True)[1]
+
+    def _func_v3(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
+        return (_func_v1(options, response) + _func_v2(options, response)) // 2
+
     return {
-        PG_PROFILE_OPTMODE.SPIDEY: (lambda ro, si: calculate_maximum_mem_in_use(ro, si, use_full_connection=True)),
-        PG_PROFILE_OPTMODE.OPTIMUS_PRIME: (lambda ro, si: (calculate_maximum_mem_in_use(ro, si, use_full_connection=True) +
-                                                           calculate_maximum_mem_in_use(ro, si, use_full_connection=False)) // 2),
-        PG_PROFILE_OPTMODE.PRIMORDIAL: (lambda ro, si: calculate_maximum_mem_in_use(ro, si, use_full_connection=False)),
+        PG_PROFILE_OPTMODE.SPIDEY: _func_v1,
+        PG_PROFILE_OPTMODE.OPTIMUS_PRIME: _func_v3,
+        PG_PROFILE_OPTMODE.PRIMORDIAL: _func_v2,
     }
 
 
@@ -804,10 +812,9 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
         _logger.info(''.join(texts))
 
     _show_tuning_result('Result (before): ')
-    _logger.info(f"The working memory usage based on memory profile on all profiles are {
-        '; '.join([f'{scope}={bytesize_to_hr(func(ro=request.options, si=response))}' 
-                   for scope, func in _get_wrk_mem_func().items()])
-    }.")
+    _mem_check_string = '; '.join([f'{scope}={bytesize_to_hr(func(request.options, response))}'
+                                   for scope, func in _get_wrk_mem_func().items()])
+    _logger.info(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.')
 
     # Trigger the tuning
     _logger.debug(f'Expected maximum memory usage in normal condition: {stop_point * 100:.2f} (%) of {srv_mem_str}')
@@ -895,10 +902,9 @@ mode = {request.options.opt_memory_precision}.
                  f'(efficiency = {_kwargs.shared_buffers_fill_ratio * 100:.2f} (%) of total).')
     _logger.info(f'The max_work_buffer_ratio is now {_kwargs.max_work_buffer_ratio:.5f}.')
     _show_tuning_result('Result (after): ')
-    _logger.info(f'The working memory usage based on memory profile on all profiles are {
-    '; '.join([f'{scope}={bytesize_to_hr(func(ro=request.options, si=response))}'
-               for scope, func in _get_wrk_mem_func().items()])
-    }.')
+    _mem_check_string = '; '.join([f'{scope}={bytesize_to_hr(func(request.options, response))}'
+                                   for scope, func in _get_wrk_mem_func().items()])
+    _logger.info(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.')
 
     return None
 
@@ -1046,26 +1052,15 @@ def _analyze(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
                  f'cache or {pgmem_remaining / request.options.usable_ram_noswap * 100:.2f} (%) of usable RAM capacity '
                  f'or {pgmem_remaining / request.options.ram_noswap * 100:.2f} (%) of total RAM capacity.')
 
-    max_normal_memory = calculate_maximum_mem_in_use(request.options, response, use_full_connection=True)
+    max_normal_memory = response.mem_test(options=request.options, use_full_connection=True, ignore_report=False)[1]
     _logger.info(f'In maximum normal working condition, the PostgreSQL server uses {bytesize_to_hr(max_normal_memory)} '
                  f'which associated to {max_normal_memory /  request.options.usable_ram_noswap * 100:.2f} (%) of '
                  f'usable RAM capacity or {max_normal_memory / request.options.ram_noswap * 100:.2f} (%) of total RAM '
                  f'capacity.')
-    normal_memory = calculate_maximum_mem_in_use(request.options, response, use_full_connection=False)
+    normal_memory = response.mem_test(options=request.options, use_full_connection=False, ignore_report=False)[1]
     _logger.info(f'In normal working condition, the PostgreSQL server uses {bytesize_to_hr(normal_memory)} '
                  f'which associated to {normal_memory /  request.options.usable_ram_noswap * 100:.2f} (%) of usable '
                  f'RAM capacity or {normal_memory / request.options.ram_noswap * 100:.2f} (%) of total RAM capacity.')
-
-    # Check if the mem_init_test() still holds accurate enough?
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
-    hash_mem_multiplier = managed_cache['hash_mem_multiplier']
-    wal_buffers = managed_cache['wal_buffers'] if managed_cache['wal_level'] != 'minimal' else 0
-    user_connection = managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] - \
-                      managed_cache['reserved_connections']
-    request.options.mem_init_test(hash_mem_multiplier=hash_mem_multiplier, wal_buffers=wal_buffers,
-                                  user_connection=user_connection, use_full_connection=False)
-    request.options.mem_init_test(hash_mem_multiplier=hash_mem_multiplier, wal_buffers=wal_buffers,
-                                  user_connection=user_connection, use_full_connection=True)
     _logger.info('\n================================================================================================= ')
     return None
 

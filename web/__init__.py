@@ -153,8 +153,6 @@ async def send(user_options: PG_WEB_TUNE_USR_OPTIONS):
     return user_options
 
 
-
-
 @app.post('/tune', status_code=status.HTTP_200_OK, response_class=ORJSONResponse)
 async def trigger_tune(
         request: PG_WEB_TUNE_REQUEST,

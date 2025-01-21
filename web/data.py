@@ -5,18 +5,16 @@ from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
 from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, DEFAULT_INSTRUCTION_PROFILE, THROUGHPUT, RANDOM_IOPS, \
-    WAL_SEGMENT_SIZE
+    BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.disks import PG_DISK_PERF, string_disk_to_performance
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
+from src.tuner.pg_dataclass import PG_TUNE_REQUEST
 
 
 __all__ = ['PG_WEB_TUNE_USR_OPTIONS', 'PG_WEB_TUNE_REQUEST']
-
-from src.tuner.pg_dataclass import PG_TUNE_REQUEST
-
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 # =============================================================================
@@ -68,15 +66,15 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     memory_connection_to_dedicated_os_ratio: float = Field(default=0.3, ge=0.0, le=1.0)
 
     effective_cache_size_available_ratio: PositiveFloat = Field(default=0.99, ge=0.93, le=1.0)
-    shared_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.15, lt=0.80)
+    shared_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.15, lt=0.60)
     shared_buffers_fill_ratio: PositiveFloat = Field(default=0.995, ge=0.95, le=1.0)
-    max_work_buffer_ratio: PositiveFloat = Field(default=0.15, gt=0, le=0.75)
+    max_work_buffer_ratio: PositiveFloat = Field(default=0.075, gt=0, le=0.50)
     effective_connection_ratio: PositiveFloat = Field(default=0.75, ge=0.25, le=1.0)
     temp_buffers_ratio: PositiveFloat = Field(default=2/3, ge=0.25, le=0.95)
     work_mem_scale_factor: PositiveFloat = Field(default=1.0, gt=0, le=3.0)
 
     # These are used for memory_precision_tuning
-    max_normal_memory_usage: PositiveFloat = Field(default=0.60, ge=0.35, le=0.85)
+    max_normal_memory_usage: PositiveFloat = Field(default=0.45, ge=0.35, le=0.85)
     memory_precision_epsilon_to_rollback: PositiveFloat = Field(default=0.01, ge=0, le=0.02)
     memory_precision_tuning_increment: PositiveFloat = Field(default=1 / 280, ge=1 / 2000, le=0.01)
     memory_precision_tuning_ratio: float = Field(default=0.5, ge=0, le=1)
@@ -113,7 +111,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             memory_precision_tuning_increment=self.memory_precision_tuning_increment,
             memory_precision_tuning_ratio=self.memory_precision_tuning_ratio,
             memory_precision_max_iterations=self.memory_precision_max_iterations,
-            wal_segment_size=self.wal_segment_size * WAL_SEGMENT_SIZE,
+            wal_segment_size=self.wal_segment_size * BASE_WAL_SEGMENT_SIZE,
             max_query_length_in_bytes=self.max_query_length_in_bytes,
             max_runtime_ms_to_log_slow_query=self.max_runtime_ms_to_log_slow_query,
             max_runtime_ratio_to_explain_slow_query=self.max_runtime_ratio_to_explain_slow_query,
@@ -161,7 +159,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     # ========================================================================
     # This is used for analyzing the memory available.
     operating_system: str = Field(default='linux')
-    vcpu_sample: PositiveInt = Field(default=4, ge=1)
+    logical_cpu: PositiveInt = Field(default=4, ge=1)
     ram_sample_in_gib: ByteSize | PositiveFloat = Field(default=16, ge=1, multiple_of=0.25)
     add_system_reserved_memory_into_ram: bool = False
     base_kernel_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=8 * Ki)]
@@ -210,14 +208,11 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             tuning_kwargs=self.keywords.to_backend(),
             # Analyzing the memory available
             operating_system=self.operating_system,
-            vcpu_sample=self.vcpu_sample,
+            vcpu=self.logical_cpu,
             ram_sample=self.ram_sample_in_gib * Gi,
-            hyperthreading=False,
             add_system_reserved_memory_into_ram=self.add_system_reserved_memory_into_ram,
             base_kernel_memory_usage=kernel_memory,
             base_monitoring_memory_usage=monitoring_memory,
-            sample_hardware=True,
-            vm_snapshot=None,
             # Questions of Application Operations to be done
             enable_database_general_tuning=self.enable_database_general_tuning,
             enable_database_correction_tuning=self.enable_database_correction_tuning,

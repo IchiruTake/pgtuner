@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import ceil
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -10,6 +11,9 @@ import logging
 from src.static.vars import APP_NAME_UPPER
 
 __all__ = ['PG_TUNE_REQUEST', 'PG_TUNE_RESPONSE']
+
+from src.utils.pydantic_utils import bytesize_to_hr
+
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 # =============================================================================
@@ -34,15 +38,15 @@ class PG_TUNE_RESPONSE(BaseModel):
             dict[str, PG_TUNE_ITEM]
         ]
     ] = (
-        Field(default_factory=lambda: defaultdict(lambda: defaultdict(dict)), frozen=True,
+        Field(default=defaultdict(lambda: defaultdict(dict)), frozen=True,
               description="The full outcome of the tuning process. Please refer to :cls:`BaseTuner` for more details.")
     )
     outcome_cache: dict[
         PGTUNER_SCOPE,
         dict[str, Any]
     ] = (
-        Field(default_factory=lambda: defaultdict(dict), frozen=True,
-              description="The full outcome of the tuning process. Please refer to :cls:`BaseTuner` for more details.")
+        Field(default=defaultdict(dict), frozen=True,
+              description='The full outcome of the tuning process. Please refer to :cls:`BaseTuner` for more details.')
     )
 
     def get_managed_items(self, target: PGTUNER_SCOPE, scope: PG_SCOPE) -> dict[str, PG_TUNE_ITEM]:
@@ -69,7 +73,7 @@ class PG_TUNE_RESPONSE(BaseModel):
                                   exclude_names: list[str] | set[str] = None) -> str:
         content: list[str] = [target.disclaimer(), '\n']
         if backup_settings:
-            content.append(f"# User Options: {request.options.model_dump(exclude={'vm_snapshot'})}\n")
+            content.append(f"# User Options: {request.options.model_dump()}\n")
         for idx, (scope, items) in enumerate(self.outcome[target].items()):
             content.append(f'## ============================== SCOPE: {scope} ============================== \n')
             for item_name, item in items.items():
@@ -110,3 +114,73 @@ class PG_TUNE_RESPONSE(BaseModel):
         msg: str = f'Invalid output format: {output_format}. Expected one of "json", "text", "conf", "file".'
         _logger.error(msg)
         raise ValueError(msg)
+
+    def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
+                 ignore_report: bool = True) -> tuple[str, int | float]:
+        # Cache result first
+        _kwargs = options.tuning_kwargs
+        usable_ram_noswap = options.usable_ram_noswap
+        usable_ram_noswap_hr = bytesize_to_hr(usable_ram_noswap)
+        ram_noswap = options.ram_noswap
+        ram_noswap_hr = bytesize_to_hr(ram_noswap)
+        usable_ram_noswap_ratio = usable_ram_noswap / ram_noswap
+        managed_cache = self.get_managed_cache(PGTUNER_SCOPE.DATABASE_CONFIG)
+
+        # Number of Connections
+        max_user_conns = (managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] -
+                          managed_cache['reserved_connections'])
+        active_user_conns = ceil(max_user_conns * _kwargs.effective_connection_ratio)
+        num_user_conns = (max_user_conns if use_full_connection else active_user_conns)
+        os_conn_overhead = (num_user_conns * _kwargs.single_memory_connection_overhead *
+                            _kwargs.memory_connection_to_dedicated_os_ratio)
+
+        # Shared Buffers and WAL buffers
+        shared_buffers = managed_cache['shared_buffers'] * _kwargs.shared_buffers_fill_ratio
+        wal_buffers = managed_cache['wal_buffers']
+
+        # Temp Buffers and Work Mem
+        temp_buffers = managed_cache['temp_buffers']
+        work_mem = managed_cache['work_mem'] * managed_cache['hash_mem_multiplier']
+        total_working_memory = (temp_buffers + work_mem) # * (1 + managed_cache['max_parallel_workers_per_gather'])
+        total_working_memory_hr = bytesize_to_hr(total_working_memory)
+
+        max_total_memory_used = shared_buffers + wal_buffers + os_conn_overhead
+        max_total_memory_used += total_working_memory * num_user_conns
+        max_total_memory_used_hr = bytesize_to_hr(max_total_memory_used)
+
+        _report = f'''
+# ===========================================================================================================
+# Memory Estimation Test by **TRUE**
+From server-side, the PostgreSQL memory usable arena is at most {usable_ram_noswap_hr} or {usable_ram_noswap_ratio * 100:.2f} (%) of the total RAM ({bytesize_to_hr(ram_noswap)}).
+All other variables must be bounded and computed within the available memory. 
+Arguments: use_full_connection={use_full_connection}
+
+Reports (over usable RAM capacity {usable_ram_noswap_hr} or {usable_ram_noswap_ratio * 100:.2f} (%) of total):
+-------
+* PostgreSQL memory (estimate): {max_total_memory_used_hr} or {max_total_memory_used / usable_ram_noswap * 100:.2f} (%) over usable RAM.
+    - The shared_buffers ratio is {shared_buffers / usable_ram_noswap * 100:.2f} (%) or {bytesize_to_hr(shared_buffers)}
+    - The wal_buffers is {bytesize_to_hr(wal_buffers)} 
+    - The total connections overhead ratio is {bytesize_to_hr(os_conn_overhead)} with {num_user_conns} user connections.
+    - The total maximum working memory (assuming with one maximum work_mem and peak temporary buffers) is as 
+        + SINGLE: {total_working_memory_hr} per user connections or {total_working_memory / usable_ram_noswap * 100:.2f} (%)
+            -> Temp Buffers: {bytesize_to_hr(temp_buffers)}
+            -> Work Mem: {bytesize_to_hr(work_mem / managed_cache['hash_mem_multiplier'])}
+            -> Hash Mem Multiplier: {managed_cache['hash_mem_multiplier']}
+        + ALL: {total_working_memory * num_user_conns / usable_ram_noswap * 100:.2f} (%)
+        + Parallel Workers: 
+            -> Gather Workers: {managed_cache['max_parallel_workers_per_gather']}
+            -> Worker in Pool: {managed_cache['max_parallel_workers']}
+    - Work mem Scale Factor: {_kwargs.work_mem_scale_factor} -> Followed the normal calculation: {_kwargs.work_mem_scale_factor == 1.0}
+
+OK STATUS: {max_total_memory_used <= usable_ram_noswap}
+WARNING: These calculations could be incorrect due to capping, precision adjustment, rounding.
+# ===========================================================================================================
+'''
+        if not ignore_report:
+            _logger.info(_report)
+        return _report, max_total_memory_used
+
+
+
+
+

@@ -1,5 +1,5 @@
 [GC]
-ALLO = 50000
+ALLO = 20000
 GEN_0 = 700
 GEN_1 = 100
 DEBUG = false

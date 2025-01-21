@@ -13,7 +13,6 @@ from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.workload import PG_WORKLOAD
-from src.tuner.external import psutil_api
 from src.utils.pydantic_utils import bytesize_to_hr
 
 
@@ -243,7 +242,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                                            user_fn=str, default_value='linux'),
               description='The operating system that the PostgreSQL server is running on. Default is Linux.')
     ]
-    vcpu_sample: Annotated[
+    vcpu: Annotated[
         PositiveInt,
         Field(default=4, ge=1,
               description='The number of vCPU (logical CPU) that the PostgreSQL server is running on. Default is 4 '
@@ -256,15 +255,6 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                           'Minimum amount of RAM is 1 GiB. PostgreSQL would performs better when your server has '
                           'more RAM available. Note that the amount of RAM on the server must be larger than the '
                           'in-place kernel and monitoring memory usage. The value must be a multiple of 256 MiB.'
-              )
-    ]
-    hyperthreading: Annotated[
-        bool,
-        Field(default=False,
-              description='Set to True if your server is running on the hyper-threading environment (it is usually '
-                          'available on many recent consumer CPUs or server CPUs). Default is False meant the number'
-                          'of physical cores is equal to the number of logical cores. Only enable it when you are '
-                          'running on dedicated hardware without virtualization or containerization.'
               )
     ]
     add_system_reserved_memory_into_ram: Annotated[
@@ -303,22 +293,6 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                           'Note that this value is not limited to the monitoring only, but also antivirus, ...',
               ge=-1, le=4 * Gi, frozen=False, allow_inf_nan=False)
     ]
-    sample_hardware: Annotated[
-        bool,
-        Field(default=True, frozen=False,
-              description='Default to True. Set to True if you want to collect the hardware profile by us. Enable '
-                          'this requires the library :lib:`psutil` to be installed on this Python virtual environment. '
-                          'This would ignore the vCPU_sample, RAM_sample, and hyperthreading. Only use this when you '
-                          'you install this on server. Otherwise, you are just backing up your system. '
-              )
-    ]
-    vm_snapshot: Annotated[
-        psutil_api.SERVER_SNAPSHOT | None,
-        Field(default=None, frozen=False,
-              description='The hardware snapshot of the server you want to tune. This variable is managed exclusively '
-                          'by this application and should not be changed by the user. Default is None.')
-    ]
-
     # ========================================================================
     # We may not have this at end-user on the website
     # Questions of System Management and Operation to be done
@@ -387,26 +361,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                             f'Forcing the version to the common version (which is the shared configuration across'
                             f'all supported versions).')
             self.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[-1]
-
-        # Set the VM snapshot
-        if self.vm_snapshot is not None:
-            _logger.info('The VM snapshot is already set. The hardware profile would be ignored made by ourself '
-                         'is ignored.')
-        else:
-            if self.operating_system not in ('docker', 'k8s', 'containerd', 'wsl', 'PaaS', 'DBaaS') and \
-                    not self.sample_hardware:
-                self.vm_snapshot = psutil_api.SERVER_SNAPSHOT.profile_current_server()
-            elif not self.sample_hardware:
-                _logger.error('Unable to collect the hardware information. It is required to either set the operating '
-                              'system (:var:`operating_system`) to the supported list (linux, windows, macos) or '
-                              'enable :attr:`sample_hardware` to True -> Fallback to use the hardware sampling.')
-                self.sample_hardware = True
-            if self.vm_snapshot is None:
-                # It is best to set this value to at least 4 GiB
-                self.vm_snapshot = psutil_api.snapshot_sample(vcpu=self.vcpu_sample, memory=self.ram_sample,
-                                                              hyperthreading=self.hyperthreading)
-
-        self.mem_init_test()
+        assert self.pcpu <= self.vcpu, 'The number of physical CPU must be equal or smaller than the number of vCPU.'
+        assert self.usable_ram_noswap >= 0, 'The usable RAM must be larger than 0.'
         return None
 
     @cached_property
@@ -432,117 +388,11 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             result.extend([0] * (3 - len(result)))
         return tuple(result)
 
-    def mem_init_test(self, hash_mem_multiplier: float = 2.0, wal_buffers: ByteSize | int = None,
-                      user_connection: int = None, use_full_connection: bool = False) -> str:
-        # This function should only being used during the initial guessing. The connection overhead and WAL buffers
-        # is updated by triggering function and not correct in this function.
-        # Please refer to the gtune_common_db_config.py
-        _logger.info('Start validating and estimate memory after general tuning phase and/or correction tuning phase '
-                     'using ratio. The number of connection and WAL buffer usage are just for estimation.')
-
-        # Cache directly after the VM snapshot is set
-        usable_ram_noswap = self.usable_ram_noswap
-        ram_noswap = self.ram_noswap
-        usable_ram_noswap_ratio = usable_ram_noswap / ram_noswap
-        if usable_ram_noswap <= 0:
-            raise ValueError('The usable RAM must be larger than 0.')
-
-        # Since all algorithms in the general-tuning phase and correction-tuning phase are based on the usable RAM
-        # (not the total RAM), we need to estimate the memory usage after the general tuning phase and correction
-        # tuning phase. The estimation is based on the ratio of the memory usage over the usable RAM
-        _kwargs = self.tuning_kwargs
-
-        # We used the minimum number of connections based on the hardware scope -> profile
-        # The magic number 3 here is the basic number of reserved connections
-        _conns = {'mini': 10, 'medium': 20, 'large': 30, 'mall': 40, 'bigt': 50}
-        _est_max_conns = user_connection or _kwargs.user_max_connections or (_conns.get(self.cpu_profile, 30) - 3 * 2)
-
-        # Shared Buffers
-        postgres_expected_mem_ratio: float = 0.0
-        shared_buffer_ratio = max(128 * Mi / usable_ram_noswap, _kwargs.shared_buffers_ratio) * _kwargs.shared_buffers_fill_ratio
-        postgres_expected_mem_ratio += shared_buffer_ratio
-
-        # Connections Overhead
-        _mem_conn_ratio = ((_est_max_conns if use_full_connection else ceil(_est_max_conns * _kwargs.effective_connection_ratio)) *
-                           _kwargs.single_memory_connection_overhead *
-                           _kwargs.memory_connection_to_dedicated_os_ratio / usable_ram_noswap)
-        postgres_expected_mem_ratio += _mem_conn_ratio
-
-        # Temp buffers and Work Mem
-        tbuff_wmem_ratio = (_kwargs.work_mem_scale_factor * hash_mem_multiplier * (1 - _kwargs.temp_buffers_ratio) +
-                            _kwargs.temp_buffers_ratio)
-        if use_full_connection:
-            tbuff_wmem_ratio *= (1 / _kwargs.effective_connection_ratio)
-
-        _mem_conn_ratio_full = (_est_max_conns * _kwargs.single_memory_connection_overhead *
-                                _kwargs.memory_connection_to_dedicated_os_ratio / usable_ram_noswap)
-        tbuff_wmem_pool_ratio = _kwargs.max_work_buffer_ratio * (1.0 - shared_buffer_ratio - _mem_conn_ratio_full)
-        postgres_expected_mem_ratio += max(_est_max_conns * (4 * Mi + 4 * Mi * hash_mem_multiplier) / usable_ram_noswap,
-                                           tbuff_wmem_pool_ratio * tbuff_wmem_ratio)
-
-        # Wal Buffers (if replica or higher) -> Default to replica
-        _wal = {'mini': 16 * Mi, 'medium': 32 * Mi, 'large': 64 * Mi, 'mall': 128 * Mi, 'bigt': 192 * Mi}
-        _est_wal_buffers = wal_buffers or _wal.get(self.mem_profile, 64 * Mi)
-        postgres_expected_mem_ratio += (_est_wal_buffers / usable_ram_noswap)
-
-        # This is the maximum we can allow in the on the whole server before collapsed
-        is_ok: bool = True
-        if postgres_expected_mem_ratio >= 1.0:
-            is_ok = False
-            _logger.warning('The memory PostgreSQL (estimate) is larger than the usable RAM (in the general tuning '
-                            'phase and probably in correction tuning). You may not receive the optimal performance '
-                            'configuration files.')
-        if usable_ram_noswap_ratio < 2/3:
-            is_ok = False
-            _logger.warning(f'The usable RAM ({bytesize_to_hr(usable_ram_noswap)}) is less than 50% of the total RAM '
-                            f'({bytesize_to_hr(ram_noswap)}). This may cause the performance issue as you have set the '
-                            f'\nRAM capacity too low (which could affect the general tuning phase and correction tuning '
-                            f'phase. Please ensure that the usable RAM is at least 50% of the total RAM. On the '
-                            f'\nsmallest server (2-4 GiB), we expect the ratio to be larger than 75% or more.')
-        if usable_ram_noswap < 2.5 * Gi:
-            is_ok = False
-            _logger.warning(f'The usable RAM ({bytesize_to_hr(usable_ram_noswap)}) is less than 2.5 GiB. If you are '
-                            f'having this low memory (unless you are tuning a mini or testing DB server on your '
-                            f'\npersonal computer, you should switch to SQLite DB.')
-
-        postgres_expected_mem = int(usable_ram_noswap * postgres_expected_mem_ratio)
-        _logger.info(f'''
-# ===========================================================================================================
-# Memory Estimation Test
-From server-side, the PostgreSQL memory usable arena is at most {bytesize_to_hr(usable_ram_noswap)} or {usable_ram_noswap_ratio * 100:.2f} (%) of the total RAM ({bytesize_to_hr(ram_noswap)}).
-All other variables must be bounded and computed within the available memory. 
-Arguments: use_full_connection={use_full_connection}, user_connection={user_connection}, wal_buffers={wal_buffers}, hash_mem_multiplier={hash_mem_multiplier}
-
-Reports (over usable RAM capacity {bytesize_to_hr(usable_ram_noswap)} or {usable_ram_noswap_ratio * 100:.2f} (%) of total):
--------
-* PostgreSQL memory (estimate): {bytesize_to_hr(postgres_expected_mem)} or {postgres_expected_mem_ratio * 100:.2f} (%) over usable RAM.
-    - The shared_buffers ratio is {shared_buffer_ratio * 100:.2f} (%)
-    - The total connections overhead ratio is {_mem_conn_ratio * 100:.2f} (%) with {_est_max_conns} user connections (active={_kwargs.effective_connection_ratio * 100:.1f}%)
-    - The temp_buffers and work_mem ratio is {tbuff_wmem_pool_ratio * tbuff_wmem_ratio * 100:.2f} (%) -> Each connection used {(tbuff_wmem_pool_ratio * tbuff_wmem_ratio * 100) / _est_max_conns:.2f} (%)
-    - The wal_buffers ratio is {_est_wal_buffers / usable_ram_noswap * 100:.2f} (%)
-
-Reports (over total RAM capacity {bytesize_to_hr(ram_noswap)}):
--------
-* PostgreSQL memory (estimate): {bytesize_to_hr(postgres_expected_mem)} or {postgres_expected_mem_ratio * usable_ram_noswap_ratio * 100:.2f} (%) over total RAM
-    - The shared_buffers ratio is {shared_buffer_ratio * usable_ram_noswap_ratio * 100:.2f} (%)
-    - The total connections overhead ratio is {_mem_conn_ratio * usable_ram_noswap_ratio * 100:.2f} (%) with {_est_max_conns} user connections (active={_kwargs.effective_connection_ratio * 100:.1f}%)
-    - The temp_buffers and work_mem ratio is {tbuff_wmem_pool_ratio * tbuff_wmem_ratio * usable_ram_noswap_ratio * 100:.2f} (%) -> Each connection used {(tbuff_wmem_pool_ratio * tbuff_wmem_ratio * usable_ram_noswap_ratio * 100) / _est_max_conns:.2f} (%)
-    - The wal_buffers ratio is {_est_wal_buffers / ram_noswap * 100:.2f} (%)
-
-WARNING: These calculations could be incorrect due to capping, precision adjustment, rounding.
-# ===========================================================================================================
-''')
-
-        return 'NOK' if not is_ok else 'OK'
-
     # ========================================================================
     # Some VM Snapshot Function
     @cached_property
-    def vcpu(self) -> int:
-        return self.vm_snapshot.logical_cpu_count
-
-    def get_total_ram(self, add_swap: bool = False) -> ByteSize | int:
-        mem_total: ByteSize = self.vm_snapshot.mem_virtual.total
+    def ram_noswap(self) -> ByteSize | int:
+        mem_total: ByteSize = self.ram_sample
         if self.add_system_reserved_memory_into_ram:
             # Unless the user is managing the OS and they supply the input of RAM by using free -m in Linux
             # or Task Manager on Windows. The system reserved memory in usual should not be added into the total
@@ -561,24 +411,14 @@ WARNING: These calculations could be incorrect due to capping, precision adjustm
 
             if _extra > 0:  # We do the rounding here.
                 mem_total = ByteSize(mem_total + _extra)
-                self.vm_snapshot.mem_virtual.total = mem_total
 
-        if add_swap:
-            mem_total += self.vm_snapshot.mem_swap.total
         return mem_total
-
-    def get_available_ram(self, add_swap: bool = False) -> ByteSize | int:
-        mem_available: ByteSize = self.get_total_ram(add_swap=add_swap)
-        mem_available -= self.base_kernel_memory_usage
-        mem_available -= self.base_monitoring_memory_usage
-        return mem_available
-
-    @cached_property
-    def ram_noswap(self) -> ByteSize | int:
-        return self.get_total_ram(add_swap=False)
 
     @cached_property
     def usable_ram_noswap(self) -> ByteSize | int:
-        return self.get_available_ram(add_swap=False)
+        mem_available: ByteSize = self.ram_noswap
+        mem_available -= self.base_kernel_memory_usage
+        mem_available -= self.base_monitoring_memory_usage
+        return mem_available
 
 

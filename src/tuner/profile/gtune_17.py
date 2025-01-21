@@ -6,7 +6,7 @@ from src.static.vars import K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, DAY, MINU
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.gtune_common import merge_extra_info_to_profile, rewrite_items, type_validation
 from src.tuner.profile.gtune_common_db_config import DB_CONFIG_PROFILE as DB17_CONFIG_PROFILE
-from src.tuner.profile.gtune_common_db_config import cap_value, realign_value_to_unit, bytesize_to_postgres_unit
+from src.utils.pydantic_utils import bytesize_to_postgres_unit, realign_value_to_unit, cap_value
 from src.utils.dict_deepmerge import deepmerge
 
 __all__ = ["DB_CONFIG_PROFILE"]
@@ -28,14 +28,6 @@ _DB_LOG_PROFILE = {
 
 _DB_VACUUM_PROFILE = {
     'vacuum_buffer_usage_limit': {
-        'instructions': {
-            'large': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(cap_value(global_cache['shared_buffers'] // 32, 2 * Mi, 1 * Gi), 32 * DB_PAGE_SIZE)[0],
-            'mall': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(cap_value(global_cache['shared_buffers'] // 48, 2 * Mi, 2 * Gi), 32 * DB_PAGE_SIZE)[0],
-            'bigt': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(cap_value(global_cache['shared_buffers'] // 64, 2 * Mi, 4 * Gi), 32 * DB_PAGE_SIZE)[0],
-        },
         'tune_op': lambda group_cache, global_cache, options, response:
         realign_value_to_unit(cap_value(global_cache['shared_buffers'] // 16, 2 * Mi, 512 * Mi), 32 * DB_PAGE_SIZE)[0],
         'default': 2 * Mi,
