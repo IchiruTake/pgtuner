@@ -136,7 +136,7 @@ _logger.info('The static files have been added to the application ...')
 # 0: Development, 1: Production
 CURRENT_ENVIRONMENT: str = os.getenv(f'{APP_NAME_UPPER}_WEB', '0')
 def _get_html(minified: bool = False):
-    return '/static/index.min.v2.html' if minified else '/static/index.html'
+    return '/static/index.min.html' if minified else '/static/index.html'
 
 @app.get('/min')
 async def root_min():
