@@ -59,7 +59,7 @@ class PG_TUNE_ITEM(BaseModel):
         texts.append(f'\n{style}' if texts else style)
         return ''.join(texts)
 
-    def out_display(self, override_value = None) -> str:
+    def out_display(self, override_value=None) -> str:
         after = self.after
         if override_value is not None:
             after = override_value

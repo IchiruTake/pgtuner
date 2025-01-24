@@ -3,6 +3,7 @@ from typing import Any, Callable
 
 __all__ = ['GetEnvVar', ]
 
+
 def GetEnvVar(var_names: list[str] | None, default: Any,
               input_message_string: str = None,
               env_type_cast_fn: Callable[[str], Any] = None,

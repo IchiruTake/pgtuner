@@ -212,7 +212,7 @@ class CompressMiddleware(BaseMiddleware):
         self._method = method
         self._compressor: dict[str, BaseResponder] = defaultdict()
 
-        # Compressor
+        # Compressor Cache to Save State
         if kwargs.get('zstd-enabled', True):
             self._compressor['zstd'] = (
                 _ZstdResponder(self._app,
@@ -258,7 +258,16 @@ class CompressMiddleware(BaseMiddleware):
         # Accept-Encoding could be single or in multiple-format
         accept_encoding_dict = _parse_accept_encoding(accept_encoding_string, ignore_wildcard=True)
         alg = _select_accept_encoding(accept_encoding_dict, sampling_list=self._compressor_keys, method=self._method)
-        _compressor = self._compressor.get(alg, self._app)  # Redirect back to the app if the algorithm is not found
+        if alg == 'zstd':
+            _compressor = _ZstdResponder(self._app, minimum_size=self._compressor['zstd'].get_size(),
+                                         compress_level=self._compressor['zstd'].get_compress_level())
+        elif alg == 'gzip':
+            _compressor = _GZipResponder(self._app, minimum_size=self._compressor['gzip'].get_size(),
+                                         compress_level=self._compressor['gzip'].get_compress_level())
+        else:
+            _compressor = self._app  # Redirect back to the app if the algorithm is not found
+
+
         # if not _compressor.content_type_validate(headers) or not _compressor.path_validate(scope):
         #     await self._app(scope, receive, send)
         #     return
@@ -302,6 +311,12 @@ class BaseResponder(BaseMiddleware):
         # This is here to prevent file opening
         self._compress_buffer = None
         self._compress_file = None
+
+    def get_size(self) -> int:
+        return self._minimum_size
+
+    def get_compress_level(self) -> int:
+        return self._compress_level
 
     def reset_cache(self) -> None:
         self._initial_message: Message | None = None

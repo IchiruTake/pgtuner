@@ -2,6 +2,7 @@ import os
 
 __all__ = ['SecureFileCheck', ]
 
+
 def SecureFileCheck(filename: str, directory: str = '~') -> str:
     """
     This function is a helper function to ensure file directory is not being hard link or symlink to another directory.

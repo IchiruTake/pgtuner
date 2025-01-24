@@ -11,6 +11,7 @@ from src.tuner.data.scope import PG_SCOPE
 __all__ = ['merge_extra_info_to_profile', 'type_validation', 'rewrite_items']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
+
 def merge_extra_info_to_profile(profiles: dict[str, tuple[PG_SCOPE, dict, dict]]):
     """
     Merge the profile data into a single file.
@@ -31,7 +32,8 @@ def type_validation(profiles: dict[str, tuple[PG_SCOPE, dict, dict]]) -> dict[st
             assert isinstance(tune_entry, dict), f'The tuning key body of {mkey} is not a dictionary.'
             assert isinstance(mkey, str), f'The key {mkey} is not a string.'
             keys: list[str] = [k.strip() for k in mkey.split(MULTI_ITEMS_SPLIT)]
-            assert all(k and ' ' not in k for k in keys), f'The key representation {mkey} is empty or contain whitespace.'
+            assert all(
+                k and ' ' not in k for k in keys), f'The key representation {mkey} is empty or contain whitespace.'
 
             # Body check
             assert 'default' in tune_entry, (f'The default value is not found in the tuning key body of {mkey} '
@@ -58,6 +60,7 @@ def type_validation(profiles: dict[str, tuple[PG_SCOPE, dict, dict]]) -> dict[st
 
     return profiles
 
+
 def rewrite_items(profiles: dict[str, tuple[PG_SCOPE, dict, dict]]) -> dict[str, tuple[PG_SCOPE, dict, dict]]:
     """ Drop the deprecated items from the profile data. """
     for _, (_, items, _) in profiles.items():
@@ -74,5 +77,3 @@ def rewrite_items(profiles: dict[str, tuple[PG_SCOPE, dict, dict]]) -> dict[str,
                                 f'tuning result.')
             items.pop(f'-{rm_key}')
     return profiles
-
-

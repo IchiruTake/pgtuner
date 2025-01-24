@@ -1,6 +1,8 @@
 import logging
+
 from pydantic import BaseModel, Field
 from pydantic.types import PositiveFloat, PositiveInt, ByteSize
+
 from src.static.vars import APP_NAME_UPPER, K10, BASE_WAL_SEGMENT_SIZE, Mi, Ki, Gi, Ti
 
 __all__ = ["PG_TUNE_USR_KWARGS", ]
@@ -80,7 +82,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'active connections are running complex queries that requires high work_mem or temp_buffers.')
     )
     temp_buffers_ratio: PositiveFloat = (
-        Field(default=2/3, ge=0.25, le=0.95,
+        Field(default=2 / 3, ge=0.25, le=0.95,
               description='The ratio of temp_buffers to the work_buffer pool above. The supported range is [0.25, '
                           '0.95], default is 2/3. Increase this value make the temp_buffers larger than the work_mem. '
                           'If you have query that use much temporary object (temporary table, CTE, ...) then you can '
@@ -138,7 +140,6 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'Higher value could make the tuning run more loops.')
     )
 
-
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
     wal_segment_size: PositiveInt = (
         Field(default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=128 * BASE_WAL_SEGMENT_SIZE, frozen=True,
@@ -169,7 +170,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'supported range is [10, 100K], default is 2000 ms (or 2 seconds). We recommend and enforce '
                           'you should know your average runtime query and its distribution and pivot the timerange '
                           'to log the *slow* query based on the database sizing and business requirements. This '
-                          'value is re-aligned by 20 ms to support some old system with high time-resolution.' )
+                          'value is re-aligned by 20 ms to support some old system with high time-resolution.')
     )
     max_runtime_ratio_to_explain_slow_query: PositiveFloat = (
         Field(default=1.5, ge=0.1, le=10.0,
@@ -177,7 +178,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'auto_explain. The value must be at least 0.1, default to 1.5. We recommend and enforce '
                           'this value should be equal to higher than the variable max_runtime_ms_to_log_slow_query to '
                           'prevent excessive logging of query planing.',
-        )
+              )
     )
 
     # WAL tuning
@@ -224,4 +225,3 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     #           description="The total size of all databases in the PostgreSQL server (in GiB). This value is used to "
     #                       "estimate some. The supported range is [1, 128000], default is 20 (GB).")
     # )
-

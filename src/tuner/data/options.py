@@ -1,6 +1,5 @@
 import logging
 from functools import cached_property, partial
-from math import ceil
 from typing import Any, Annotated
 
 from pydantic import BaseModel, Field, ByteSize, AfterValidator
@@ -14,7 +13,6 @@ from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.workload import PG_WORKLOAD
 from src.utils.pydantic_utils import bytesize_to_hr
-
 
 __all__ = ["PG_TUNE_USR_OPTIONS", 'backup_description']
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -37,6 +35,7 @@ def _backup_translation(value: str) -> str:
         raise ValueError(f'The backup tool {value} is not in the supported list.')
     return value.strip()
 
+
 # =============================================================================
 # Ask user which tuning options they choose for
 def _allowed_values(v, values: list[str] | tuple[str, ...]):
@@ -44,6 +43,7 @@ def _allowed_values(v, values: list[str] | tuple[str, ...]):
     # Since Literal does not support dynamic values, we have to use this method
     assert v in values, f'Invalid value {v} for the tuning options. The allowed values are {values}'
     return v
+
 
 _backup_itms = list(backup_description().keys())
 _TomlProfileData = list(LoadAppToml()['profile'].keys())
@@ -58,7 +58,6 @@ _allowed_profile = partial(_allowed_values, values=_TomlProfileData)
 _allowed_postgres_version = partial(_allowed_values, values=list(SUPPORTED_POSTGRES_VERSIONS) + ['latest', 'stable'])
 _allowed_backup_tool = partial(_allowed_values, values=_backup_itms)
 _allowed_os = partial(_allowed_values, values=_PG_OS_KEYS)
-
 
 
 # =============================================================================
@@ -203,7 +202,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
 
     # These are for the database tuning options
     workload_type: Annotated[
-        PG_WORKLOAD, # AfterValidator(_allowed_workload),
+        PG_WORKLOAD,  # AfterValidator(_allowed_workload),
         Field(default_factory=PydanticFact(f'Enter the PostgreSQL workload type as {_PG_WORKLOAD_KEYS}: ',
                                            user_fn=PG_WORKLOAD, default_value=PG_WORKLOAD.HTAP),
               description='The PostgreSQL workload type. This would affect the tuning options and the risk level, '
@@ -211,7 +210,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     ]
 
     opt_mem_pool: Annotated[
-        PG_PROFILE_OPTMODE, # AfterValidator(_allowed_opt_mode),
+        PG_PROFILE_OPTMODE,  # AfterValidator(_allowed_opt_mode),
         Field(default_factory=PydanticFact(f'Enter the PostgreSQL memory precision profile as {_PG_OPT_KEYS}: ',
                                            user_fn=PG_PROFILE_OPTMODE, default_value=PG_PROFILE_OPTMODE.OPTIMUS_PRIME),
               description='If not NONE, it would proceed the extra tuning to increase the memory buffer usage to '
@@ -336,7 +335,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                 self.base_monitoring_memory_usage = ByteSize(64 * Mi)
             elif self.operating_system in ('PaaS', 'DBaaS'):
                 self.base_monitoring_memory_usage = ByteSize(0 * Mi)
-            _logger.debug(f"Set the monitoring memory usage to {self.base_monitoring_memory_usage.human_readable(separator=' ')}")
+            _logger.debug(
+                f"Set the monitoring memory usage to {self.base_monitoring_memory_usage.human_readable(separator=' ')}")
 
         if self.base_kernel_memory_usage == -1:
             self.base_kernel_memory_usage = ByteSize(768 * Mi)
@@ -346,7 +346,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                 self.base_kernel_memory_usage = ByteSize(2 * Gi)
             elif self.operating_system in ('PaaS', 'DBaaS'):
                 self.base_kernel_memory_usage = ByteSize(0 * Mi)
-            _logger.debug(f"Set the kernel memory usage to {self.base_kernel_memory_usage.human_readable(separator=' ')}")
+            _logger.debug(
+                f"Set the kernel memory usage to {self.base_kernel_memory_usage.human_readable(separator=' ')}")
 
         # Check the database version is in the supported version
         if self.pgsql_version not in SUPPORTED_POSTGRES_VERSIONS:
@@ -405,7 +406,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             _extra: int = 0
             if self.operating_system in ('linux', 'macos'):
                 _extra = 128 * Mi
-            elif self.operating_system in ('windows', ):
+            elif self.operating_system in ('windows',):
                 _extra = 256 * Mi
             elif self.operating_system in ('containerd', 'docker', 'k8s', 'wsl'):
                 _extra = 32 * Mi
@@ -421,5 +422,3 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         mem_available -= self.base_kernel_memory_usage
         mem_available -= self.base_monitoring_memory_usage
         return mem_available
-
-

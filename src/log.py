@@ -11,17 +11,19 @@ References:
 """
 
 import logging
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-import sys
 import os.path
+import sys
 from datetime import datetime, date
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Any
+
 from src._log_compressor import CompressRotatingFileHandler, CompressTimedRotatingFileHandler
 from src.static.c_timezone import GetTimezone
 from src.static.c_toml import TranslateNone
 from src.static.vars import DATE_PATTERN, DATETIME_PATTERN_FOR_FILENAME, APP_NAME_UPPER, Mi
 
 __all__ = ["BuildLogger"]
+
 
 # ==================================================================================================
 # File Handler
@@ -71,7 +73,7 @@ def _BuildFileHandler(profile: dict[str, Any], readonly_clogger: logging.Logger)
         message = "Invalid LOG_FILEMODE value. Please check the value again."
         readonly_clogger.error(message)
         raise ValueError(message)
-       
+
     # [01]: Build the log filename and Check if file exists
     log_file_path: str = _BuildLogFilepath(profile, readonly_clogger=readonly_clogger)
     if not os.path.exists(log_file_path):
@@ -141,15 +143,15 @@ def _BuildStreamHandler(profile: dict[str, Any], readonly_clogger: logging.Logge
         case 'ext://sys.stderr':
             h = logging.StreamHandler(stream=sys.stderr)
         case _:
-            raise ValueError("Invalid STREAM value. Please check the value again.")    
+            raise ValueError("Invalid STREAM value. Please check the value again.")
     formatter = logging.Formatter(log_format)
     formatter.converter = lambda *args: datetime.now(tz=GetTimezone()[0]).timetuple()
     h.setFormatter(formatter)
     h.setLevel(log_level)
     return h
-    
 
-def _BuildHandlers(profile: dict[str, dict], readonly_clogger: logging.Logger) -> list[logging.Handler]: # type: ignore
+
+def _BuildHandlers(profile: dict[str, dict], readonly_clogger: logging.Logger) -> list[logging.Handler]:  # type: ignore
     # [00] Validation and Checkout if the handler is OK to proceed:
     _term: str = '_HANDLER'
     output: list[logging.Handler] = []
@@ -201,7 +203,5 @@ def BuildLogger(cfg: dict[str, Any]) -> logging.Logger:
     for h in _BuildHandlers(cfg[logger_name], readonly_clogger=c_logger):
         c_logger.addHandler(h)
 
-
     c_logger.info(f"Logger {logger_name} is created and initialized.")
     return c_logger
-

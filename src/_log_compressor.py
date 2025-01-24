@@ -1,11 +1,11 @@
-import gzip
-import lzma
-import shutil
-import os
-import zlib
 import bz2
-import logging.handlers
 import glob
+import gzip
+import logging.handlers
+import lzma
+import os
+import shutil
+import zlib
 
 __all__ = ['CompressRotatingFileHandler', 'CompressTimedRotatingFileHandler']
 
@@ -83,6 +83,7 @@ def _compress(source: str, dest: str, algorithm: tuple[str, int, str] = None):
         shutil.move(temp_filepath, f'{dest}.{extension_name}')
 
     return temp_filepath
+
 
 def _cleanup(compress_filepath: str, backup_count: int, algorithm: tuple[str, int, str] = None, ):
     # Scan all files and remove all compressed files made by logging

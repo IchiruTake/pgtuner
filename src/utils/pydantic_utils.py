@@ -1,4 +1,5 @@
 from pydantic import ByteSize
+
 from src.static.vars import DB_PAGE_SIZE
 
 __all__ = ['bytesize_to_hr', 'bytesize_to_postgres_string', 'bytesize_to_postgres_unit',

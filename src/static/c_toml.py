@@ -3,29 +3,30 @@ This contains some utility functions to work with TOML files.
 
 """
 
-import typing
-import logging
-from datetime import datetime, timedelta
 import json
+import logging
+import os
+import typing
+from datetime import datetime, timedelta
 
 import toml
-import os
-
-from src.static.vars import APP_NAME_UPPER, PRESET_PROFILE_CHECKSUM, PGTUNER_PROFILE_FILE_PATH, APP_NAME_LOWER
-from src.utils.dict_deepmerge import deepmerge
-from src.static.c_timezone import GetTimezone
-from src.utils.checksum import checksum
 from rich import print_json
+
+from src.static.c_timezone import GetTimezone
+from src.static.vars import APP_NAME_UPPER, PRESET_PROFILE_CHECKSUM, PGTUNER_PROFILE_FILE_PATH, APP_NAME_LOWER
+from src.utils.checksum import checksum
+from src.utils.dict_deepmerge import deepmerge
+
 try:
     import rich
 except ImportError as e:
     rich = None
     print(f"Failed to import rich: {e}")
 
-
 __all__ = ['TranslateNone', 'LoadAppToml']
 _logger = logging.getLogger(APP_NAME_UPPER)
 _max_depth: int = 6
+
 
 def _TranslateNone(cfg: dict[str, typing.Any] | list[typing.Any], c_depth: int) -> None:
     """
@@ -56,6 +57,7 @@ def _TranslateNone(cfg: dict[str, typing.Any] | list[typing.Any], c_depth: int) 
             cfg[key] = None
     return None
 
+
 def TranslateNone(cfg: dict[str, typing.Any]) -> None:
     """
     This function translates the string "None" into python NoneType object in the dictionary (which happens
@@ -71,10 +73,13 @@ def TranslateNone(cfg: dict[str, typing.Any]) -> None:
     """
     return _TranslateNone(cfg, 0)
 
+
 # =============================================================================
 __APP_CACHE: dict[str, tuple[datetime, dict[str, typing.Any]]] = {
 
 }
+
+
 def LoadAppToml(force: bool = False, expiry_seconds: int = 0, perform_checksum: bool = True,
                 skip_checksum_verification: bool = True, verbose: bool = False) -> dict:
     """

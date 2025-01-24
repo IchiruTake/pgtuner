@@ -10,10 +10,11 @@ References:
 [1]: https://stackoverflow.com/questions/7204805/deep-merge-dictionaries-of-dictionaries-in-python/71700270#71700270
 
 """
+from copy import deepcopy, copy
 from functools import lru_cache
 from typing import Annotated, Literal, Any, Callable
+
 from pydantic import PositiveInt, Field
-from copy import deepcopy, copy
 
 __all__ = ['deepmerge']
 
@@ -90,7 +91,7 @@ def _deepmerge(a: dict, b: dict, result: dict, path: list[str], /, merged_index_
         raise RecursionError(f"The depth of the dictionary (={curdepth}) exceeds the maximum depth (={maxdepth}).")
     curdepth += 1
     max_num_items_allowed = _max_num_items_in_depth(curdepth)
-    if len(a) + len(b) > 2 * max_num_items_allowed: # This is to prevent a subset having too many items
+    if len(a) + len(b) > 2 * max_num_items_allowed:  # This is to prevent a subset having too many items
         raise RecursionError(f"The number of items in the dictionary exceeds twice maximum limit "
                              f"(={max_num_items_allowed}).")
 

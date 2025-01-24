@@ -29,6 +29,7 @@ _MAX_USER_CONN_FOR_ANALYTICS = 40
 _DEFAULT_WAL_SENDERS: tuple[int, int, int] = (3, 5, 7)
 _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
 
+
 def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     change_list = []

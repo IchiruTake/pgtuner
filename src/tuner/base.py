@@ -68,7 +68,7 @@ class GeneralTuner(BaseModel):
 
     @staticmethod
     def _get_fn_default(key: str, tune_entry: dict, hw_scope: str):
-        if 'instructions' not in tune_entry:    # No profile-based tuning
+        if 'instructions' not in tune_entry:  # No profile-based tuning
             _logger.debug(f'Profile-based tuning is not found for this item {key} -> Use the general tuning instead.')
             fn = tune_entry.get('tune_op', None)
             default = tune_entry['default']
@@ -118,7 +118,7 @@ class GeneralTuner(BaseModel):
                 itm = self._make_itm(key, None, after=result or tune_entry['default'], trigger=triggering,
                                      tune_entry=tune_entry, hardware_scope=(hw_scope_term, hw_scope_value))
 
-                if itm is None or itm.after is None:    # A must-have condition. DO NOT remove
+                if itm is None or itm.after is None:  # A must-have condition. DO NOT remove
                     _logger.warning(f"Error in tuning the variable as default value is not found or set to None for "
                                     f"'{key}'. Skipping...")
                     continue

@@ -12,6 +12,7 @@ _ascending_specs: dict[str, list] = {
     'network_mbps_max': [500, 1000, 5000, 12500, 30000],
 }
 
+
 # =============================================================================
 # ENUM choices
 class PG_SIZING(str, Enum):
@@ -51,4 +52,3 @@ class PG_SIZING(str, Enum):
 
     def __sub__(self, other: 'PG_SIZING') -> 'PG_SIZING':
         return PG_SIZING(_ascending_specs['size'][self._num() - other._num()])
-

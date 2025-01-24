@@ -15,14 +15,14 @@ from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
-from src.tuner.profile.database.stune import correction_tune
-from src.utils.timing import time_decorator
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_13 import DB13_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_14 import DB14_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_15 import DB15_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_16 import DB16_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_17 import DB17_CONFIG_PROFILE
+from src.tuner.profile.database.stune import correction_tune
+from src.utils.timing import time_decorator
 
 _profiles = {
     0: DB0_CONFIG_PROFILE,
@@ -32,6 +32,8 @@ _profiles = {
     16: DB16_CONFIG_PROFILE,
     17: DB17_CONFIG_PROFILE,
 }
+
+
 def get_postgresql_profile(version: int | str):
     if isinstance(version, str):
         try:
@@ -41,10 +43,10 @@ def get_postgresql_profile(version: int | str):
     return _profiles.get(version, DB0_CONFIG_PROFILE)
 
 
-
 _logger = logging.getLogger(APP_NAME_UPPER)
 _SIZING = ByteSize | int | float
 __all__ = ['init', 'optimize', 'make_disk', 'make_tuning_keywords', 'make_tune_request']
+
 
 # ==================================================================================================
 # Initialize folders
@@ -54,6 +56,7 @@ def init() -> None:
     os.makedirs(BACKUP_ENTRY_READER_DIR, mode=0o640, exist_ok=True)
     os.makedirs(SUGGESTION_ENTRY_READER_DIR, mode=0o640, exist_ok=True)
     return None
+
 
 # ==================================================================================================
 @time_decorator
@@ -124,12 +127,14 @@ def optimize(request: PG_TUNE_REQUEST):
 
     return response
 
+
 # ==================================================================================================
 # Receive user tuning options
 _OS_DB_DISK_STRING_CODE = 'ssdv1'
 _DATA_INDEX_DISK_STRING_CODE = 'ssdv2'
 _WAL_DISK_STRING_CODE = 'ssdv2'
 _DB_LOG_DISK_STRING_CODE = 'hddv1'
+
 
 def make_disk(disk_string_code_throughput: str = _OS_DB_DISK_STRING_CODE,
               disk_string_code_rand_iops: str = _OS_DB_DISK_STRING_CODE,
@@ -145,6 +150,7 @@ def make_disk(disk_string_code_throughput: str = _OS_DB_DISK_STRING_CODE,
                         write_throughput_spec=write_throughput_spec or disk_string_code_throughput,
                         throughput_scale_factor=throughput_scale_factor, disk_usable_size=disk_usable_size,
                         per_scale_in_raid=per_scale_in_raid, num_disks=num_disks)
+
 
 def make_tuning_keywords(**kwargs: _SIZING) -> PG_TUNE_USR_KWARGS:
     return PG_TUNE_USR_KWARGS(**kwargs)

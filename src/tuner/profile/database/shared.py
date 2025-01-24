@@ -3,7 +3,7 @@ This module is to perform specific tuning on the PostgreSQL database server.
 
 """
 import logging
-from math import ceil, floor
+from math import floor
 
 from pydantic import ByteSize
 

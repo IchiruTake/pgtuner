@@ -2,12 +2,14 @@ import asyncio
 import logging
 import random
 from contextlib import asynccontextmanager
+import os
 from typing import Literal
 
 from fastapi import FastAPI
 from fastapi import status
-from fastapi.responses import ORJSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import ORJSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import ValidationError
+from starlette.responses import FileResponse
 from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -117,27 +119,48 @@ app.add_middleware(CompressMiddleware, minimum_size=(Ki >> 1), compress_level=3)
 _logger.info('The middlewares have been added to the application ...')
 
 _logger.info('Mounting the static files to the application ...')
+_static_mapper = {
+    '/static': './web/ui/static',
+    '/resource': './web/ui/static/resource',
+    '/css': './web/ui/static/css',
+    # '/js': './web/ui/js',
+}
 try:
-    app.mount('/static', StaticFiles(directory='./web/ui/static'), name='static')
-    _logger.info('The static files have been added to the application ...')
+    for path, directory in _static_mapper.items():
+        app.mount(path, StaticFiles(directory=directory), name=path.split('/')[-1])
 except (FileNotFoundError, RuntimeError) as e:
     _logger.warning(f'The static files have not been mounted: {e}')
     raise e
+_logger.info('The static files have been added to the application ...')
+
+# 0: Development, 1: Production
+CURRENT_ENVIRONMENT: str = os.getenv(f'{APP_NAME_UPPER}_WEB', '0')
+def _get_html(minified: bool = False):
+    return '/static/index.min.v2.html' if minified else '/static/index.html'
+
+@app.get('/min')
+async def root_min():
+    return RedirectResponse(url=_get_html(minified=True), status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
+@app.get('/dev')
+async def root_dev():
+    return RedirectResponse(url=_get_html(minified=False), status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
-@app.get('/', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+@app.get('/')
 async def root():
-    return RedirectResponse(url='/static/index.min.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse(url=_get_html(minified=(CURRENT_ENVIRONMENT == '1')),
+                            status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
+@app.get('/js/{javascript_path}')
+async def js(javascript_path: str):
+    _javascript_filepath = f'./web/ui/static/js/{javascript_path}'
+    if not os.path.exists(_javascript_filepath):
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+    content = open(_javascript_filepath, 'r').read()
+    return Response(content, status_code=status.HTTP_200_OK, headers={'Content-Type': 'application/javascript'})
 
-@app.get('/min', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-async def root_min():
-    return RedirectResponse(url='/static/index.min.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-
-@app.get('/dev', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-async def root_min():
-    return RedirectResponse(url='/static/index.html', status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get('/_health', status_code=status.HTTP_200_OK)

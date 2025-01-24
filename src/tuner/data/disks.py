@@ -23,6 +23,7 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 _DISK_TOML: dict[str, dict[str, int]] | None = LoadAppToml()['disk']
 _DEFAULT_DISK_STRING_CODE = 'ssdv2'
 
+
 @lru_cache(maxsize=2)
 def network_disk_performance(mode: str) -> tuple[int, int]:
     lower_bound: int = int(4 * _DISK_TOML[mode]['hddv2'])
@@ -30,6 +31,7 @@ def network_disk_performance(mode: str) -> tuple[int, int]:
     if lower_bound > upper_bound:
         return upper_bound, lower_bound
     return lower_bound, upper_bound
+
 
 def string_disk_to_performance(value: str | int | ByteSize, mode: str) -> int | ByteSize:
     if isinstance(value, (int, ByteSize)):

@@ -1,5 +1,5 @@
-from enum import Enum
 from datetime import datetime
+from enum import Enum
 
 from src.static.c_timezone import GetTimezone
 from src.static.vars import __VERSION__, APP_NAME_UPPER
