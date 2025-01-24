@@ -13,7 +13,7 @@ from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import pgtuner
-from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, Ki
+from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, Ki, Gi
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
 from web.middlewares.compressor import CompressMiddleware
@@ -160,6 +160,12 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
             content={'message': 'Invalid Request', 'detail': err.errors()},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+    except ValueError as err:
+        return ORJSONResponse(
+            content={'message': 'Invalid Request', 'detail': str(err)},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     # pprint(backend_request.options)
     exclude_names = {'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command'}
     response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
@@ -167,7 +173,7 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
                                         output_format=request.output_format, backup_settings=request.backup_settings,
                                         exclude_names=exclude_names)
     if isinstance(content, dict):
-        mem_report = response.mem_test(backend_request.options, use_full_connection=False, ignore_report=True)[0]
+        mem_report = response.mem_test(backend_request.options, use_full_connection=True, ignore_report=True)[0]
         return ORJSONResponse(content={'mem_report': mem_report, 'config': content},
                               status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
     return PlainTextResponse(content=content, status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})

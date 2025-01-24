@@ -107,10 +107,10 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             temp_buffers_ratio=self.temp_buffers_ratio,
             work_mem_scale_factor=self.work_mem_scale_factor,
             max_normal_memory_usage=self.max_normal_memory_usage,
-            memory_precision_epsilon_to_rollback=self.memory_precision_epsilon_to_rollback,
-            memory_precision_tuning_increment=self.memory_precision_tuning_increment,
-            memory_precision_tuning_ratio=self.memory_precision_tuning_ratio,
-            memory_precision_max_iterations=self.memory_precision_max_iterations,
+            mem_pool_epsilon_to_rollback=self.memory_precision_epsilon_to_rollback,
+            mem_pool_tuning_increment=self.memory_precision_tuning_increment,
+            mem_pool_tuning_ratio=self.memory_precision_tuning_ratio,
+            mem_pool_max_iterations=self.memory_precision_max_iterations,
             wal_segment_size=self.wal_segment_size * BASE_WAL_SEGMENT_SIZE,
             max_query_length_in_bytes=self.max_query_length_in_bytes,
             max_runtime_ms_to_log_slow_query=self.max_runtime_ms_to_log_slow_query,
@@ -142,7 +142,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     # Data Integrity, Transaction, Crash Recovery, and Replication
     max_backup_replication_tool: str = Field(default='pg_basebackup')
     opt_transaction_lost: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.NONE)
-    opt_wal_buffers: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.NONE)
+    opt_wal_buffers: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.SPIDEY)
     repurpose_wal_buffers: bool = True
     max_time_transaction_loss_allow_in_millisecond: PositiveInt = Field(default=650, ge=1, le=10000)
     max_num_stream_replicas_on_primary: int = Field(default=0, ge=0, le=32)
@@ -151,8 +151,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
 
     # These are for the database tuning options
     workload_type: PG_WORKLOAD = Field(default=PG_WORKLOAD.HTAP)
-    opt_memory: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.OPTIMUS_PRIME)
-    opt_memory_precision: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.OPTIMUS_PRIME)
+    opt_mem_pool: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.OPTIMUS_PRIME)
     keywords: PG_WEB_TUNE_USR_KWARGS = Field(default=PG_TUNE_USR_KWARGS())
 
 
@@ -160,7 +159,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     # This is used for analyzing the memory available.
     operating_system: str = Field(default='linux')
     logical_cpu: PositiveInt = Field(default=4, ge=1)
-    ram_sample_in_gib: ByteSize | PositiveFloat = Field(default=16, ge=1, multiple_of=0.25)
+    ram_sample_in_gib: ByteSize | PositiveFloat = Field(default=16, ge=2, multiple_of=0.25)
     add_system_reserved_memory_into_ram: bool = False
     base_kernel_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=8 * Ki)]
     base_monitoring_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=4 * Ki)]
@@ -203,13 +202,12 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             offshore_replication=self.offshore_replication,
             # Database tuning options
             workload_type=self.workload_type,
-            opt_memory=self.opt_memory,
-            opt_memory_precision=self.opt_memory_precision,
+            opt_mem_pool=self.opt_mem_pool,
             tuning_kwargs=self.keywords.to_backend(),
             # Analyzing the memory available
             operating_system=self.operating_system,
             vcpu=self.logical_cpu,
-            ram_sample=self.ram_sample_in_gib * Gi,
+            ram_sample=ByteSize(self.ram_sample_in_gib * Gi),
             add_system_reserved_memory_into_ram=self.add_system_reserved_memory_into_ram,
             base_kernel_memory_usage=kernel_memory,
             base_monitoring_memory_usage=monitoring_memory,
@@ -232,7 +230,7 @@ class PG_WEB_TUNE_REQUEST(BaseModel):
     user_options: PG_WEB_TUNE_USR_OPTIONS
     alter_style: bool = False
     backup_settings: bool = False
-    output_format: Literal['json', 'text', 'conf', 'file'] = 'conf'
+    output_format: Literal['json', 'conf', 'file'] = 'conf'
 
     def to_backend(self) -> PG_TUNE_REQUEST:
         custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'

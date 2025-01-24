@@ -13,10 +13,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script crossorigin="anonymous"
             integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer async></script>
+            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script crossorigin="anonymous"
             integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
-            src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" defer async></script>
+            src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
 </head>
 
 <!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
@@ -87,30 +87,14 @@
             <!-- Optimization Mode -->
             <div class="col-4 mb-3">
                 <div class="d-flex justify-content-between align-items-center">
-                    <label class="form-label" for="opt_memory"> Memory Optimization Mode </label>
-                    <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                       data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                       data-bs-content="The PostgreSQL optimization mode on workload type to tune memory usage by allowing total disk cache (effective_cache_size) in buffer to higher ratio (shared_buffers + effective_cache_size + wal_buffers + dedicated memory of connection to be approximate the RAM)"
-                       title="Memory Optimization Mode">
-                    </i>
-                </div>
-                <select class="form-select" id="opt_memory" name="opt_memory">
-                    <option value="none">NONE: Ignore Optimization </option>
-                    <option value="lightweight">SPIDEY: Light-weight Optimization</option>
-                    <option selected value="general">OPTIMUS PRIME: General Optimization </option>
-                    <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
-                </select>
-            </div>
-            <div class="col-4 mb-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <label class="form-label" for="opt_memory_precision"> Memory Precision Optimization Mode </label>
+                    <label class="form-label" for="opt_mem_pool"> Memory Pool Optimization Mode </label>
                     <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
                        data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
                        data-bs-content="If not NONE, it would proceed the extra tuning to increase the memory usage to reach to your expectation (shared_buffers, work_mem, temp_buffer, wal_buffer, ...). Set to SPIDEY use the worst case of memory usage by assuming all connections are under high load. Set to OPTIMUS_PRIME (default) take the average between normal (active connections) and worst case as the stopping condition; PRIMORDIAL take the normal case as the stopping condition."
-                       title="Memory Precision Optimization Mode">
+                       title="Memory Pool Optimization Mode">
                     </i>
                 </div>
-                <select class="form-select" id="opt_memory_precision" name="opt_memory_precision">
+                <select class="form-select" id="opt_mem_pool" name="opt_mem_pool">
                     <option value="none">NONE: Ignore Optimization </option>
                     <option value="lightweight">SPIDEY: Light-weight Optimization</option>
                     <option selected value="general">OPTIMUS PRIME: General Optimization </option>
@@ -130,13 +114,8 @@
                 <select class="form-select" id="operating_system" name="operating_system">
                     <option selected value="linux">Linux</option>
                     <option value="windows">Windows</option>
-                    <option value="macos">macOS</option>
-                    <option value="docker">Docker</option>
-                    <option value="k8s">Kubernetes</option>
-                    <option value="containerd">Containerd</option>
-                    <option value="wsl">WSL</option>
+                    <option value="containerd">Container (K8s, Docker, containerd)</option>
                     <option value="PaaS">PaaS (Cloud or 3rd-Party)</option>
-                    <option value="DBaaS">DBaaS (Cloud or 3rd-Party)</option>
                 </select>
             </div>
             <div class="col-4 mb-3">
@@ -169,11 +148,11 @@
                 </div>
                 <div class="d-flex align-items-center">
                     <input class="form-range me-3" name="ram_sample_in_gib" id="ram_sample_in_gib_range"
-                           max="1024" min="1" step="0.25" value="16" type="range"
-                           onchange="syncSliderToNumber('ram_sample_in_gib')">
+                           max="1024" min="2" step="0.25" value="16" type="range"
+                           onchange="syncSliderToNumber('ram_sample_in_gib'); ram_calculator()">
                     <input class="form-control w-50" id="ram_sample_in_gib"
-                            max="1024" min="1" step="0.25" value="16" type="number"
-                            onchange="syncNumberToSlider('ram_sample_in_gib')">
+                           max="1024" min="2" step="0.25" value="16" type="number"
+                           onchange="syncNumberToSlider('ram_sample_in_gib'); ram_calculator()">
                 </div>
             </div>
             <!-- RAM usage in basic (OS and Monitoring) -->
@@ -187,7 +166,7 @@
                     </i>
                 </div>
                 <div class="d-flex align-items-center form-check form-switch">
-                    <input class="form-check-input" type="checkbox" role="switch" id="add_system_reserved_memory_into_ram" >
+                    <input class="form-check-input" type="checkbox" role="switch" id="add_system_reserved_memory_into_ram" onchange="ram_calculator()">
                     <label class="form-check-label px-3" for="add_system_reserved_memory_into_ram">No</label>
                 </div>
             </div>
@@ -203,10 +182,10 @@
                 <div class="d-flex align-items-center">
                     <input class="form-range me-3" name="base_kernel_memory_usage_in_mib" id="base_kernel_memory_usage_in_mib_range"
                            max="8192" min="-1" step="1" value="-1" type="range"
-                           onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib')">
+                           onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib'); ram_calculator()">
                     <input class="form-control w-50" id="base_kernel_memory_usage_in_mib"
                            max="8192" min="-1" step="1" value="-1" type="number"
-                           onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib')">
+                           onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib'); ram_calculator()">
                 </div>
             </div>
             <div class="col-4 mb-3">
@@ -219,14 +198,30 @@
                     </i>
                 </div>
                 <div class="d-flex align-items-center">
-                    <input class="form-range me-3" name="base_monitoring_memory_usage_in_mib" id="base_monitoring_memory_usage_in_mib_range"
+                    <input class="form-range me-3" name="base_monitoring_memory_usage_in_mib"
+                           id="base_monitoring_memory_usage_in_mib_range"
                            max="4096" min="-1" step="1" value="-1" type="range"
-                           onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib')">
+                           onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); ram_calculator()">
                     <input class="form-control w-50" id="base_monitoring_memory_usage_in_mib"
                             max="4096" min="-1" step="1" value="-1" type="number"
-                            onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib')">
+                            onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()">
                 </div>
             </div>
+            <!-- Display Total RAM in (MiB), not a form submit -->
+            <div class="col-4 mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <label class="form-label" for="total_usable_ram">Total Usable RAM (MiB)</label>
+                    <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
+                       data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                       data-bs-content="This displays the total usable RAM in MiB after accounting for kernel and monitoring memory usage. We recommended to have this attribute at least 1.5 GiB. Recommended minimally at 4-8 GiB at least. "
+                       title="Total Usable RAM (MiB)">
+                    </i>
+                </div>
+                <div class="d-flex align-items-center">
+                    <input class="form-control w-100" id="total_usable_ram" disabled readonly onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()" value="???">
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -675,13 +670,13 @@
                     <label class="form-label" for="opt_wal_buffers">WAL Buffer Optimization Profile </label>
                     <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
                        data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                       data-bs-content="Higher profile would reduce the maximum space for WAL buffers. Default to NONE means we reuse the value taken from the general tuning phase. Switch to SPIDEY would cap its maximum to a lower value (defined when the wal_level is minimal). Increase to OPTIMUS_PRIME would half the value return from the general tuning phase, but ensuring the WAL buffers minimum to be the size of a WAL segment (16 MiB). Increase to PRIMORDIAL would set the WAL buffers to zero. Unless you are working in on the mission-critical system where the atomicity and consistency are the top priorities; otherwise, we recommended to use the value equal or below the OPTIMUS_PRIME. This flag is not being impacted regardless the wal_level value."
+                       data-bs-content="The optimization mode for the WAL buffers to ensure the WAL buffers in the correction tuning phase during outage lose data less than the maximum time of lossy transaction. Set to PRIMORDIAL ensure 2x WAL buffers can be written to disk in our estimation. Similarly with OPTIMUS_PRIME at 1.5x and SPIDEY at 1.0x. Set to NONE would not tune the WAL setting. Only set to NONE when you feel the maximum of data integrity is not required integrity. Otherwise, this would be enforced to SPIDEY."
                        title="WAL Buffer Optimization Profile">
                     </i>
                 </div>
                 <select class="form-select" id="opt_wal_buffers" name="opt_wal_buffers">
-                    <option selected value="none">NONE: Ignore Optimization </option>
-                    <option value="lightweight">SPIDEY: Light-weight Optimization</option>
+                    <option value="none">NONE: Ignore Optimization </option>
+                    <option selected value="lightweight">SPIDEY: Light-weight Optimization</option>
                     <option value="general">OPTIMUS PRIME: General Optimization </option>
                     <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
                 </select>
@@ -754,7 +749,7 @@
                     </label>
                     <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
                        data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                       data-bs-content="Set to True (default) would take the difference of WAL buffers to be used in temp_buffers and work_mem, by increasing its pool size. This would be conducted after the final memory tuning. The reason not to re-purpose into the shared_buffers is that the shared_buffers is usually persistent when the database is online. This argument is only valid when the opt_wal_buffers is set to SPIDEY or higher."
+                       data-bs-content="Set to True (default) would take the difference of WAL buffers to be used in temp_buffers and work_mem, by increasing its pool size. This would be conducted after the final memory tuning. The reason not to re-purpose into the shared_buffers is that the shared_buffers is usually persistent when the database is online. This argument is only valid when the WAL buffers is reduced because your disk cannot handle between transaction loss."
                        title="Transfer WAL buffers to Working Memory">
                     </i>
                 </div>
@@ -849,8 +844,8 @@
                     </i>
                 </div>
                 <div class="d-flex align-items-center form-check form-switch">
-                    <input class="form-check-input" type="checkbox" role="switch" id="backup_settings" >
-                    <label class="form-check-label px-3" for="backup_settings">No</label>
+                    <input class="form-check-input" type="checkbox" role="switch" id="backup_settings" checked>
+                    <label class="form-check-label px-3" for="backup_settings">Yes</label>
                 </div>
             </div>
             <div class="col-3 mb-3">
@@ -863,10 +858,9 @@
                     </i>
                 </div>
                 <select class="form-select" id="output_format" name="output_format">
-                    <option selected value="conf">Conf: Configuration File</option>
-                    <option value="json">JSON: Return JSON configuration</option>
-                    <option value="text">Text: Similar to Conf but with dot-comma notion</option>
-                    <option value="file">File: Fully-managed outcome</option>
+                    <option value="conf">Conf: INI Format</option>
+                    <option value="json">JSON: JSON Format and Memory Report</option>
+                    <option selected value="file">File: Fully-Managed INI Format</option>
                 </select>
             </div>
         </div>
@@ -875,6 +869,11 @@
     <!-- Advanced Settings -->
     <div class="my-4">
         <h4 class="mb-3">Advanced Tuning Parameters</h4>
+        <p>
+            It is best to review these advanced settings to customize it based on your needs.
+
+        </p>
+
         <button aria-controls="advancedSettings" aria-expanded="false" class="btn btn-secondary"
                 data-bs-target="#advancedSettings"
                 data-bs-toggle="collapse" type="button">
@@ -1045,7 +1044,7 @@
                             <label class="form-label" for="keywords.max_work_buffer_ratio"> Max Work Buffer Pool Ratio </label>
                             <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
                                data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                               data-bs-content="The ratio of the maximum PostgreSQL available memory (excluding shared_buffers and others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). The supported range is (0, 0.75], default is 0.15. The algorithm is temp_buffers + work_mem = (pgmem_available * max_work_buffer_ratio) / active_user_connections."
+                               data-bs-content="The ratio of the maximum PostgreSQL available memory (excluding shared_buffers and others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). The supported range is (0, 0.50], default is 0.0755. The algorithm is temp_buffers + work_mem = (pgmem_available * max_work_buffer_ratio) / active_user_connections."
                                title="Max Work Buffer Pool Ratio">
                             </i>
                         </div>
@@ -1141,7 +1140,7 @@
                                    onchange="syncNumberToSlider('max_normal_memory_usage')">
                         </div>
                     </div>
-                    <!-- memory_precision_epsilon_to_rollback -->
+                    <!-- mem_pool_epsilon_to_rollback -->
                     <div class="col-4 mb-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <label class="form-label" for="keywords.memory_precision_epsilon_to_rollback">
@@ -1162,7 +1161,7 @@
                                    onchange="syncNumberToSlider('keywords.memory_precision_epsilon_to_rollback')">
                         </div>
                     </div>
-                    <!-- memory_precision_tuning_increment -->
+                    <!-- mem_pool_tuning_increment -->
                     <div class="col-4 mb-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <label class="form-label" for="keywords.memory_precision_tuning_increment">
@@ -1183,7 +1182,7 @@
                                    onchange="syncNumberToSlider('keywords.memory_precision_tuning_increment')">
                         </div>
                     </div>
-                    <!-- memory_precision_tuning_ratio -->
+                    <!-- mem_pool_tuning_ratio -->
                     <div class="col-4 mb-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <label class="form-label" for="keywords.memory_precision_tuning_ratio">
@@ -1204,7 +1203,7 @@
                                    onchange="syncNumberToSlider('keywords.memory_precision_tuning_ratio')">
                         </div>
                     </div>
-                    <!-- memory_precision_max_iterations -->
+                    <!-- mem_pool_max_iterations -->
                     <div class="col-4 mb-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <label class="form-label" for="keywords.memory_precision_max_iterations">
@@ -1426,6 +1425,72 @@
             }
         });
     }
+
+    function _get_kernel_memory() {
+        // Ensure these part synchronized with Python code
+        const operating_system = document.getElementById("operating_system").value;
+        const kernel_memory_block = document.getElementById("base_kernel_memory_usage_in_mib");
+        let kernel_memory = kernel_memory_block.value * 1; // To get a copy
+        if (kernel_memory === -1) {
+            if (operating_system === "linux") {
+                kernel_memory = 768;
+            } else if (operating_system === "windows") {
+                kernel_memory = 2048;
+            } else {
+                kernel_memory = 64;
+            }
+        }
+        return kernel_memory;
+    }
+    function _get_monitoring_memory() {
+        // Ensure these part synchronized with Python code
+        const operating_system = document.getElementById("operating_system").value;
+        const monitoring_memory_block = document.getElementById("base_monitoring_memory_usage_in_mib");
+        let monitoring_memory = monitoring_memory_block.value * 1;  // To get a copy
+        if (monitoring_memory === -1) {
+            monitoring_memory = 256;
+            if (operating_system === "containerd") {
+                monitoring_memory = 64;
+            } else if (operating_system === "PaaS") {
+                monitoring_memory = 0;
+            }
+        }
+        return monitoring_memory;
+    }
+    function _get_total_ram() {
+        // Ensure these part synchronized with Python code
+        const operating_system = document.getElementById("operating_system").value;
+        const add_reserved_ram_block = document.getElementById("add_system_reserved_memory_into_ram");
+        let total_ram = document.getElementById("ram_sample_in_gib").value * 1024;
+        if (add_reserved_ram_block.checked) {
+            if (operating_system === "linux") {
+                total_ram += 128;
+            } else if (operating_system === "windows") {
+                total_ram += 256;
+            } else if (operating_system === "containerd") {
+                total_ram += 32;
+            }
+        }
+        return total_ram;
+    }
+
+    function ram_calculator() {
+        let kernel_memory = _get_kernel_memory()
+        let monitoring_memory = _get_monitoring_memory()
+        let total_ram = _get_total_ram()
+
+        const final_ram = total_ram - kernel_memory - monitoring_memory;
+        const postgresql_ram_available_block = document.getElementById("total_usable_ram");
+        postgresql_ram_available_block.value = final_ram;
+        if (final_ram < 1536) {
+            // Set it to 1.5 GiB limit
+            alert('The remaining memory is less than 1.5 GiB. Please consider to increase the total RAM of your server, or switch to a more lightweight monitoring system, kernel usage, or even the operating system');
+        }
+        // We already have a stronger backend validation with Pydantic so we don't need to check it here
+        return final_ram;
+    }
+    ram_calculator();
+
     const checkboxList = document.querySelectorAll('.form-check-input');
     checkboxList.forEach(checkbox => {
         syncLabelFromCheckbox(checkbox.id, 'Yes', 'No');
@@ -1438,6 +1503,9 @@
     const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
     const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
 
+
+
+    // ----------------- Fetching API -----------------
     function preprocessParameters(params) {
         const nestedParams = {};
 
@@ -1488,6 +1556,19 @@
         return params;
     }
 
+    function update_response(id, value) {
+        const response_box_block = document.getElementById(id);
+        console.log(response_box_block);
+        if (response_box_block.readOnly) {
+            response_box_block.readOnly = false;
+            response_box_block.innerHTML = '';
+            response_box_block.innerHTML = value;
+            response_box_block.readOnly = true;
+        } else {
+            response_box_block.innerHTML = value;
+        }
+    }
+
     async function submitConfiguration() {
         const rawParams = gatherFormValues();
         const processedParams = preprocessParameters(rawParams);
@@ -1513,37 +1594,25 @@
                 // If the response is successful, show the result based on its content-type
                 if (response.headers.get('content-type').includes('application/json')) {
                     const result = await response.json();
-                    console.log(result);
                     // Set the response box to be editable, then set the response to the result
-                    const responseBox = document.getElementById('response-box');
-                    responseBox.readOnly = false;
-                    responseBox.innerHTML = '';
-                    responseBox.innerHTML = JSON.stringify(result['config'], null, 2);
-                    responseBox.readOnly = true;
+                    update_response('response-box', JSON.stringify(result['config'], null, 2));
+
                     // Set the memory report box to be editable, then set the response to the result
-                    const memReportBox = document.getElementById('mem-report');
-                    memReportBox.readOnly = false;
-                    memReportBox.innerHTML = '';
-                    memReportBox.innerHTML = result['mem_report'];
-                    memReportBox.readOnly = true;
+                    update_response('mem-report', result['mem_report']);
 
                 } else if (response.headers.get('content-type').includes('text/plain')) {
                     const result = await response.text();
-                    console.log(result);
-                    const responseBox = document.getElementById('response-box');
-                    responseBox.readOnly = false;
-                    responseBox.innerHTML = '';
-                    responseBox.innerHTML = result;
-                    responseBox.readOnly = true;
+                    // Set the response box to be editable, then set the response to the result
+                    update_response('response-box', result);
                 }
             } else {
-                const error = await response.text();
+                const error = await response.json();
+                update_response('response-box', JSON.stringify(error['detail'], null, 2));
                 console.error('Error:', error);
-                alert('Failed to generate configuration.');
             }
         } catch (err) {
+            update_response('response-box', err);
             console.error('Request failed:', err);
-            alert('An error occurred. Please try again.');
         }
     }
 

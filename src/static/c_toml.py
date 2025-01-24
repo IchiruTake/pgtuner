@@ -153,8 +153,8 @@ def LoadAppToml(force: bool = False, expiry_seconds: int = 0, perform_checksum: 
     sub_contents = [content for filepath, (_, content) in __APP_CACHE.items() if filepath != PGTUNER_PROFILE_FILE_PATH]
     result = deepmerge(main_content, *sub_contents)
     __APP_CACHE[APP_NAME_LOWER + '-final'] = (datetime.now(tz=GetTimezone()[0]), result)
-    _logger.info(f"Successfully loaded the TOML files for application {APP_NAME_LOWER}. Result as follows:"
-                 f"\nJSON: {json.dumps(result, allow_nan=False, sort_keys=True)}")
+    _logger.info(f'Successfully loaded the TOML files for application {APP_NAME_LOWER}. Result as follows:'
+                 f'\nJSON: {json.dumps(result, allow_nan=False, sort_keys=True)}')
     if rich is not None and verbose:
         print_json(data=result)
 
