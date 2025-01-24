@@ -18,22 +18,23 @@ _<Scope>_<Description>_PROFILE = {
 """
 
 import logging
+import math
 from functools import partial
 from math import ceil
 
 from pydantic import ByteSize
 
 from src.static.vars import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
-    SECOND, PG_LOG_DIR
+    SECOND, PG_LOG_DIR, BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
+from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
 from src.utils.pydantic_utils import (bytesize_to_postgres_string, bytesize_to_postgres_unit, bytesize_to_hr,
-                                      realign_value_to_unit, cap_value)
-from src.tuner.profile.gtune_common import merge_extra_info_to_profile, type_validation
+                                      realign_value_to_unit, cap_value, )
 
-__all__ = ['DB_CONFIG_PROFILE',]
+__all__ = ['DB0_CONFIG_PROFILE', ]
 
 _SIZING = ByteSize | int | float
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -42,7 +43,6 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 if DB_PAGE_SIZE != 8 * Ki:
     raise ValueError("The database page size is not 8 KiB. The PostgreSQL server do not use any page size differed "
                      "8 KiB or 8192 bytes")
-
 
 # =============================================================================
 # Don't change these constant
@@ -164,12 +164,11 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     # Also, we encourage the use of not maximum of 100%, could be 99.5% instead to not overly estimate.
     # For the connection memory estimation, we assumed not all connections required work_mem, but idle connections
     # persist.
-    pgmem_available = int(options.usable_ram_noswap)    # Copy the value
+    pgmem_available = int(options.usable_ram_noswap)  # Copy the value
     pgmem_available -= int(group_cache['shared_buffers'] * options.tuning_kwargs.shared_buffers_fill_ratio)
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= int(_mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio)
-    if 'wal_level' in global_cache and global_cache['wal_level'] != 'minimal' and 'wal_buffers' in global_cache:
-        # Ignore 'minimal' WAL level for free estimation during correction tuning phase
+    if 'wal_buffers' in global_cache:
         pgmem_available -= global_cache['wal_buffers']
 
     max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio
@@ -209,28 +208,27 @@ def __work_mem(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
     return __temp_buffers_and_work_mem(group_cache, global_cache, options, response)[1]
 
 
-def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, response: PG_TUNE_RESPONSE,
-                      minimum: int, maximum: int) -> int:
-    total_reserved_connections: int = group_cache["reserved_connections"] + group_cache["superuser_reserved_connections"]
+def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_conns: int, max_user_conns: int) -> int:
+    total_reserved_connections: int = group_cache['reserved_connections'] + group_cache[
+        'superuser_reserved_connections']
     if options.tuning_kwargs.user_max_connections != 0:
-        _logger.debug('The max_connections variable is overridden by the user, start the capping process.')
+        _logger.debug('The max_connections variable is overridden by the user so no constraint here.')
         allowed_connections = options.tuning_kwargs.user_max_connections
         return allowed_connections + total_reserved_connections
 
+    # Should I upscale here?
+    # Make a small upscale here to future-proof database scaling, and reduce the number of connections
+    _upscale: float = __SCALE_FACTOR_CPU_TO_CONNECTION  # / max(0.75, options.tuning_kwargs.effective_connection_ratio)
     _logger.debug(f'The max_connections variable is determined by the number of logical CPU count with the scale '
-                  f'factor of {__SCALE_FACTOR_CPU_TO_CONNECTION}x.')
-
-    allowed_connections: int = options.vcpu * __SCALE_FACTOR_CPU_TO_CONNECTION
-    if allowed_connections <= 2 * total_reserved_connections:
-        _logger.warning('The number of connections is too low. Please consider increasing the number of connections.')
-    max_connections = cap_value(allowed_connections + total_reserved_connections,
-                                max(minimum, 2 * total_reserved_connections), maximum)
+                  f'factor of {__SCALE_FACTOR_CPU_TO_CONNECTION:.1f}x.')
+    _minimum = max(min_user_conns, total_reserved_connections)
+    max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections
     _logger.debug(f'max_connections: {max_connections}')
     return max_connections
 
 
-def __reserved_connections(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
-                           minimum: _SIZING, maximum: _SIZING, superuser_mode: bool = False) -> int:
+def __reserved_connections(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: int,
+                           superuser_mode: bool = False) -> int:
     # 1.5x here is heuristically defined to limit the number of superuser reserved connections
     if not superuser_mode:
         reserved_connections: int = options.vcpu // __DESCALE_FACTOR_RESERVED_DB_CONNECTION
@@ -259,28 +257,36 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     # Re-align the number (always use the lower bound for memory safety)
     lower_effective_cache_size, _ = realign_value_to_unit(effective_cache_size, page_size=DB_PAGE_SIZE)
     _logger.debug(f"effective_cache_size: {bytesize_to_hr(lower_effective_cache_size)}")
-
-    # Don't use the :func:`get_postgresql_memory_worst_case_remaining` here since we are in the tuning stage
-    worst_case_memory_remaining = options.usable_ram_noswap - global_cache['shared_buffers'] - lower_effective_cache_size
-    if worst_case_memory_remaining < 0:  # Unless the heuristic is larger than 1.0
-        _logger.warning("The memory used for PostgreSQL would exceed the total memory in the worst case when "
-                        "estimate index use for disk cache with shared buffers.")
-    _logger.debug(f'Your server allows {bytesize_to_hr(worst_case_memory_remaining)} in the worst case, '
-                  f'when estimate index use for disk cache with shared buffers.')
     return lower_effective_cache_size
 
 
 def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
-                  minimum: _SIZING, maximum: _SIZING, divider_of_shared_buffers: int,
-                  maximum_if_minimal_wal_level: _SIZING) -> _SIZING:
-    minimum = min(minimum, options.tuning_kwargs.wal_segment_size // 16)
-    if group_cache['wal_level'] == 'minimal':
-        maximum = min(maximum, maximum_if_minimal_wal_level)
-    return realign_value_to_unit(
-        cap_value(global_cache['shared_buffers'] // divider_of_shared_buffers, minimum, maximum),
-        # The WAL segment size is 16 MiB (here is 1 MiB precision), or you can set 32 * DB_PAGE_SIZE (add / 4 more)
-        page_size=32 * DB_PAGE_SIZE # options.tuning_kwargs.wal_segment_size // 16,
-    )[0]
+                  minimum: _SIZING, maximum: _SIZING) -> _SIZING:
+    # See this article https://www.cybertec-postgresql.com/en/wal_level-what-is-the-difference/
+    # It is only benefit when you use COPY instead of SELECT. For other thing, the spawning of
+    # WAL buffers is not necessary.
+    shared_buffers = global_cache['shared_buffers']
+    usable_ram_noswap = options.usable_ram_noswap
+    fn = lambda x: 1024 * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
+    if shared_buffers <= 512 * Mi or usable_ram_noswap <= 4 * Gi:
+        oldstyle_wal_buffers = shared_buffers // 32  # Measured in bytes
+        wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki)
+    else:
+        wal_buffers = fn(usable_ram_noswap / Gi) * Ki  # Measured in MiB
+
+    precision: int = DB_PAGE_SIZE
+    # With low server usage, we push it to exploited 1 page of precision
+    if 2.5 * Gi < usable_ram_noswap <= 4 * Gi:
+        precision = 4 * DB_PAGE_SIZE
+    elif 4 * Gi < usable_ram_noswap <= 6 * Gi:
+        precision = 8 * DB_PAGE_SIZE
+    elif 6 * Gi < usable_ram_noswap <= 8 * Gi:
+        precision = 16 * DB_PAGE_SIZE
+    elif 8 * Gi < usable_ram_noswap <= 16 * Gi:
+        precision = 24 * DB_PAGE_SIZE
+    elif usable_ram_noswap > 16 * Gi:
+        precision = 32 * DB_PAGE_SIZE
+    return realign_value_to_unit(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[0]
 
 
 # =============================================================================
@@ -288,30 +294,30 @@ _DB_CONN_PROFILE = {
     # Connections
     'superuser_reserved_connections': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            __reserved_connections(options, response, 0, 10, superuser_mode=True),
+        __reserved_connections(options, 0, 10, superuser_mode=True),
         'default': __BASE_RESERVED_DB_CONNECTION,
         'comment': f"Sets the number of connections reserved for superusers. The default is {__BASE_RESERVED_DB_CONNECTION} "
                    f"plus 1/{__DESCALE_FACTOR_RESERVED_DB_CONNECTION} of logical CPU, maximum at {10 + __BASE_RESERVED_DB_CONNECTION}",
     },
     'reserved_connections': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            __reserved_connections(options, response, 0, 10, superuser_mode=False),
+        __reserved_connections(options, 0, 10, superuser_mode=False),
         'default': __BASE_RESERVED_DB_CONNECTION,
         'comment': f"Sets the number of connections reserved for users. The default is {__BASE_RESERVED_DB_CONNECTION} "
                    f"plus 1/{__DESCALE_FACTOR_RESERVED_DB_CONNECTION} of logical CPU, maximum at {10 + __BASE_RESERVED_DB_CONNECTION}.",
     },
     'max_connections': {
         'instructions': {
-            'mini': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache,
-                                                                                           response, 10, 50),
-            'medium': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache,
-                                                                                             response, 20, 65),
-            'large': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache,
-                                                                                            response, 30, 100),
-            'mall': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache,
-                                                                                           response, 40, 175),
-            'bigt': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache,
-                                                                                           response, 50, 250),
+            'mini': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 10,
+                                                                                           50),
+            'medium': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 20,
+                                                                                             65),
+            'large': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 30,
+                                                                                            100),
+            'mall': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 40,
+                                                                                           175),
+            'bigt': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 50,
+                                                                                           250),
         },
         'default': 50,
         'comment': "The maximum number of client connections allowed. The default is 50. But by testing and some "
@@ -327,7 +333,7 @@ _DB_CONN_PROFILE = {
                    "even on OLTP/OLAP, Power Bi workload, and not a real-world scenario.",
     },
     'listen_addresses': {
-        'default': '*', # '127.0.0.1/32, ::1/128, 192.168.0.0/16, 172.18.0.0/12, 10.0.0.0/8, 127.0.0.0/8',
+        'default': '*',  # '127.0.0.1/32, ::1/128, 192.168.0.0/16, 172.18.0.0/12, 10.0.0.0/8, 127.0.0.0/8',
         'comment': 'Specifies the TCP/IP address(es) on which the server is to listen for connections from client '
                    'applications. The value takes the form of a comma-separated list of host names and/or numeric '
                    'IP addresses. The special entry * corresponds to all available IP interfaces. The entry 0.0.0.0 '
@@ -432,7 +438,7 @@ _DB_VACUUM_PROFILE = {
         'default': 64 * Mi,
         'hardware_scope': 'mem',
         'post-condition-group': lambda value, cache, options:
-            value * cache['autovacuum_max_workers'] < int(options.usable_ram_noswap // 2),
+        value * cache['autovacuum_max_workers'] < int(options.usable_ram_noswap // 2),
         'comment': "Specifies the maximum amount of memory to be used by maintenance operations, such as VACUUM, CREATE "
                    "INDEX, and ALTER TABLE ADD FOREIGN KEY. Since only one of these operations can be executed at a "
                    "time by a database session, and an installation normally doesn't have many of them running "
@@ -590,8 +596,8 @@ _DB_BGWRITER_PROFILE = {
         'default': 300,
         'comment': "In each round, no more than this many buffers will be written by the background writer. Setting "
                    "this to zero disables background writing. (Note that checkpoints, which are managed by a separate, "
-                   "dedicated auxiliary process, are unaffected.) The default value is 300 pages on small servers "
-                   "and max 500 pages on large servers. On strong servers, especially with SSD, we can have "
+                   "dedicated auxiliary process, are unaffected.) The default value is 300 pages but it would be "
+                   "changed based on your data disk IOPs. On strong servers, especially with SSD, we can have "
                    "a stronger write here.",
     },
     'bgwriter_lru_multiplier': {
@@ -651,14 +657,14 @@ _DB_ASYNC_DISK_PROFILE = {
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            cap_value(int(options.vcpu * 1.5), 4, 512),
+        cap_value(int(options.vcpu * 1.5), 4, 512),
         'default': 8,
         'comment': "Sets the maximum number of background processes that the system can support. The supported range "
                    "is [4, 512], with default to 1.5x of the logical CPU count (8 by official documentation).",
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            min(cap_value(int(options.vcpu * 1), 4, 512), group_cache['max_worker_processes']),
+        min(cap_value(int(options.vcpu * 1), 4, 512), group_cache['max_worker_processes']),
         'default': 8,
         'comment': "Sets the maximum number of workers that the cluster can support for parallel operations. The "
                    "supported range is [4, 1024], with default to 1.0x of the logical CPU count (8 by official "
@@ -901,19 +907,8 @@ _DB_WAL_PROFILE = {
         'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, Mi)}MB',
     },
     'wal_buffers': {
-        'instructions': {
-            'mini': partial(__wal_buffers, minimum=8 * Mi, maximum=64 * Mi, divider_of_shared_buffers=32,
-                            maximum_if_minimal_wal_level=16 * Mi),
-            'medium': partial(__wal_buffers, minimum=8 * Mi, maximum=96 * Mi, divider_of_shared_buffers=64,
-                              maximum_if_minimal_wal_level=24 * Mi),
-            'large': partial(__wal_buffers, minimum=16 * Mi, maximum=128 * Mi, divider_of_shared_buffers=80,
-                             maximum_if_minimal_wal_level=32 * Mi),
-            'mall': partial(__wal_buffers, minimum=16 * Mi, maximum=160 * Mi, divider_of_shared_buffers=96,
-                            maximum_if_minimal_wal_level=48 * Mi),
-            'bigt': partial(__wal_buffers, minimum=16 * Mi, maximum=192 * Mi, divider_of_shared_buffers=128,
-                            maximum_if_minimal_wal_level=64 * Mi),
-        },
-        'default': 32 * Mi,
+        'tune_op': partial(__wal_buffers, minimum=BASE_WAL_SEGMENT_SIZE // 2, maximum=BASE_WAL_SEGMENT_SIZE * 16),
+        'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
         'comment': 'The amount of shared memory used for WAL data that has not yet been written to disk. The default '
                    'setting of -1 selects a size equal to 1/32nd (about 3%) of shared_buffers, but not less than 64kB '
@@ -923,7 +918,7 @@ _DB_WAL_PROFILE = {
                    'https://postgresqlco.nf/doc/en/param/wal_buffers/. But if you having a large write in OLAP workload '
                    'then it is best to increase this attribute. Our auto-tuning are set to be range from 16-128 MiB on '
                    'small servers and 32-512 MiB on large servers (ratio from shared_buffers are varied).',
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi)}MB",
+        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi)}MB',
     },
 
     # ============================== ARCHIVE && RECOVERY ==============================
@@ -973,7 +968,7 @@ exit 0
             'bigt_default': 5 * MINUTE,  # 5 minutes
         },
         'default': 15 * MINUTE,
-        'hardware_scope': 'overall',   # But based on data rate
+        'hardware_scope': 'overall',  # But based on data rate
         'comment': 'The :var:`archive_command` or :var:`archive_library` is only invoked for completed WAL segments. '
                    'Hence, if your server generates little WAL traffic, there could be a long delay between the '
                    'completion of a transaction and its safe recording in archive storage. To limit how old unarchived '
@@ -1064,17 +1059,19 @@ _DB_REPLICATION_PROFILE = {
     },
     'wal_keep_size': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(max(global_cache['max_wal_size'] // 10, 10 * options.tuning_kwargs.wal_segment_size),
-                                  page_size=options.tuning_kwargs.wal_segment_size)[0],
-        'default': 80 * Mi,
+        realign_value_to_unit(
+            cap_value(global_cache['max_wal_size'] // 20, 10 * options.tuning_kwargs.wal_segment_size,
+                      options.wal_spec.disk_usable_size // 10),
+            page_size=options.tuning_kwargs.wal_segment_size)[0],
+        'default': 10 * BASE_WAL_SEGMENT_SIZE,
         'comment': 'Specifies the minimum size of past WAL files kept in the pg_wal directory, in case a standby '
                    'server needs to fetch them for streaming replication. If a standby server connected to the '
                    'sending server falls behind by more than wal_keep_size megabytes, the sending server might '
                    'remove a WAL segment still needed by the standby, in which case the replication connection '
                    'will be terminated. Downstream connections will also eventually fail as a result. (However, '
                    'the standby server can recover by fetching the segment from archive, if WAL archiving is in use). '
-                   'We set this value to be 10% of the max_wal_size instead of zero '
-                   'in official PostgreSQL documentation.',
+                   'We set this value to be 5% of the max_wal_size instead of zero in official PostgreSQL '
+                   'documentation.',
         'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi)}MB',
     },
     'wal_sender_timeout': {
@@ -1107,8 +1104,8 @@ _DB_REPLICATION_PROFILE = {
     # Generic
     'logical_decoding_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi),
-                                  page_size=DB_PAGE_SIZE)[0],
+        realign_value_to_unit(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi),
+                              page_size=DB_PAGE_SIZE)[0],
         'default': 64 * Mi,
         'comment': "Specifies the maximum amount of memory to be used by logical decoding, before some of the decoded "
                    "changes are written to local disk. This limits the amount of memory used by logical streaming "
@@ -1223,7 +1220,7 @@ _DB_QUERY_PROFILE = {
                    'only performed if at least :var:`commit_siblings` other transactions are active when a flush is '
                    'about to be initiated. Also, no delays are performed if fsync is disabled. The default is 1ms, '
                    'and 0.2-0.5ms on large system. See the reference [27] for more information.',
-        'partial_func': lambda value: f"{value}us",
+        'partial_func': lambda value: f'{value}us',
     },
     'commit_siblings': {
         'instructions': {
@@ -1531,7 +1528,7 @@ _DB_LIB_PROFILE = {
     # Auto Explain
     'auto_explain.log_min_duration': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[1],
+        realign_value_to_unit(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[1],
         'default': -1,
         'comment': "auto_explain.log_min_duration is the minimum statement execution time, in milliseconds, that will "
                    "cause the statement's plan to be logged. Setting this to 0 logs all plans. -1 (the default) "
@@ -1643,7 +1640,6 @@ _DB_LIB_PROFILE = {
     },
 }
 
-
 # Validate and remove the invalid library configuration
 preload_libraries = set(_DB_LIB_PROFILE['shared_preload_libraries']['default'].split(','))
 for key in list(_DB_LIB_PROFILE.keys()):
@@ -1651,7 +1647,7 @@ for key in list(_DB_LIB_PROFILE.keys()):
         _DB_LIB_PROFILE.pop(key)
 
 # ========================= #
-DB_CONFIG_PROFILE = {
+DB0_CONFIG_PROFILE = {
     'connection': (PG_SCOPE.CONNECTION, _DB_CONN_PROFILE, {'hardware_scope': 'cpu'}),
     'memory': (PG_SCOPE.MEMORY, _DB_RESOURCE_PROFILE, {'hardware_scope': 'mem'}),
     'maintenance': (PG_SCOPE.MAINTENANCE, _DB_VACUUM_PROFILE, {'hardware_scope': 'disk'}),
@@ -1665,5 +1661,5 @@ DB_CONFIG_PROFILE = {
     'timeout': (PG_SCOPE.OTHERS, _DB_TIMEOUT_PROFILE, {'hardware_scope': 'overall'}),
     'lib': (PG_SCOPE.EXTRA, _DB_LIB_PROFILE, {'hardware_scope': 'overall'}),
 }
-merge_extra_info_to_profile(DB_CONFIG_PROFILE)
-type_validation(DB_CONFIG_PROFILE)
+merge_extra_info_to_profile(DB0_CONFIG_PROFILE)
+type_validation(DB0_CONFIG_PROFILE)

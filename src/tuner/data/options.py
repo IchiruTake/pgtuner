@@ -146,15 +146,13 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     opt_wal_buffers: Annotated[
         PG_PROFILE_OPTMODE,
         Field(default_factory=PydanticFact(f'Enter the PostgreSQL WAL buffers profile as {_PG_OPT_KEYS}: ',
-                                           user_fn=PG_PROFILE_OPTMODE, default_value=PG_PROFILE_OPTMODE.NONE),
-              description='Higher profile would reduce the maximum space for WAL buffers. Default to NONE means we '
-                          'reuse the value taken from the general tuning phase. Switch to SPIDEY would cap its maximum '
-                          'to a lower value (defined when the wal_level is minimal). Increase to OPTIMUS_PRIME would '
-                          'half the value return from the general tuning phase, but ensuring the WAL buffers minimum '
-                          'to be the size of a WAL segment (16 MiB). Increase to PRIMORDIAL would set the WAL buffers '
-                          'to zero. Unless you are working in on the mission-critical system where the atomicity and '
-                          'consistency are the top priorities; otherwise, we recommended to use the value equal or '
-                          'below the OPTIMUS_PRIME. This flag is not being impacted regardless the wal_level value',
+                                           user_fn=PG_PROFILE_OPTMODE, default_value=PG_PROFILE_OPTMODE.SPIDEY),
+              description='The optimization mode for the WAL buffers to ensure the WAL buffers in the correction '
+                          'tuning phase during outage lose data less than the maximum time of lossy transaction. '
+                          'Set to PRIMORDIAL ensure 2x WAL buffers can be written to disk in our estimation. Similarly '
+                          'with OPTIMUS_PRIME at 1.5x and SPIDEY at 1.0x. Set to NONE would not tune the WAL setting. '
+                          'Only set to NONE when you feel the maximum of data integrity is not required integrity. '
+                          'Otherwise, this would be enforced to SPIDEY.',
               )
     ]
     repurpose_wal_buffers: Annotated[
@@ -164,7 +162,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                           'and work_mem, by increasing its pool size. This would be conducted after the final memory '
                           'tuning. The reason not to re-purpose into the shared_buffers is that the shared_buffers is '
                           'usually persistent when the database is online. This argument is only valid when the '
-                          'opt_wal_buffers is set to SPIDEY or higher.',
+                          'WAL buffers is reduced because your disk cannot handle between transaction loss when the '
+                          'opt_wal_buffers is different than NONE.',
               )
     ]
     max_time_transaction_loss_allow_in_millisecond: Annotated[
@@ -182,14 +181,16 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         int,
         Field(default=0, ge=0, le=32,
               description='The maximum number of streaming replicas for the PostgreSQL primary server. The supported '
-                          'range is [0, 32], default is 0.',
+                          'range is [0, 32], default is 0. If you are deployed on replica or receiving server, set '
+                          'this number as low. ',
               )
     ]
     max_num_logical_replicas_on_primary: Annotated[
         int,
         Field(default=0, ge=0, le=32,
               description='The maximum number of logical replicas for the PostgreSQL primary server. The supported '
-                          'range is [0, 32], default is 0.',
+                          'range is [0, 32], default is 0. If you are deployed on replica or receiving server, set '
+                          'this number as low. ',
               )
     ]
     offshore_replication: Annotated[
@@ -208,15 +209,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
               description='The PostgreSQL workload type. This would affect the tuning options and the risk level, '
                           'and many other options. Default is HTAP (Hybrid Transactional/Analytical Processing).')
     ]
-    opt_memory: Annotated[
-        PG_PROFILE_OPTMODE, # AfterValidator(_allowed_opt_mode),
-        Field(default_factory=PydanticFact(f'Enter the PostgreSQL memory optimization profile as {_PG_OPT_KEYS}: ',
-                                           user_fn=PG_PROFILE_OPTMODE, default_value=PG_PROFILE_OPTMODE.OPTIMUS_PRIME),
-              description='The PostgreSQL optimization mode on workload type to tune overall memory usage by allowing '
-                          'total disk cache (effective_cache_size) in buffer to higher ratio (shared_buffers + '
-                          'effective_cache_size ~= RAM).')
-    ]
-    opt_memory_precision: Annotated[
+
+    opt_mem_pool: Annotated[
         PG_PROFILE_OPTMODE, # AfterValidator(_allowed_opt_mode),
         Field(default_factory=PydanticFact(f'Enter the PostgreSQL memory precision profile as {_PG_OPT_KEYS}: ',
                                            user_fn=PG_PROFILE_OPTMODE, default_value=PG_PROFILE_OPTMODE.OPTIMUS_PRIME),
@@ -250,9 +244,9 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     ]
     ram_sample: Annotated[
         ByteSize,
-        Field(default=16 * Gi, ge=1 * Gi, multiple_of=256 * Mi,
+        Field(default=16 * Gi, ge=2 * Gi, multiple_of=256 * Mi,
               description='The amount of RAM capacity that the PostgreSQL server is running on. Default is 16 GiB.'
-                          'Minimum amount of RAM is 1 GiB. PostgreSQL would performs better when your server has '
+                          'Minimum amount of RAM is 2 GiB. PostgreSQL would performs better when your server has '
                           'more RAM available. Note that the amount of RAM on the server must be larger than the '
                           'in-place kernel and monitoring memory usage. The value must be a multiple of 256 MiB.'
               )
@@ -361,8 +355,14 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                             f'Forcing the version to the common version (which is the shared configuration across'
                             f'all supported versions).')
             self.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[-1]
-        assert self.pcpu <= self.vcpu, 'The number of physical CPU must be equal or smaller than the number of vCPU.'
-        assert self.usable_ram_noswap >= 0, 'The usable RAM must be larger than 0.'
+        if self.usable_ram_noswap < 2 * Gi:
+            _sign = '+' if self.usable_ram_noswap >= 0 else '-'
+            _msg: str = (f'The usable RAM {_sign}{bytesize_to_hr(self.usable_ram_noswap)} is less than the PostgreSQL '
+                         'minimum 2 GiB. It is recommended to increase the total RAM of your server, or switch to a '
+                         'more lightweight monitoring system, kernel usage, or even the operating system. The tuning '
+                         'could be inaccurate.')
+            _logger.warning(_msg)
+            raise ValueError(_msg)
         return None
 
     @cached_property
@@ -376,7 +376,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             term = term.lower().strip()
             try:
                 return self.hardware_scope[term]
-            except KeyError:
+            except KeyError as e:
+                # This should never be happened.
                 _logger.debug(f'The hardware scope {term} is not in the supported list '
                               f'-> Fall back to overall profile.')
 
@@ -402,11 +403,11 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             # In containerd, docker, k8s, WSL, ... we usually made 100% memory usage unless some distros and things
             # are used, but they are not reserved memory.
             _extra: int = 0
-            if self.operating_system in ('linux', ):
+            if self.operating_system in ('linux', 'macos'):
                 _extra = 128 * Mi
             elif self.operating_system in ('windows', ):
                 _extra = 256 * Mi
-            elif self.operating_system in ('containerd', 'docker', 'k8s', 'wsl', 'PaaS', 'DBaaS'):
+            elif self.operating_system in ('containerd', 'docker', 'k8s', 'wsl'):
                 _extra = 32 * Mi
 
             if _extra > 0:  # We do the rounding here.

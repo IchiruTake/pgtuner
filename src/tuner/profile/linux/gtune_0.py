@@ -25,6 +25,8 @@ from src.tuner.data.scope import PG_SCOPE
 
 __all__ = ["KERNEL_SYSCTL_PROFILE"]
 
+from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
+
 # =============================================================================
 # Kernel tuning profiles for the filesystem
 _KERNEL_FS_PROFILE = {
@@ -409,3 +411,5 @@ KERNEL_SYSCTL_PROFILE = {
     'net-01': (PG_SCOPE.NETWORK, _KERNEL_NETIPV4_PROFILE, {'hardware_scope': 'net'}),
     'vm-00': (PG_SCOPE.VM, _KERNEL_VM_PROFILE, {'hardware_scope': 'cpu'})
 }
+merge_extra_info_to_profile(KERNEL_SYSCTL_PROFILE)
+type_validation(KERNEL_SYSCTL_PROFILE)

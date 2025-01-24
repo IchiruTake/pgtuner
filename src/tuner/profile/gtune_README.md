@@ -205,8 +205,7 @@ Questions:
     value is 5 minutes for OLTP and 15 minutes for OLAP, DW. The lock timeout is a good way to prevent the database from
     being stalled and held by un-necessary deadlock. The setting value is very loose and could be adjusted based on your
     workload. However, the default value is good enough for most of the cases. But this is what we thought about it.
-14.
-15. For the lock timeout, we believe a good default value is 5 minutes for OLTP and 15 minutes for OLAP, DW. The lock
+    -> For the lock timeout, we believe a good default value is 5 minutes for OLTP and 15 minutes for OLAP, DW. The lock
     timeout is a good way to prevent the database from being stalled and held by un-necessary deadlock. The setting
     value is very loose and could be adjusted based on your workload. However, the default value is good enough for most
     of the cases. But this is what we thought about it. For the transaction timeout, a scenario that could trigger this

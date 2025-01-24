@@ -15,9 +15,31 @@ from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
-from src.tuner.profile.stune_db_config import correction_tune
+from src.tuner.profile.database.stune import correction_tune
 from src.utils.timing import time_decorator
-from src.tuner.profile.gtune_common_db_config import DB_CONFIG_PROFILE as DB_COMMON_CONFIG_PROFILE
+from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
+from src.tuner.profile.database.gtune_13 import DB13_CONFIG_PROFILE
+from src.tuner.profile.database.gtune_14 import DB14_CONFIG_PROFILE
+from src.tuner.profile.database.gtune_15 import DB15_CONFIG_PROFILE
+from src.tuner.profile.database.gtune_16 import DB16_CONFIG_PROFILE
+from src.tuner.profile.database.gtune_17 import DB17_CONFIG_PROFILE
+
+_profiles = {
+    0: DB0_CONFIG_PROFILE,
+    13: DB13_CONFIG_PROFILE,
+    14: DB14_CONFIG_PROFILE,
+    15: DB15_CONFIG_PROFILE,
+    16: DB16_CONFIG_PROFILE,
+    17: DB17_CONFIG_PROFILE,
+}
+def get_postgresql_profile(version: int | str):
+    if isinstance(version, str):
+        try:
+            version = int(version.split('.')[0])
+        except ValueError:
+            version = int(version)
+    return _profiles.get(version, DB0_CONFIG_PROFILE)
+
 
 
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -41,7 +63,7 @@ def _tune_sysctl(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     if request.options.enable_sysctl_general_tuning:
         _logger.info('=========================================================================================='
                      '\nStart general tuning on the sysctl-based parameters.')
-        from src.tuner.profile.gtune_common_kernel_sysctl import KERNEL_SYSCTL_PROFILE
+        from src.tuner.profile.linux.gtune_0 import KERNEL_SYSCTL_PROFILE
         sysctl_tuner = GeneralTuner(target=PGTUNER_SCOPE.KERNEL_SYSCTL, items=KERNEL_SYSCTL_PROFILE)
         sysctl_tuner.optimize(request=request, response=response)
         found_tuning = True
@@ -59,33 +81,6 @@ def _tune_sysctl(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     return None
 
 
-def _load_pgdb_profile(pgsql_version: str):
-    try:
-        match pgsql_version:
-            case '13':
-                from src.tuner.profile.gtune_13 import DB_CONFIG_PROFILE
-                return DB_CONFIG_PROFILE
-            case '14':
-                from src.tuner.profile.gtune_14 import DB_CONFIG_PROFILE
-                return DB_CONFIG_PROFILE
-            case '15':
-                from src.tuner.profile.gtune_15 import DB_CONFIG_PROFILE
-                return DB_CONFIG_PROFILE
-            case '16':
-                from src.tuner.profile.gtune_16 import DB_CONFIG_PROFILE
-                return DB_CONFIG_PROFILE
-            case '17':
-                from src.tuner.profile.gtune_17 import DB_CONFIG_PROFILE
-                return DB_CONFIG_PROFILE
-            case _:
-                _logger.warning(f'Unsupported PostgreSQL version: {pgsql_version} -> Fallback to the common profile.')
-                return DB_COMMON_CONFIG_PROFILE
-    except (ImportError, ModuleNotFoundError) as e:
-        _logger.error(f'Failed to import the PostgreSQL profile: {e}')
-        _logger.warning(f'Unsupported PostgreSQL version: {pgsql_version} -> Fallback to the common profile.')
-        return DB_COMMON_CONFIG_PROFILE
-
-
 @time_decorator
 def _tune_pgdb(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     found_tuning: bool = False
@@ -93,7 +88,7 @@ def _tune_pgdb(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     if request.options.enable_database_general_tuning:
         _logger.info('=========================================================================================='
                      '\nStart general tuning on the PostgreSQL database settings.')
-        db_config_profile = _load_pgdb_profile(request.options.pgsql_version)
+        db_config_profile = get_postgresql_profile(request.options.pgsql_version)
         dbconf_tuner = GeneralTuner(target=PGTUNER_SCOPE.DATABASE_CONFIG, items=db_config_profile)
         dbconf_tuner.optimize(request=request, response=response)
         found_tuning = True
@@ -119,7 +114,10 @@ def optimize(request: PG_TUNE_REQUEST):
     response = PG_TUNE_RESPONSE()
 
     # [01]: Perform tuning on the sysctl-based parameters if the OS is managed by the user
-    _tune_sysctl(request, response)
+    if request.options.operating_system == 'linux':
+        _tune_sysctl(request, response)
+    else:
+        _logger.warning('The system tuning is not supported on the non-Linux operating system.')
 
     # [02]: Perform general tuning on the PostgreSQL configuration file
     _tune_pgdb(request, response)
@@ -169,8 +167,7 @@ def make_tune_request(
 
         ## PostgreSQL Tuning Configuration
         workload_type: PG_WORKLOAD = PG_WORKLOAD.HTAP,
-        opt_memory: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.OPTIMUS_PRIME,
-        opt_memory_precision: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.OPTIMUS_PRIME,
+        opt_mem_pool: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.OPTIMUS_PRIME,
         operating_system: str = 'linux',
         add_system_reserved_memory_into_ram: bool = False,
         base_kernel_memory_usage: _SIZING = -1,
@@ -181,7 +178,7 @@ def make_tune_request(
 
         ## PostgreSQL Data Integrity
         opt_transaction_lost: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.NONE,
-        opt_wal_buffers: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.NONE,
+        opt_wal_buffers: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.SPIDEY,
         repurpose_wal_buffers: bool = True,
         max_time_transaction_loss_allow_in_millisecond: PositiveInt = 650,
         max_num_stream_replicas_on_primary: PositiveInt = 0,
@@ -212,11 +209,11 @@ def make_tune_request(
         os_db_spec=os_db_disk or disk_template, data_index_spec=data_index_disk or disk_template,
         wal_spec=wal_disk or disk_template, db_log_spec=db_log_disk or disk_template,
         ## PostgreSQL Tuning Configuration
-        workload_type=workload_type, opt_memory=opt_memory, operating_system=operating_system,
+        workload_type=workload_type, operating_system=operating_system,
         add_system_reserved_memory_into_ram=add_system_reserved_memory_into_ram,
         base_kernel_memory_usage=base_kernel_memory_usage, base_monitoring_memory_usage=base_monitoring_memory_usage,
         tuning_kwargs=tuning_keywords, vcpu=logical_cpu, ram_sample=ram_sample,
-        opt_memory_precision=opt_memory_precision,
+        opt_mem_pool=opt_mem_pool,
 
         ## PostgreSQL Data Integrity
         opt_transaction_lost=opt_transaction_lost, opt_wal_buffers=opt_wal_buffers,

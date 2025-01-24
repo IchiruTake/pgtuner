@@ -7,6 +7,9 @@ _SIZING = ByteSize | int | float
 
 
 def bytesize_to_hr(bytesize: int, separator: str = ' ') -> str:
+    if isinstance(bytesize, float):
+        bytesize = int(bytesize)
+
     return ByteSize(bytesize).human_readable(separator=separator)
 
 

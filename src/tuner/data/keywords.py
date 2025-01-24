@@ -109,14 +109,14 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'further tuning to keep your server function properly without unknown incident such as '
                           'parallelism, maintenance, and other background tasks.')
     )
-    memory_precision_epsilon_to_rollback: PositiveFloat = (
+    mem_pool_epsilon_to_rollback: PositiveFloat = (
         Field(default=0.01, ge=0, le=0.02,
               description='A small epsilon value if the memory tuning does not exceeded max_normal_memory_usage + '
                           'epsilon to perform a rollback. We recommend this value to be small. The supported '
                           'range is [0, 0.02], and default to 1e-2 (1.0%). If the result exceeded, we trigger the '
                           'rollback to get the previous iteration.')
     )
-    memory_precision_tuning_increment: PositiveFloat = (
+    mem_pool_tuning_increment: PositiveFloat = (
         Field(default=1 / 280, ge=1 / 2000, le=0.01,
               description='The single increment for the memory tuning in correction tuning of shared_buffer_ratio '
                           'and max_work_buffer_ratio, which impacted to shared_buffers, temp_buffers, work_mem, '
@@ -124,14 +124,14 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'but slower. Supported value is [1/2000, 1/100] and default is 1/280. Higher value meant '
                           'there may have a small room for rollback')
     )
-    memory_precision_tuning_ratio: float = (
+    mem_pool_tuning_ratio: float = (
         Field(default=0.5, ge=0, le=1,
               description='The ratio of the memory tuning in correction tuning of shared_buffer_ratio and '
                           'max_work_buffer_ratio. Supported value is [0, 1] and default is 0.5. Higher value meant '
                           'the tuning would prefer the shared_buffers over the max_work_buffer_ratio. Lower value '
                           'meant the tuning would prefer the max_work_buffer_ratio over the shared_buffers.')
     )
-    memory_precision_max_iterations: int = (
+    mem_pool_max_iterations: int = (
         Field(default=100, ge=0, le=1000,
               description='The maximum number of iteration for the memory tuning. The supported range is [0, 1000] '
                           'and default is 100. Set to 0 to run infinitely until the memory tuning is converged. '
@@ -158,7 +158,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     )
     # Tune logging behaviour (query size, and query runtime)
     max_query_length_in_bytes: ByteSize = (
-        Field(default=2 * Ki, ge=64, le=64 * Mi,
+        Field(default=2 * Ki, ge=64, le=64 * Mi, multiple_of=32,
               description='The maximum query length in bytes. The supported range is 64 bytes to 64 MiB, default to '
                           '2 KiB. Default on PostgreSQL is 1 KiB. It is recommended to not set this value too high '
                           'to prevent the server write too many logs. This would be re-aligned with 32-bytes.')
