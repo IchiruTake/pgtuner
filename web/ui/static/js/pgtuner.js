@@ -1,14 +1,14 @@
 function syncNumberToSlider(id) {
     const slider = document.getElementById(id + "_range");
     const numberInput = document.getElementById(id);
-    let result = Math.min(Math.max(numberInput.min, numberInput.value), numberInput.max);
+    let result = Math.min(Math.max(numberInput.min, numberInput?.value), numberInput.max);
     slider.value = result;
     numberInput.value = result;
 }
 function syncSliderToNumber(id) {
     const slider = document.getElementById(id + "_range");
     const numberInput = document.getElementById(id);
-    let result = Math.min(Math.max(slider.min, slider.value), slider.max);
+    let result = Math.min(Math.max(slider.min, slider?.value), slider.max);
     numberInput.value = result;
     slider.value = result;
 }
@@ -25,9 +25,9 @@ function syncLabelFromCheckbox(id, yes_text, no_text) {
 
 function _get_kernel_memory() {
     // Ensure these part synchronized with Python code
-    const operating_system = document.getElementById("operating_system").value;
+    const operating_system = document.getElementById("operating_system")?.value;
     const kernel_memory_block = document.getElementById("base_kernel_memory_usage_in_mib");
-    let kernel_memory = kernel_memory_block.value * 1; // To get a copy
+    let kernel_memory = kernel_memory_block?.value * 1; // To get a copy
     if (kernel_memory === -1) {
         if (operating_system === "linux") {
             kernel_memory = 768;
@@ -42,9 +42,9 @@ function _get_kernel_memory() {
 
 function _get_monitoring_memory() {
     // Ensure these part synchronized with Python code
-    const operating_system = document.getElementById("operating_system").value;
+    const operating_system = document.getElementById("operating_system")?.value;
     const monitoring_memory_block = document.getElementById("base_monitoring_memory_usage_in_mib");
-    let monitoring_memory = monitoring_memory_block.value * 1;  // To get a copy
+    let monitoring_memory = monitoring_memory_block?.value * 1;  // To get a copy
     if (monitoring_memory === -1) {
         monitoring_memory = 256;
         if (operating_system === "containerd") {
@@ -57,10 +57,10 @@ function _get_monitoring_memory() {
 }
 function _get_total_ram() {
     // Ensure these part synchronized with Python code
-    const operating_system = document.getElementById("operating_system").value;
+    const operating_system = document.getElementById("operating_system")?.value;
     const add_reserved_ram_block = document.getElementById("add_system_reserved_memory_into_ram");
-    let total_ram = document.getElementById("ram_sample_in_gib").value * 1024;
-    if (add_reserved_ram_block.checked) {
+    let total_ram = document.getElementById("ram_sample_in_gib")?.value * 1024;
+    if (add_reserved_ram_block?.checked) {
         if (operating_system === "linux") {
             total_ram += 128;
         } else if (operating_system === "windows") {
@@ -79,7 +79,9 @@ function ram_calculator() {
 
     const final_ram = total_ram - kernel_memory - monitoring_memory;
     const postgresql_ram_available_block = document.getElementById("total_usable_ram");
-    postgresql_ram_available_block.value = final_ram;
+    if(postgresql_ram_available_block) {
+        postgresql_ram_available_block.value = final_ram;
+    }
     if (final_ram < 1536) {
         // Set it to 1.5 GiB limit
         alert('The remaining memory is less than 1.5 GiB. Please consider to increase the total RAM of your server, or switch to a more lightweight monitoring system, kernel usage, or even the operating system');
@@ -133,11 +135,11 @@ function gatherFormValues() {
     formElements.forEach(el => {
         if (el.type === 'range' || el.type === 'number') {
             // parseFloat if element.step in string has dot, parseInt
-            params[el.name] = el.step.includes('.') ? parseFloat(el.value) : parseInt(el.value);
+            params[el.name] = el.step.includes('.') ? parseFloat(el?.value) : parseInt(el?.value);
         } else if (el.type === 'text') {
-            params[el.name] = el.value;
+            params[el.name] = el?.value;
         } else if (el.type === 'select-one') {
-            params[el.name] = el.value;
+            params[el.name] = el?.value;
         }
     });
 
@@ -170,7 +172,7 @@ async function submitConfiguration() {
         'user_options': processedParams,
         'alter_style': document.getElementById('alter_style').checked,
         'backup_settings': document.getElementById('backup_settings').checked,
-        'output_format': document.getElementById('output_format').value,
+        'output_format': document.getElementById('output_format')?.value,
     };
     body = JSON.stringify(body, null, 2);
     console.log(body)
@@ -219,7 +221,7 @@ function copyToClipboard() {
 
 function downloadResponse() {
     const responseBox = document.getElementById('response-box');
-    const blob = new Blob([responseBox.value], { type: 'text/plain' });
+    const blob = new Blob([responseBox?.value], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

@@ -24,6 +24,8 @@
 
     <!--    <link rel="stylesheet" href="/css/bootstrap.min.mincss3k.css">-->
     <link rel="stylesheet" href="/css/bootstrap-icons.min.mincss3k.css" />
+    <script src="./js/pgtuner.js"></script>
+    <script src="./js/pgtuner.min.js"></script>
 </head>
 
 <!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
@@ -60,7 +62,8 @@
 <body>
     <div class="container my-4">
         <h2 class="mb-4">PGTuner Input Form</h2>
-        <script src="./js/pgtuner.js"></script>
+        <!-- <script src="./js/pgtuner.js"></script> -->
+        <div class="sections-container border border-red"></div>
         <script>
             const sections = [
                 {
@@ -154,7 +157,7 @@
 
             const renderSections = () => {
                 sections.forEach((section) => {
-                    const parent = document.querySelector('#container');
+                    const parent = document.querySelector('.sections-container');
                     const sectionElement = document.createElement('div');
                     sectionElement.classList.add('my-4');
                     const sectionTitle = document.createElement('h4');
@@ -227,7 +230,9 @@
                         } else if (item.type === 'switch') {
                             item.items.forEach((switchItem) => {
                                 const switchElement = document.createElement('input');
-                                switchElement.classList.add(...switchItem.classes.split(' '));
+                                if(switchItem?.classes?.length) {
+                                    switchElement.classList.add(...switchItem?.classes?.split(' '));
+                                }
                                 switchElement.setAttribute('type', 'checkbox');
                                 switchElement.setAttribute('role', 'switch');
                                 switchElement.setAttribute('id', switchItem.id);
@@ -242,7 +247,9 @@
                         } else if (item.type === 'text') {
                             item.items.forEach((textItem) => {
                                 const textElement = document.createElement('input');
-                                textElement.classList.add(...textItem.classes.split(' '));
+                                if(textItem.classes?.length) {
+                                    textElement.classList.add(...textItem.classes.split(' '));
+                                }
                                 textElement.setAttribute('type', 'text');
                                 textElement.setAttribute('value', textItem.value);
                                 textElement.setAttribute('id', textItem.id);
@@ -261,208 +268,8 @@
 
             renderSections();
         </script>
-        <div class="container"></div>
         <!-- Workload and Optimization Mode -->
-        <div class="my-4">
-            <h4 class="mb-3">Workload and Optimization Mode</h4>
-            <div class="row">
-                <!-- Workload Type -->
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="workload_type">
-                            Workload Type
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="Select the workload type for system tuning. The choice of workload type can impact some parameters, especially during the correction tuning and its associated risk level"
-                            title="Workload Type">
-                        </i>
-                    </div>
-                    <select class="form-select" id="workload_type" name="workload_type">
-                        <option value="soltp">SOLTP: Single-User or Simple OLTP</option>
-                        <option value="log">LOG: Logging or Log Data Ingestion</option>
-                        <option value="tst">TST: Time Series Data of OLTP or IoT</option>
-                        <option value="oltp">OLTP: Online Transaction Processing</option>
-                        <option selected value="htap">
-                            HTAP: Hybrid Transactional/Analytical Processing
-                        </option>
-                        <option value="tsh">
-                            TSH: Time-Series of Analytic and Transaction
-                        </option>
-                        <option value="olap">OLAP: Online Analytical Processing</option>
-                        <option value="tsa">TSA: Time-Series of OLAP</option>
-                        <option value="dw">DW: Data Warehouse</option>
-                        <option value="dl">DL: Data Lake</option>
-                        <option value="search">
-                            Search: Full-Text Search and Indexing
-                        </option>
-                        <option value="rag">RAG: Retrieval-Augmented Generation</option>
-                        <option value="geo">Geo: Geospatial Data</option>
-                    </select>
-                </div>
-                <!-- Optimization Mode -->
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="opt_mem_pool">
-                            Memory Pool Optimization Mode
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="If not NONE, it would proceed the extra tuning to increase the memory usage to reach to your expectation (shared_buffers, work_mem, temp_buffer, wal_buffer, ...). Set to SPIDEY use the worst case of memory usage by assuming all connections are under high load. Set to OPTIMUS_PRIME (default) take the average between normal (active connections) and worst case as the stopping condition; PRIMORDIAL take the normal case as the stopping condition."
-                            title="Memory Pool Optimization Mode">
-                        </i>
-                    </div>
-                    <select class="form-select" id="opt_mem_pool" name="opt_mem_pool">
-                        <option value="none">NONE: Ignore Optimization</option>
-                        <option value="lightweight">
-                            SPIDEY: Light-weight Optimization
-                        </option>
-                        <option selected value="general">
-                            OPTIMUS PRIME: General Optimization
-                        </option>
-                        <option value="aggressive">
-                            PRIMORDIAL: Extreme Optimization
-                        </option>
-                    </select>
-                </div>
-                <!-- Operating System and its Specification (CPU, RAM) -->
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="operating_system">
-                            Operating System
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="The operating system that the PostgreSQL server is running on. Default is Linux. If the memory usage of kernel and monitoring is set to -1, the system would self-calculate your basic RAM usage based on the developer testing. To minimize its estimation, set the memory usage of kernel and monitoring to 0 bytes"
-                            title="Operating System">
-                        </i>
-                    </div>
-                    <select class="form-select" id="operating_system" name="operating_system">
-                        <option selected value="linux">Linux</option>
-                        <option value="windows">Windows</option>
-                        <option value="containerd">
-                            Container (K8s, Docker, containerd)
-                        </option>
-                        <option value="PaaS">PaaS (Cloud or 3rd-Party)</option>
-                    </select>
-                </div>
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="logical_cpu">
-                            Number of vCPUs
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="Select the number of logical CPUs for system tuning. This can bond together with the CPU profile"
-                            title="Number of vCPUs">
-                        </i>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <input class="form-range me-3" name="logical_cpu" id="logical_cpu_range" max="128" min="1"
-                            step="1" value="4" type="range" placeholder="Enter the number of logical CPUs"
-                            onchange="syncSliderToNumber('logical_cpu')" />
-                        <input class="form-control w-25" id="logical_cpu" max="128" min="1" step="1" value="4"
-                            type="number" onchange="syncNumberToSlider('logical_cpu')" />
-                    </div>
-                </div>
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="ram_sample_in_gib">
-                            RAM Size (GiB)
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-text-align="justify"
-                            data-bs-content="Select the RAM size for system tuning. This can bond together with the Memory profile. However, please ensure that the RAM must be larger than total RAM in use. For the PostgreSQL database the minimum memory should be larger than 4 GiB (recommended to be larger than 8 GiB)."
-                            title="RAM Size">
-                        </i>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <input class="form-range me-3" name="ram_sample_in_gib" id="ram_sample_in_gib_range" max="1024"
-                            min="2" step="0.25" value="16" type="range"
-                            onchange="syncSliderToNumber('ram_sample_in_gib'); ram_calculator()" />
-                        <input class="form-control w-50" id="ram_sample_in_gib" max="1024" min="2" step="0.25"
-                            value="16" type="number"
-                            onchange="syncNumberToSlider('ram_sample_in_gib'); ram_calculator()" />
-                    </div>
-                </div>
-                <!-- RAM usage in basic (OS and Monitoring) -->
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="add_system_reserved_memory_into_ram">Add System Reserved Memory
-                            into RAM
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="Add system reserved memory into RAM. Only enable this if you take the value *directly* the operating system by measurement (free -m on Linux, Task Manager on Windows, etc), as this would add a small amount of memory into the estimation depending on the operating system. However, we do not recommend to set this as it could assume your PostgreSQL can use the reserved memory which are already dedicated for the kernel, booting process, and other system processes."
-                            title="Add System Reserved Memory into RAM">
-                        </i>
-                    </div>
-                    <div class="d-flex align-items-center form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch"
-                            id="add_system_reserved_memory_into_ram" onchange="ram_calculator()" />
-                        <label class="form-check-label px-3" for="add_system_reserved_memory_into_ram">No</label>
-                    </div>
-                </div>
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="base_kernel_memory_usage_in_mib">Kernel Memory Usage
-                            (MiB)</label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="Enter the kernel memory when idle in MiB. Default value is -1 would make pgtuner to perform estimation based on the OS. Set to 0 to disable. If you have measured the kernel memory then set to the value you have measured. But ensure that the RAM capacity must be larger than this kernel and monitoring memory usage."
-                            title="Kernel Memory Usage (MiB)">
-                        </i>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <input class="form-range me-3" name="base_kernel_memory_usage_in_mib"
-                            id="base_kernel_memory_usage_in_mib_range" max="8192" min="-1" step="1" value="-1"
-                            type="range"
-                            onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib'); ram_calculator()" />
-                        <input class="form-control w-50" id="base_kernel_memory_usage_in_mib" max="8192" min="-1"
-                            step="1" value="-1" type="number"
-                            onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib'); ram_calculator()" />
-                    </div>
-                </div>
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="base_monitoring_memory_usage_in_mib">Monitoring Memory Usage
-                            (MiB)
-                        </label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="Enter the monitoring memory when idle in MiB. Default value is -1 would make pgtuner to perform estimation based on the OS. Set to 0 to disable. If you have measured the monitoring memory then set to the value you have measured. But ensure that the RAM capacity must be larger than this kernel and monitoring memory usage."
-                            title="Monitoring Memory Usage (MiB)">
-                        </i>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <input class="form-range me-3" name="base_monitoring_memory_usage_in_mib"
-                            id="base_monitoring_memory_usage_in_mib_range" max="4096" min="-1" step="1" value="-1"
-                            type="range"
-                            onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); ram_calculator()" />
-                        <input class="form-control w-50" id="base_monitoring_memory_usage_in_mib" max="4096" min="-1"
-                            step="1" value="-1" type="number"
-                            onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()" />
-                    </div>
-                </div>
-                <!-- Display Total RAM in (MiB), not a form submit -->
-                <div class="col-4 mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label" for="total_usable_ram">Total Usable RAM (MiB)</label>
-                        <i class="bi bi-info-circle text-primary align-items-left" data-bs-toggle="popover"
-                            data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                            data-bs-content="This displays the total usable RAM in MiB after accounting for kernel and monitoring memory usage. We recommended to have this attribute at least 1.5 GiB. Recommended minimally at 4-8 GiB at least. "
-                            title="Total Usable RAM (MiB)">
-                        </i>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <input class="form-control w-100" id="total_usable_ram" disabled readonly
-                            onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()"
-                            value="???" />
-                    </div>
-                </div>
-            </div>
-        </div>
+        
 
         <!-- System Profiles -->
         <div class="my-4">
