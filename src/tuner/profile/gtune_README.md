@@ -74,6 +74,7 @@ tune for commit_delay and commit_siblings
 [37] https://www.timescale.com/forum/t/what-is-recommended-wal-segment-size-parameter-for-timescaledb/2712/3
 [38] https://postgrespro.com/list/thread-id/1898949
 [39] https://www.bytebase.com/blog/postgres-timeout/
+[40] https://www.enterprisedb.com/blog/managing-freezing-postgresql
 
 Questions:
 

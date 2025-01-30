@@ -1,6 +1,6 @@
 import logging
 from functools import cached_property, partial
-from typing import Any, Annotated
+from typing import Any, Annotated, Literal
 
 from pydantic import BaseModel, Field, ByteSize, AfterValidator
 from pydantic.types import PositiveInt
@@ -14,7 +14,7 @@ from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.workload import PG_WORKLOAD
 from src.utils.pydantic_utils import bytesize_to_hr
 
-__all__ = ["PG_TUNE_USR_OPTIONS", 'backup_description']
+__all__ = ['PG_TUNE_USR_OPTIONS', 'backup_description']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 
@@ -317,6 +317,12 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         Field(default=True, frozen=False,
               description='Set to True would enable correction tuning on the PostgreSQL database parameters. Default '
                           'to True. Only valid when :attr:`enable_database_general_tuning` is True.'
+              )
+    ]
+    align_index: Annotated[
+        Literal[0, 1],
+        Field(default=0, ge=0, le=1,
+              description='This is the index used to pick the value during number alignment. Default is 0'
               )
     ]
 

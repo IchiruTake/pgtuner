@@ -68,11 +68,12 @@ class GeneralTuner(BaseModel):
 
     @staticmethod
     def _get_fn_default(key: str, tune_entry: dict, hw_scope: str):
+        _msg: str = ''
         if 'instructions' not in tune_entry:  # No profile-based tuning
-            _logger.debug(f'Profile-based tuning is not found for this item {key} -> Use the general tuning instead.')
+            _msg = f'DEBUG: Profile-based tuning is not found for this item {key} -> Use the general tuning instead.'
             fn = tune_entry.get('tune_op', None)
             default = tune_entry['default']
-            return fn, default
+            return fn, default, _msg
 
         # Profile-based Tuning
         profile_fn = tune_entry['instructions'].get(hw_scope, None)
@@ -81,9 +82,9 @@ class GeneralTuner(BaseModel):
         if profile_default is None:
             profile_default = tune_entry['default']
             if profile_fn is None or not isinstance(profile_fn, Callable):
-                _logger.warning(f'Profile-based tuning is not found for this item {key} even with default option '
-                                f'of profile -> Use the general default as the fallback.')
-        return profile_fn, profile_default
+                _msg = (f"WARNING: Profile-based tuning function collection is not found for this item {key} but the "
+                        f"associated hardware scope '{hw_scope}' is NOT found")
+        return profile_fn, profile_default, _msg
 
     @time_decorator
     def optimize(self, request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
@@ -98,6 +99,9 @@ class GeneralTuner(BaseModel):
             group_itm: list[tuple[PG_TUNE_ITEM, Callable | None]] = []  # A group of tuning items
             managed_items = response.get_managed_items(self.target, scope)
 
+            # Batched Logging
+            _info_log = [f"\n====== Start the tuning process with scope: {scope} ======"]
+            _warn_error_log = []
             for mkey, tune_entry in category.items():
                 # Perform tuning on multi-items that shared same tuning operation (rare case, but possible)
                 keys = mkey.split(MULTI_ITEMS_SPLIT)
@@ -111,27 +115,32 @@ class GeneralTuner(BaseModel):
                 # We don't want to apply safeguard here to deal with non-sanitized profile from custom user input.
                 # If they need custom change on the tuning after the profile is applied, they can do it manually
                 # after our tuning is applied.
-                _logger.debug(f'Item: {key} with profile: {hw_scope_value} started tuning ...')
-                fn, default = GeneralTuner._get_fn_default(key, tune_entry, hw_scope_value)
+                fn, default, _msg = GeneralTuner._get_fn_default(key, tune_entry, hw_scope_value)
+                if _msg:
+                    if _msg.startswith('DEBUG'):
+                        # _info_log.append(_msg)
+                        pass
+                    elif _msg.startswith('WARNING'):
+                        _warn_error_log.append(_msg)
                 result, triggering = GeneralTuner._VarTune(request, response, group_cache, global_cache,
                                                            tune_op=fn, default=default)
                 itm = self._make_itm(key, None, after=result or tune_entry['default'], trigger=triggering,
                                      tune_entry=tune_entry, hardware_scope=(hw_scope_term, hw_scope_value))
 
                 if itm is None or itm.after is None:  # A must-have condition. DO NOT remove
-                    _logger.warning(f"Error in tuning the variable as default value is not found or set to None for "
-                                    f"'{key}'. Skipping...")
+                    _warn_error_log.append(f"WARNING: Error in tuning the variable as default value is not found or "
+                                           f"set to None for '{key}' -> Skipping and not adding to the final result.")
                     continue
 
                 # Perform post-condition check:
                 if post_condition_check:
                     if not tune_entry.get('post-condition', _dummy_fn)(itm.after):
-                        _logger.error(f"Post-condition self-check of '{key}' failed on new value {itm.after}. "
-                                      f"Skipping...")
+                        _warn_error_log.append(f"ERROR: Post-condition self-check of '{key}' failed on new value "
+                                               f"{itm.after}. Skipping and not adding to the final result.")
                         continue
                     if not tune_entry.get('post-condition-group', _dummy_fn)(itm.after, group_cache, request.options):
-                        _logger.error(f"Post-condition group-check of '{key}' failed on new value "
-                                      f"{itm.after}. Skipping...")
+                        _warn_error_log.append(f"ERROR: Post-condition group-check of '{key}' failed on new value "
+                                               f"{itm.after}. Skipping and not adding to the final result.")
                         continue
 
                 # We don't add failing validation result to the cache, which is used for instruction-based tuning
@@ -139,7 +148,7 @@ class GeneralTuner(BaseModel):
                 group_cache[key] = itm.after
                 _post_condition_all_fn = tune_entry.get('post-condition-all', _dummy_fn)
                 group_itm.append((itm, _post_condition_all_fn))
-                _logger.info(f"Variable '{key}' has been tuned from {itm.before} to {itm.out_display()}.")
+                _info_log.append(f"Variable '{key}' has been tuned from {itm.before} to {itm.out_display()}.")
 
                 # Perform the cloning of tuning items for same result
                 for k in keys[1:]:
@@ -147,18 +156,24 @@ class GeneralTuner(BaseModel):
                     _itm = itm.model_copy(update={'key': sub_key}, deep=False)
                     group_cache[sub_key] = _itm.after
                     group_itm.append((_itm, _post_condition_all_fn))
-                    _logger.info(f"Variable '{sub_key}' has been tuned from {_itm.before} to {_itm.out_display()} "
-                                 f"by copying the tuning result from '{key}'.")
+                    _info_log.append(f"Variable '{sub_key}' has been tuned from {_itm.before} to {_itm.out_display()} "
+                                     f"by copying the tuning result from '{key}'.")
 
             # Perform global post-condition check
             for itm, post_func in group_itm:
                 if post_condition_check and not post_func(itm.after, global_cache, request.options):
-                    _logger.error(f"Post-condition total-check of '{itm.key}' failed on new value {itm.after}. "
-                                  f"The tuning item is not added to the final result.")
+                    _warn_error_log.append(f"ERROR: Post-condition total-check of '{itm.key}' failed on new value "
+                                           f"{itm.after}. The tuning item is not added to the final result.")
                     continue
 
                 # Since this item has passed all the checks, we add it to the items
                 global_cache[itm.key] = itm.after
                 managed_items[itm.key] = itm
+
+            # Batched Logging Display
+            if _info_log:
+                _logger.info('\n'.join(_info_log))
+            if _warn_error_log:
+                _logger.warning('\n'.join(_warn_error_log))
 
         return None

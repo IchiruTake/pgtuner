@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
 from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, DEFAULT_INSTRUCTION_PROFILE, THROUGHPUT, RANDOM_IOPS, \
-    BASE_WAL_SEGMENT_SIZE
+    BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.disks import PG_DISK_PERF, string_disk_to_performance
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
@@ -60,11 +60,13 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     This class stored some tuning user|app-defined keywords that could be used to adjust the tuning phase.
     Parameters:
     """
+    # Connection Parameters
     user_max_connections: int = Field(default=0, ge=0, le=1000)
     superuser_reserved_connections_scale_ratio: PositiveFloat = Field(default=1.5, ge=1, le=3)
-    single_memory_connection_overhead_in_kib: ByteSize = Field(default=5 * Ki, ge=1 * Ki, le=16 * Ki)
+    single_memory_connection_overhead_in_kib: ByteSize = Field(default=5 * Ki, ge=2 * Ki, le=12 * Ki)
     memory_connection_to_dedicated_os_ratio: float = Field(default=0.3, ge=0.0, le=1.0)
 
+    # Memory Parameters
     effective_cache_size_available_ratio: PositiveFloat = Field(default=0.99, ge=0.93, le=1.0)
     shared_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.15, lt=0.60)
     shared_buffers_fill_ratio: PositiveFloat = Field(default=0.995, ge=0.95, le=1.0)
@@ -75,23 +77,31 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
 
     # These are used for memory_precision_tuning
     max_normal_memory_usage: PositiveFloat = Field(default=0.45, ge=0.35, le=0.85)
-    memory_precision_epsilon_to_rollback: PositiveFloat = Field(default=0.01, ge=0, le=0.02)
-    memory_precision_tuning_increment: PositiveFloat = Field(default=1 / 280, ge=1 / 2000, le=0.01)
-    memory_precision_tuning_ratio: float = Field(default=0.5, ge=0, le=1)
-    memory_precision_max_iterations: int = Field(default=100, ge=0, le=1000)
-
+    mem_pool_epsilon_to_rollback: PositiveFloat = Field(default=0.01, ge=0, le=0.02)
+    mem_pool_tuning_increment: PositiveFloat = Field(default=1 / 280, ge=1 / 2000, le=0.01)
+    mem_pool_tuning_ratio: float = Field(default=0.5, ge=0, le=1)
+    mem_pool_max_iterations: int = Field(default=100, ge=0, le=1000)
+    mem_pool_parallel_estimate: bool = Field(default=False)
 
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
     wal_segment_size: PositiveInt = Field(default=1, ge=1, le=128, frozen=True)
+    min_wal_ratio_scale: PositiveFloat = Field(default=0.5, ge=0.01, le=3.0)
+    max_wal_size_ratio: PositiveFloat = Field(default=0.90, gt=0.0, lt=1.0)
+    max_wal_size_remain_upper_size_in_gib: ByteSize = Field(default=256, ge=1, le=2 * Ki)
+
     # Tune logging behaviour (query size, and query runtime)
     max_query_length_in_bytes: ByteSize = Field(default=2 * Ki, ge=64, le=64 * Mi)
     max_runtime_ms_to_log_slow_query: PositiveInt = Field(default=2 * K10, ge=20, le=100 * K10)
     max_runtime_ratio_to_explain_slow_query: PositiveFloat = Field(default=1.5, ge=0.1, le=10.0)
 
-    # WAL tuning
-    min_wal_ratio_scale: PositiveFloat = Field(default=0.5, ge=0.01, le=3.0)
-    max_wal_size_ratio: PositiveFloat = Field(default=0.90, gt=0.0, lt=1.0)
-    max_wal_size_remain_upper_size_in_gib: ByteSize = Field(default=256, ge=1, le=2 * Ki)
+    # Background Writer Tuning
+    bgwriter_utilization_ratio: PositiveFloat = Field(default=0.1, gt=0, le=0.3)
+
+    # Vacuum Tuning
+    autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
+
+    # Transaction Rate
+    num_transaction_per_hour_on_workload: PositiveInt = Field(default=int(5 * M10), ge=K10, le=50 * M10)
 
     def to_backend(self) -> PG_TUNE_USR_KWARGS:
         return PG_TUNE_USR_KWARGS(
@@ -101,23 +111,26 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             memory_connection_to_dedicated_os_ratio=self.memory_connection_to_dedicated_os_ratio,
             effective_cache_size_available_ratio=self.effective_cache_size_available_ratio,
             shared_buffers_ratio=self.shared_buffers_ratio,
-            shared_buffers_fill_ratio=self.shared_buffers_fill_ratio,
             max_work_buffer_ratio=self.max_work_buffer_ratio,
             effective_connection_ratio=self.effective_connection_ratio,
             temp_buffers_ratio=self.temp_buffers_ratio,
             work_mem_scale_factor=self.work_mem_scale_factor,
             max_normal_memory_usage=self.max_normal_memory_usage,
-            mem_pool_epsilon_to_rollback=self.memory_precision_epsilon_to_rollback,
-            mem_pool_tuning_increment=self.memory_precision_tuning_increment,
-            mem_pool_tuning_ratio=self.memory_precision_tuning_ratio,
-            mem_pool_max_iterations=self.memory_precision_max_iterations,
+            mem_pool_epsilon_to_rollback=self.mem_pool_epsilon_to_rollback,
+            mem_pool_tuning_increment=self.mem_pool_tuning_increment,
+            mem_pool_tuning_ratio=self.mem_pool_tuning_ratio,
+            mem_pool_max_iterations=self.mem_pool_max_iterations,
+            mem_pool_parallel_estimate=self.mem_pool_parallel_estimate,
             wal_segment_size=self.wal_segment_size * BASE_WAL_SEGMENT_SIZE,
             max_query_length_in_bytes=self.max_query_length_in_bytes,
             max_runtime_ms_to_log_slow_query=self.max_runtime_ms_to_log_slow_query,
             max_runtime_ratio_to_explain_slow_query=self.max_runtime_ratio_to_explain_slow_query,
             min_wal_ratio_scale=self.min_wal_ratio_scale,
             max_wal_size_ratio=self.max_wal_size_ratio,
-            max_wal_size_remain_upper_size=self.max_wal_size_remain_upper_size_in_gib * Gi
+            max_wal_size_remain_upper_size=self.max_wal_size_remain_upper_size_in_gib * Gi,
+            bgwriter_utilization_ratio=self.bgwriter_utilization_ratio,
+            autovacuum_utilization_ratio=self.autovacuum_utilization_ratio,
+            num_transaction_per_hour_on_workload=self.num_transaction_per_hour_on_workload
         )
 
 
@@ -216,6 +229,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             enable_database_correction_tuning=self.enable_database_correction_tuning,
             enable_sysctl_general_tuning=self.enable_sysctl_general_tuning,
             enable_sysctl_correction_tuning=self.enable_sysctl_correction_tuning,
+            align_index=1,
         )
 
         # Scan and Update the current configuration
@@ -231,6 +245,7 @@ class PG_WEB_TUNE_REQUEST(BaseModel):
     alter_style: bool = False
     backup_settings: bool = False
     output_format: Literal['json', 'conf', 'file'] = 'conf'
+    analyze_with_full_connection_use: bool = False
 
     def to_backend(self) -> PG_TUNE_REQUEST:
         custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'

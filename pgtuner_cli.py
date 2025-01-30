@@ -36,8 +36,6 @@ This work may not be there without these great projects:
 - postgresqltuner: https://github.com/jfcoz/postgresqltuner/blob/master/postgresqltuner.pl
 - timescaledb-tune: https://github.com/timescale/timescaledb-tune
 
-Install with library: pydantic python-dotenv typer "psycopg[binary,pool]" toml psutil
-
 """
 import os
 from pprint import pprint
@@ -47,7 +45,6 @@ import logging.handlers
 from typing import Annotated, Literal
 from datetime import datetime
 
-from src.static.c_toml import LoadAppToml
 from src.static.vars import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR
 from src.tuner.data.scope import PGTUNER_SCOPE
 
@@ -56,9 +53,6 @@ from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
 
 # ==================================================================================================
 # Metadata
-
-def validate():
-    LoadAppToml(skip_checksum_verification=True)
 
 
 def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'file', 'conf'] = 'conf'):
@@ -70,7 +64,7 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
         filepath = f'{PGTUNER_SCOPE.KERNEL_SYSCTL.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
         result = pgtuner.write(request, response, PGTUNER_SCOPE.KERNEL_SYSCTL, output_format=output_format,
                                output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
-        pprint(result)
+        # pprint(result)
 
 
     if request.options.enable_database_general_tuning:
@@ -78,7 +72,7 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
         filepath = f'{PGTUNER_SCOPE.DATABASE_CONFIG.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
         result = pgtuner.write(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, output_format=output_format,
                                output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
-        pprint(result)
+        # pprint(result)
 
     # Test the logger of rotation
     # _logger = logging.getLogger(APP_NAME_UPPER)
@@ -90,7 +84,13 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
 
 
 if __name__ == "__main__":
-    rq = pgtuner.make_tune_request(vcpu_sample=24, ram_sample=int(128 * Gi), hyperthreading=True)
+    logical_cpu: int = 16
+    ram_cpu_ratio: float | int = 4.0
+    # rq = pgtuner.make_tune_request(logical_cpu=logical_cpu, ram_sample=int(logical_cpu * ram_cpu_ratio * Gi))
+    # optimize(rq, output_format='file')
+
+    logical_cpu: int = 4
+    rq = pgtuner.make_tune_request(logical_cpu=logical_cpu, ram_sample=int(logical_cpu * ram_cpu_ratio * Gi))
     # backup(rq, pgtuner_env_file=None)
     optimize(rq, output_format='file')
     pass

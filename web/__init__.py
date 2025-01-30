@@ -113,16 +113,21 @@ except (ImportError, ModuleNotFoundError) as e:
                     f'\nPlease install more dependencies: {e}')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True,
                    allow_methods=['GET', 'POST'], allow_headers=[], max_age=600)
-app.add_middleware(GlobalRateLimitMiddleware, max_requests=50, interval_by_second=1)
+REQUEST_SCALE_FACTOR = os.getenv(f'{APP_NAME_UPPER}_REQUEST_SCALE_FACTOR', '1')
+app.add_middleware(GlobalRateLimitMiddleware, max_requests=int(50 * float(REQUEST_SCALE_FACTOR)), interval_by_second=1)
 app.add_middleware(HeaderManageMiddleware)
-app.add_middleware(CompressMiddleware, minimum_size=(Ki >> 1), compress_level=3)
+app.add_middleware(CompressMiddleware, minimum_size=(Ki >> 1), compress_level=6)
 _logger.info('The middlewares have been added to the application ...')
 
 _logger.info('Mounting the static files to the application ...')
+# 0: Development, 1: Production
+CURRENT_ENVIRONMENT: str = os.getenv(f'{APP_NAME_UPPER}_WEB', '0')
+_env_tag = 'dev' if CURRENT_ENVIRONMENT == '0' else 'prd'
+_default_path = f'./web/ui/{_env_tag}/static'
 _static_mapper = {
-    '/static': './web/ui/static',
-    '/resource': './web/ui/static/resource',
-    '/css': './web/ui/static/css',
+    '/static': _default_path,
+    '/resource': f'{_default_path}/resource',
+    '/css': f'{_default_path}/css',
     # '/js': './web/ui/js',
 }
 try:
@@ -133,11 +138,13 @@ except (FileNotFoundError, RuntimeError) as e:
     raise e
 _logger.info('The static files have been added to the application ...')
 
-# 0: Development, 1: Production
+
 CURRENT_ENVIRONMENT: str = os.getenv(f'{APP_NAME_UPPER}_WEB', '0')
 def _get_html(minified: bool = False):
     return '/static/index.min.html' if minified else '/static/index.html'
 
+# ----------------------------------------------------------------------------------------------
+# UI Directory
 @app.get('/min')
 async def root_min():
     return RedirectResponse(url=_get_html(minified=True), status_code=status.HTTP_307_TEMPORARY_REDIRECT)
@@ -155,7 +162,7 @@ async def root():
 
 @app.get('/js/{javascript_path}')
 async def js(javascript_path: str):
-    _javascript_filepath = f'./web/ui/static/js/{javascript_path}'
+    _javascript_filepath = f'{_default_path}/js/{javascript_path}'
     if not os.path.exists(_javascript_filepath):
         return Response(status_code=status.HTTP_404_NOT_FOUND)
     content = open(_javascript_filepath, 'r').read()
@@ -173,6 +180,9 @@ async def version():
     return ORJSONResponse(content={'frontend': __version__, 'backend': backend_version}, status_code=status.HTTP_200_OK,
                           headers={'Cache-Control': 'max-age=360'})
 
+
+# ----------------------------------------------------------------------------------------------
+# Backend API
 @app.post('/tune', status_code=status.HTTP_200_OK, response_class=ORJSONResponse)
 async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     # Main website
@@ -195,10 +205,10 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     content = response.generate_content(target=PGTUNER_SCOPE.DATABASE_CONFIG, request=backend_request,
                                         output_format=request.output_format, backup_settings=request.backup_settings,
                                         exclude_names=exclude_names)
-    if isinstance(content, dict):
-        mem_report = response.mem_test(backend_request.options, use_full_connection=True, ignore_report=True)[0]
-        return ORJSONResponse(content={'mem_report': mem_report, 'config': content},
-                              status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
-    return PlainTextResponse(content=content, status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
+    mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,
+                                   ignore_report=False, skip_logger=True)[0]
+    return ORJSONResponse(content={'mem_report': mem_report, 'config': content},
+                          status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
+
 
 

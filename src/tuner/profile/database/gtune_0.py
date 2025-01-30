@@ -25,7 +25,7 @@ from math import ceil
 from pydantic import ByteSize
 
 from src.static.vars import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
-    SECOND, PG_LOG_DIR, BASE_WAL_SEGMENT_SIZE
+    SECOND, PG_LOG_DIR, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
@@ -110,11 +110,6 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
                         'the starting point is 25% of RAM or over. Please consider increasing the ratio.')
 
     shared_buffers: int = max(int(options.usable_ram_noswap * shared_buffers_ratio), 128 * Mi)
-    # Re-cap this value on specific workload that may not be best to have high shared_buffers. For these types of
-    # workload, it is best to size your instances properly.
-    if options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
-        shared_buffers = cap_value(shared_buffers, 128 * Mi, 8 * Gi)
-
     if shared_buffers == 128 * Mi:
         _logger.warning('No benefit is found on tuning this variable')
 
@@ -124,9 +119,9 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
 
     # Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
     # probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
-    lower_shared_buffers, _ = realign_value_to_unit(shared_buffers, page_size=DB_PAGE_SIZE)
-    _logger.debug(f'shared_buffers: {bytesize_to_hr(lower_shared_buffers)}')
-    return lower_shared_buffers
+    shared_buffers = realign_value_to_unit(shared_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
+    _logger.debug(f'shared_buffers: {bytesize_to_hr(shared_buffers)}')
+    return shared_buffers
 
 
 def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
@@ -165,7 +160,7 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     # For the connection memory estimation, we assumed not all connections required work_mem, but idle connections
     # persist.
     pgmem_available = int(options.usable_ram_noswap)  # Copy the value
-    pgmem_available -= int(group_cache['shared_buffers'] * options.tuning_kwargs.shared_buffers_fill_ratio)
+    pgmem_available -= int(group_cache['shared_buffers'])
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= int(_mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio)
     if 'wal_buffers' in global_cache:
@@ -191,11 +186,11 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
                          1 * Mi, max_cap)
 
     # Realign the number (always use the lower bound for memory safety)
-    lower_temp_buffers, _ = realign_value_to_unit(temp_buffers, page_size=DB_PAGE_SIZE)
-    lower_work_mem, _ = realign_value_to_unit(work_mem, page_size=DB_PAGE_SIZE)
-    _logger.debug(f'temp_buffers: {bytesize_to_hr(lower_temp_buffers)}')
-    _logger.debug(f'work_mem: {bytesize_to_hr(lower_work_mem)}')
-    return lower_temp_buffers, lower_work_mem
+    temp_buffers = realign_value_to_unit(temp_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
+    work_mem = realign_value_to_unit(work_mem, page_size=DB_PAGE_SIZE)[options.align_index]
+    _logger.debug(f'temp_buffers: {bytesize_to_hr(temp_buffers)}')
+    _logger.debug(f'work_mem: {bytesize_to_hr(work_mem)}')
+    return temp_buffers, work_mem
 
 
 def __temp_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
@@ -247,7 +242,7 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     # and https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
     # Default is half of physical RAM memory on most tuning guideline
     pgmem_available = int(options.usable_ram_noswap)
-    pgmem_available -= int(global_cache['shared_buffers'] * options.tuning_kwargs.shared_buffers_fill_ratio)
+    pgmem_available -= int(global_cache['shared_buffers'])
 
     # Add the memory used in connection setting here.
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
@@ -255,9 +250,9 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio
 
     # Re-align the number (always use the lower bound for memory safety)
-    lower_effective_cache_size, _ = realign_value_to_unit(effective_cache_size, page_size=DB_PAGE_SIZE)
-    _logger.debug(f"effective_cache_size: {bytesize_to_hr(lower_effective_cache_size)}")
-    return lower_effective_cache_size
+    effective_cache_size = realign_value_to_unit(effective_cache_size, page_size=DB_PAGE_SIZE)[options.align_index]
+    _logger.debug(f'effective_cache_size: {bytesize_to_hr(effective_cache_size)}')
+    return effective_cache_size
 
 
 def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
@@ -286,7 +281,7 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
         precision = 24 * DB_PAGE_SIZE
     elif usable_ram_noswap > 16 * Gi:
         precision = 32 * DB_PAGE_SIZE
-    return realign_value_to_unit(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[0]
+    return realign_value_to_unit(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[options.align_index]
 
 
 # =============================================================================
@@ -422,11 +417,11 @@ _DB_VACUUM_PROFILE = {
         'instructions': {
             'mini_default': 1,
             'medium_default': 2,
-            'large': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 4, 2, 5),
-            'mall': lambda group_cache, global_cache, options, response: cap_value(int(options.vcpu / 3.5), 3, 6),
-            'bigt': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 3, 3, 8),
+            'large': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 4 + 1, 2, 5),
+            'mall': lambda group_cache, global_cache, options, response: cap_value(int(options.vcpu / 3.5) + 1, 3, 6),
+            'bigt': lambda group_cache, global_cache, options, response: cap_value(options.vcpu // 3 + 1, 3, 8),
         },
-        'default': 2,
+        'default': 3,
         'hardware_scope': 'cpu',
         'comment': "Specifies the maximum number of autovacuum worker processes that may be running at any one time. "
                    "The default is 3. Best options should be less than the number of CPU cores. Increase this if "
@@ -434,7 +429,7 @@ _DB_VACUUM_PROFILE = {
     },
     'maintenance_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response: realign_value_to_unit(cap_value(
-            options.usable_ram_noswap // 16, 64 * Mi, 8 * Gi), page_size=DB_PAGE_SIZE)[0],
+            options.usable_ram_noswap // 16, 64 * Mi, 8 * Gi), page_size=DB_PAGE_SIZE)[options.align_index],
         'default': 64 * Mi,
         'hardware_scope': 'mem',
         'post-condition-group': lambda value, cache, options:
@@ -468,35 +463,52 @@ _DB_VACUUM_PROFILE = {
     # on most scenarios, except that you are having an extremely large table where 0.1% is too large.
     'autovacuum_vacuum_threshold': {
         'instructions': {
-            "mall_default": (5 * K10) >> 1,
-            "bigt_default": 5 * K10,
+            'mini_default': 200,
+            'bigt_default': 3 * K10,
         },
+        'hardware_scope': 'overall',
         'default': K10,
         'comment': "Specifies the minimum number of updated or deleted tuples needed to trigger a VACUUM in any one "
-                   "table. Default is 1000 tuples and 2.5K-5K tuples on a larger system.",
+                   "table. Default is 1000 tuples and 1K-3K tuples on a larger system.",
     },
     'autovacuum_vacuum_scale_factor': {
+        'instructions': {
+            'mini_default': 0.0250,
+            'mall_default': 0.0050,
+            'bigt_default': 0.0025,
+        },
+        'hardware_scope': 'overall',
         'default': 0.0125,
-        'comment': "Specifies a fraction of the table size to add to autovacuum_vacuum_threshold when deciding whether "
-                   "to trigger a VACUUM. Default is 0.0125 (or 1.25%, or 1/80).",
+        'comment': 'Specifies a fraction of the table size to add to autovacuum_vacuum_threshold when deciding whether '
+                   'to trigger a VACUUM. Default is 0.0125 (or 1.25%, or 1/80); and can be reduced to 0.25% on an '
+                   'extreme large system',
     },
     'autovacuum_vacuum_insert_threshold; autovacuum_analyze_threshold': {
         'instructions': {
-            "mall_default": 5 * K10,
-            "bigt_default": 10 * K10,
+            'mini_default': 200,
+            'mall_default': 2 * K10,
+            'bigt_default': 5 * K10,
         },
+        'hardware_scope': 'overall',
         'default': K10,
         'comment': "Specifies the minimum number of inserted tuples needed to trigger a VACUUM in any one table. "
                    "or the minimum number of inserted, updated or deleted tuples needed to trigger an ANALYZE "
-                   "in any one table. Default is 1000 tuples and 5K-10K tuples on a larger system. This is twice "
+                   "in any one table. Default is 1000 tuples and 2K-5K tuples on a larger system. This is twice "
                    "compared to the normal VACUUM/ANALYZE since UPDATE/DELETE cause data bloating and index "
                    "fragmentation more.",
     },
     'autovacuum_vacuum_insert_scale_factor; autovacuum_analyze_scale_factor': {
+        'instructions': {
+            'mini_default': 0.050,
+            'mall_default': 0.010,
+            'bigt_default': 0.005,
+        },
+        'hardware_scope': 'overall',
         'default': 0.025,
         'comment': "Specifies a fraction of the table size to add to autovacuum_vacuum_insert_threshold when deciding "
-                   "whether to trigger a VACUUM or ANALYZE. Default is 0.025 (or 2.5%, or 1/40). This is twice "
-                   "compared to the normal VACUUM/ANALYZE as it cause less data bloating and index fragmentation.",
+                   "whether to trigger a VACUUM or ANALYZE. Default is 0.025 (or 2.5%, or 1/40); and can be reduced "
+                   "to 0.5% on an extreme large system. This is twice compared to the normal VACUUM/ANALYZE as it cause "
+                   "less data bloating and index fragmentation.",
     },
     # Cost Delay, Limit, and Naptime (Naptime would not be changed)
     'autovacuum_vacuum_cost_delay': {
@@ -506,7 +518,7 @@ _DB_VACUUM_PROFILE = {
                    "to follow the official PostgreSQL documentation. With 2ms value, it meant that the wake-up "
                    "operation costs 2ms, resulting in a 500 wake-up per second. See [10] for more information. We "
                    "want auto-vacuum behave same with manual vacuum but different delay.",
-        'partial_func': lambda value: f"{value}ms",
+        'partial_func': lambda value: f'{value}ms' if isinstance(value, int) else f'{value:.4f}ms',
     },
     'autovacuum_vacuum_cost_limit': {
         'default': -1,
@@ -529,27 +541,28 @@ _DB_VACUUM_PROFILE = {
                    "20ms to decrease the impact vacuum has on currently running queries. Will cause vacuum to take up "
                    "to twice as long to complete. In our tuning model, we want to let autovacuum to do everything "
                    "unless something is wrong. Supported range is 0 and 100 ms.",
-        'partial_func': lambda value: f"{value}ms",
+        'partial_func': lambda value: f'{value}ms' if isinstance(value, int) else f'{value:.4f}ms',
     },
     'vacuum_cost_limit': {
         'instructions': {
-            "mini_default": K10,
-            "mall_default": 10 * K10,
-            "bigt_default": 10 * K10,
+            'large_default': 500,
+            'mall_default': K10,
+            'bigt_default': K10,
         },
-        'default': (5 * K10) >> 1,
-        'comment': "The cost limit value that will be used in vacuum operations. If -1 is specified, the regular "
-                   "vacuum_cost_limit value will be used. We set the default value to 2.5K for normal server, 10K "
-                   "for large server, and 1K for mini server. This default is genuinely good enough unless you work "
-                   "on the HDD disk. The cost limit is used to determine the maximum disk/memory throughput when to "
-                   "start the cost-based vacuum delay to prevent throttle. If you have much RAM and using SSD, "
-                   "increase this factor can make the vacuum faster, but only at maximum to the shared_buffers size. "
-                   "Supported range is 0 and 10000. However, on different version, the cost on buffer_hit, "
-                   "buffer_miss, and dirty_page are different.",
-        'partial_func': lambda value: f"{value}",
+        'default': 200,
+        'comment': 'The cost limit value that will be used in vacuum operations. If -1 is specified, the regular '
+                   'vacuum_cost_limit value will be used. We set the default value to 500 for normal server, 10K '
+                   'for large server, and 1K for mini server. This default is genuinely good enough unless you work '
+                   'on the HDD disk. The cost limit is used to determine the maximum disk/memory throughput when to '
+                   'start the cost-based vacuum delay to prevent throttle. If you have much RAM and using SSD, '
+                   'increase this factor can make the vacuum faster, but only at maximum to the shared_buffers size. '
+                   'Supported range is 0 and 10000. However, on different version, the cost on buffer_hit, '
+                   'buffer_miss, and dirty_page are different.',
+        'partial_func': lambda value: f'{value}',
     },
     'vacuum_cost_page_hit': {
         'default': 1,
+        'hardware_scope': 'mem',
         'comment': "The cost of a page found in the buffer cache. The default value is 1. This value is used to "
                    "determine the cost of a page hit in the buffer cache. The cost of a page hit is added to the total "
                    "cost of a vacuum operation.",
@@ -565,8 +578,62 @@ _DB_VACUUM_PROFILE = {
         'comment': "The cost of a page that is dirty. The default value is 20. This value is used to determine "
                    "the cost of a dirty page in the buffer cache. The cost of a dirty page is added to the total "
                    "cost of a vacuum operation.",
-        'partial_func': lambda value: f"{value}",
     },
+    # Transaction ID and MultiXact
+    'autovacuum_freeze_max_age': {
+        # See here: https://postgresqlco.nf/doc/en/param/autovacuum_freeze_max_age/
+        # And https://www.youtube.com/watch?v=vtjjaEVPAb8 at (30:02)
+        'default': 500 * M10,
+        'comment': "Specifies the maximum age (in transactions) that a table's pg_class.relfrozenxid field can attain "
+                   "before a VACUUM operation is forced to prevent transaction ID wraparound within the table. Note "
+                   "that the system will launch autovacuum processes to prevent wraparound even when autovacuum is "
+                   "otherwise disabled. Vacuum also allows removal of old files from the pg_xact subdirectory, which "
+                   "is why the default is a relatively low 200 million transactions."
+    },
+    'vacuum_freeze_table_age': {
+        'tune_op': lambda group_cache, global_cache, options, response:
+            realign_value_to_unit(int(group_cache['autovacuum_freeze_max_age'] * 0.80),
+                                  page_size=M10)[options.align_index],
+        'default': 150 * M10,
+        'comment': "VACUUM performs an aggressive scan if the table's pg_class.relfrozenxid field has reached the age "
+                   "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits every "
+                   "page that might contain unfrozen XIDs or MXIDs, not just those that might contain dead tuples. The "
+                   "default is 150 million transactions. "
+    },
+    'vacuum_freeze_min_age': {
+        'default': 50 * M10,
+        'comment': "Specifies the cutoff age (in transactions) that VACUUM should use to decide whether to trigger "
+                   "freezing of pages that have an older XID. The default is 50 million transactions."
+    },
+
+    'autovacuum_multixact_freeze_max_age': {
+        'default': 850 * M10,
+        'comment': "Specifies the maximum age (in multixacts) that a table's pg_class.relminmxid field can attain "
+                   "before a VACUUM operation is forced to prevent multixact ID wraparound within the table. Note "
+                   "that the system will launch autovacuum processes to prevent wraparound even when autovacuum is "
+                   "otherwise disabled. Vacuuming multixacts also allows removal of old files from the "
+                   "pg_multixact/members and pg_multixact/offsets subdirectories, which is why the default is a "
+                   "relatively low 400 million multixacts. "
+    },
+    'vacuum_multixact_freeze_table_age': {
+        'tune_op': lambda group_cache, global_cache, options, response:
+            realign_value_to_unit(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.80),
+                                  page_size=M10)[options.align_index],
+        'default': 150 * M10,
+        'comment': "VACUUM performs an aggressive scan if the table's pg_class.relminmxid field has reached the age "
+                   "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits "
+                   "every page that might contain unfrozen XIDs or MXIDs, not just those that might contain dead "
+                   "tuples. The default is 150 million multixacts. Although users can set this value anywhere from "
+                   "zero to two billion, VACUUM will silently limit the effective value to 95% of "
+                   "autovacuum_multixact_freeze_max_age, so that a periodic manual VACUUM has a chance to run before "
+                   "an anti-wraparound is launched for the table"
+    },
+    'vacuum_multixact_freeze_min_age': {
+        'default': 5 * M10,
+        'comment': "Specifies the cutoff age (in multixacts) that VACUUM should use to decide whether to trigger "
+                   "freezing of pages with an older multixact ID. The default is 5 million multixacts. "
+    },
+
 }
 
 _DB_BGWRITER_PROFILE = {
@@ -657,35 +724,37 @@ _DB_ASYNC_DISK_PROFILE = {
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        cap_value(int(options.vcpu * 1.5), 4, 512),
+        cap_value(int(options.vcpu * 1.5) + 2, 4, 512),
         'default': 8,
-        'comment': "Sets the maximum number of background processes that the system can support. The supported range "
-                   "is [4, 512], with default to 1.5x of the logical CPU count (8 by official documentation).",
+        'comment': 'Sets the maximum number of background processes that the system can support. The supported range '
+                   'is [4, 512], with default to 1.5x + 2 of the logical CPU count (8 by official documentation). We do '
+                   'not have intention on the worst case with > 128 vCPU for PostgreSQL since beyond that, the '
+                   'benefit gained is quite minimal due to OS context switching.',
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu * 1), 4, 512), group_cache['max_worker_processes']),
+        min(cap_value(int(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
         'default': 8,
-        'comment': "Sets the maximum number of workers that the cluster can support for parallel operations. The "
-                   "supported range is [4, 1024], with default to 1.0x of the logical CPU count (8 by official "
-                   "documentation). The number of parallel workers that default value is 8. When increasing or "
-                   "decreasing this value, consider also adjusting max_parallel_maintenance_workers and "
-                   "max_parallel_workers_per_gather. Also, note that these workers are retrieved from "
-                   "max_parallel_workers so higher value than max_worker_processes will have no effect. See Ref [05]"
-                   "for more information.",
+        'comment': 'Sets the maximum number of workers that the cluster can support for parallel operations. The '
+                   'supported range is [4, 512], with default to 1.125x of the logical CPU count (8 by official '
+                   'documentation). When increasing or decreasing this value, consider also adjusting '
+                   'max_parallel_maintenance_workers and max_parallel_workers_per_gather. Also, note that these '
+                   'workers are retrieved from max_parallel_workers so higher value than max_worker_processes will '
+                   'have no effect. See Ref [05] for more information.',
     },
     'max_parallel_workers_per_gather': {
         'tune_op': lambda group_cache, global_cache, options, response:
         min(cap_value(int(options.vcpu // 3), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
-        'comment': "Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. "
-                   "Parallel workers are taken from the pool of processes established by max_worker_processes, limited "
-                   "by max_parallel_workers. However, there are no guarantee from Ref video [33] saying that increase "
-                   "more is better due to the algorithm, lock contention and memory usage. Thus by TimescaleDB, it is "
-                   "best to keep it below 1/2 of number of CPUs or 1/2 of max_parallel_workers to allow at least 2 "
-                   "*Gather* queries to be run. The supported range is [2, 32], with default to 1/3x of the logical "
-                   "CPU count (2 by official documentation).",
+        'comment': 'Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. '
+                   'Parallel workers are taken from the pool of processes established by max_worker_processes, limited '
+                   'by max_parallel_workers. However, there are no guarantee from Ref video [33] saying that increase '
+                   'more is better due to the algorithm, lock contention and memory usage. Thus by TimescaleDB, it is '
+                   'best to keep it below 1/2 of number of CPUs or 1/2 of max_parallel_workers to allow at least 2 '
+                   '*Gather* queries to be run. The supported range is [2, 32], with default to 1/3x of the logical '
+                   'CPU count (2 by official documentation).',
     },
+
     'max_parallel_maintenance_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
         min(cap_value(int(options.vcpu // 2), 2, 32), group_cache['max_parallel_workers']),
@@ -922,7 +991,7 @@ _DB_WAL_PROFILE = {
     },
 
     # ============================== ARCHIVE && RECOVERY ==============================
-    "archive_mode": {
+    'archive_mode': {
         'default': 'on',
         'comment': 'When archive_mode is enabled, completed WAL segments are sent to archive storage by setting '
                    ':var:`archive_command` or :var:`archive_library`. In addition to :enum:`off`, to disable, there '
@@ -963,9 +1032,8 @@ exit 0
     },
     'archive_timeout': {
         'instructions': {
-            'large_default': 10 * MINUTE,  # 10 minutes
-            'mall_default': int(7.5 * MINUTE),  # 7.5 minutes
-            'bigt_default': 5 * MINUTE,  # 5 minutes
+            'mall_default': 10 * MINUTE,  # 10 minutes
+            'bigt_default': int(7.5 * MINUTE),  # 7.5 minutes
         },
         'default': 15 * MINUTE,
         'hardware_scope': 'overall',  # But based on data rate
@@ -985,7 +1053,7 @@ exit 0
                    'putting additional constraint on the archive storage system).',
         'partial_func': lambda value: f"{value}s",
     },
-    "restore_command": {
+    'restore_command': {
         'default': rf""" 
 #!/bin/sh
 set -euox pipefail
@@ -1039,7 +1107,7 @@ _DB_RECOVERY_PROFILE = {
 _DB_REPLICATION_PROFILE = {
     # Sending Servers
     'max_wal_senders': {
-        'default': 10,
+        'default': 3,
         'hardware_scope': 'net',
         'comment': 'Specifies the maximum number of concurrent connections from standby servers or streaming base '
                    'backup clients (i.e., the maximum number of simultaneously running WAL sender processes). The '
@@ -1049,7 +1117,7 @@ _DB_REPLICATION_PROFILE = {
                    'disconnected clients can immediately reconnect.'
     },
     'max_replication_slots': {
-        'default': 10,
+        'default': 3,
         'hardware_scope': 'net',
         'comment': 'Specifies the maximum number of replication slots (see streaming-replication-slots) that the '
                    'server can support. The default is 10. This parameter can only be set at server start. Setting '
@@ -1062,7 +1130,7 @@ _DB_REPLICATION_PROFILE = {
         realign_value_to_unit(
             cap_value(global_cache['max_wal_size'] // 20, 10 * options.tuning_kwargs.wal_segment_size,
                       options.wal_spec.disk_usable_size // 10),
-            page_size=options.tuning_kwargs.wal_segment_size)[0],
+            page_size=options.tuning_kwargs.wal_segment_size)[options.align_index],
         'default': 10 * BASE_WAL_SEGMENT_SIZE,
         'comment': 'Specifies the minimum size of past WAL files kept in the pg_wal directory, in case a standby '
                    'server needs to fetch them for streaming replication. If a standby server connected to the '
@@ -1105,7 +1173,7 @@ _DB_REPLICATION_PROFILE = {
     'logical_decoding_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response:
         realign_value_to_unit(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi),
-                              page_size=DB_PAGE_SIZE)[0],
+                              page_size=DB_PAGE_SIZE)[options.align_index],
         'default': 64 * Mi,
         'comment': "Specifies the maximum amount of memory to be used by logical decoding, before some of the decoded "
                    "changes are written to local disk. This limits the amount of memory used by logical streaming "
@@ -1202,7 +1270,6 @@ _DB_QUERY_PROFILE = {
                    "believe the cost of tuple transfer would be reduced but still maintained its ratio compared to "
                    "the single CPU execution (0.01 vs 0.1). "
     },
-
     # Commit Behaviour
     'commit_delay': {
         'instructions': {
@@ -1334,7 +1401,7 @@ _DB_LOG_PROFILE = {
         'default': 300 * K10,
         'comment': 'Causes each action and each statement to be logged if their duration is equal to or longer than '
                    'the specified time in milliseconds. Setting this to zero logs all statements and actions. A '
-                   'negative value turns this feature off. The default is -1 (turning this feature off).',
+                   'negative value turns this feature off. PostgreSQL default to -1 (off) and we set to 5 minutes.',
         'partial_func': lambda value: f"{value // K10}s",
     },
     'log_checkpoints': {
@@ -1514,7 +1581,7 @@ _DB_TIMEOUT_PROFILE = {
 # Library (You don't need to tune these variable as they are not directly related to the database performance)
 _DB_LIB_PROFILE = {
     'shared_preload_libraries': {
-        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements',
+        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_repack',   # Not pg_squeeze
         'comment': 'A comma-separated list of shared libraries to load into the server. The list of libraries must be '
                    'specified by name, not with file name or path. The libraries are loaded into the server during '
                    'startup. If a library is not found when the server is started, the server will fail to start. '
@@ -1528,7 +1595,7 @@ _DB_LIB_PROFILE = {
     # Auto Explain
     'auto_explain.log_min_duration': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value_to_unit(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[1],
+        realign_value_to_unit(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[options.align_index],
         'default': -1,
         'comment': "auto_explain.log_min_duration is the minimum statement execution time, in milliseconds, that will "
                    "cause the statement's plan to be logged. Setting this to 0 logs all plans. -1 (the default) "

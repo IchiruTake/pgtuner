@@ -28,7 +28,7 @@ _DB_LOG_PROFILE = {
 _DB_VACUUM_PROFILE = {
     'vacuum_buffer_usage_limit': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value_to_unit(cap_value(global_cache['shared_buffers'] // 16, 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[0],
+        realign_value_to_unit(cap_value(global_cache['shared_buffers'] // 16, 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         'default': 2 * Mi,
         'hardware_scope': 'mem',
         'comment': 'Specifies the size of the Buffer Access Strategy used by the VACUUM and ANALYZE commands. A '

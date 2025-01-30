@@ -3,7 +3,7 @@ import logging
 from pydantic import BaseModel, Field
 from pydantic.types import PositiveFloat, PositiveInt, ByteSize
 
-from src.static.vars import APP_NAME_UPPER, K10, BASE_WAL_SEGMENT_SIZE, Mi, Ki, Gi, Ti
+from src.static.vars import APP_NAME_UPPER, K10, BASE_WAL_SEGMENT_SIZE, Mi, Ki, Gi, Ti, M10
 
 __all__ = ["PG_TUNE_USR_KWARGS", ]
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -30,9 +30,9 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'is stronger.')
     )
     single_memory_connection_overhead: ByteSize = (
-        Field(default=5 * Mi, ge=1 * Mi, le=16 * Mi,
-              description='The memory overhead for a single connection at idle state. The supported range is [1 MiB, '
-                          '16 MiB], default is 5 MiB in total. This value is used to estimate the memory usage for '
+        Field(default=5 * Mi, ge=2 * Mi, le=12 * Mi,
+              description='The memory overhead for a single connection at idle state. The supported range is [2 MiB, '
+                          '12 MiB], default is 5 MiB in total. This value is used to estimate the memory usage for '
                           "each connection. We do not recommend to set this value too high as it could make the "
                           'estimation to be incorrect (recommend to be between 4 - 8 MiB).')
     )
@@ -46,7 +46,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     effective_cache_size_available_ratio: PositiveFloat = (
         Field(default=0.99, ge=0.93, le=1.0,
               description='The percentage of effective_cache_size over the total PostgreSQL available memory excluding '
-                          'the shared_buffers and others. The supported range is [0.93, 1.0), default is 0.99. '
+                          'the shared_buffers and others. The supported range is [0.93, 1.0], default is 0.99. '
                           'It is recommended to set this value to at least 0.98 or higher.')
     )
     shared_buffers_ratio: PositiveFloat = (
@@ -57,14 +57,6 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           '*same* table, than you can think of increasing **slowly** this value (1-2% increment change) '
                           'with consideration. However, we recommend that this value should be below 0.40 to prevent '
                           'double caching unless you are making a read-only database or a not-good synthetic benchmark.')
-    )
-    shared_buffers_fill_ratio: PositiveFloat = (
-        Field(default=0.995, ge=0.95, le=1.0,
-              description='The fill ratio of the shared_buffers. The supported range is [0.95, 1.0], default is 0.995 '
-                          'which meant that 99.5% capacity of shared_buffers is occupied. We did not recommended this '
-                          'value to be lower than 0.99 as it could lead to non-optimal memory estimation. For example, '
-                          'on a server with 16 GiB of RAM with 25% shared_buffers, the 99% of fill ratio meant that '
-                          'your server still have 40.96 MiB of shared_buffers.')
     )
     max_work_buffer_ratio: PositiveFloat = (
         Field(default=0.075, gt=0, le=0.50,
@@ -139,24 +131,11 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'and default is 100. Set to 0 to run infinitely until the memory tuning is converged. '
                           'Higher value could make the tuning run more loops.')
     )
-
-    # WAL control parameters -> Change this when you initdb with custom wal_segment_size
-    wal_segment_size: PositiveInt = (
-        Field(default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=128 * BASE_WAL_SEGMENT_SIZE, frozen=True,
-              multiple_of=BASE_WAL_SEGMENT_SIZE,
-              description='The WAL segment size in PostgreSQL (in MiB). The supported range is [16, 2048] in MiB. '
-                          'Whilst the tuning of this value is not recommended as mentioned in [36-39] due to some '
-                          'hard-coded in 3rd-party tools, and benefits of WAL recovering, archiving, and transferring; '
-                          'longer WAL initialization during burst workload. Unless you run initdb with custom '
-                          'wal_segment_size (64 MiB or larger); I still leave it here for you to adjust. For the best '
-                          'practice, whilst 16 MiB of single WAL file is good for most cases; a scenario where you '
-                          'need higher WAL size is when dealing with OLTP workload with large amount of data write '
-                          'that would rotate the WAL too frequently. Also, the benchmarking from PostgreSQL team '
-                          'does show improvement but at when the number of connections are large (> 64) with larger '
-                          'than 64 vCPU. Beyond that, the improvement are marginal and you could have same benefit '
-                          'when tuning other variables. Just to remember to adjust the max_wal_size, archive_timeout, '
-                          'and checkpoint_timeout to better suit your workload.')
+    mem_pool_parallel_estimate: bool = (
+        Field(default=False,
+              description='The flag to switch to the memory estimation in parallelism. The default is False. ')
     )
+
     # Tune logging behaviour (query size, and query runtime)
     max_query_length_in_bytes: ByteSize = (
         Field(default=2 * Ki, ge=64, le=64 * Mi, multiple_of=32,
@@ -181,7 +160,24 @@ class PG_TUNE_USR_KWARGS(BaseModel):
               )
     )
 
+    # WAL control parameters -> Change this when you initdb with custom wal_segment_size
     # WAL tuning
+    wal_segment_size: PositiveInt = (
+        Field(default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=128 * BASE_WAL_SEGMENT_SIZE, frozen=True,
+              multiple_of=BASE_WAL_SEGMENT_SIZE,
+              description='The WAL segment size in PostgreSQL (in MiB). The supported range is [16, 2048] in MiB. '
+                          'Whilst the tuning of this value is not recommended as mentioned in [36-39] due to some '
+                          'hard-coded in 3rd-party tools, and benefits of WAL recovering, archiving, and transferring; '
+                          'longer WAL initialization during burst workload. Unless you run initdb with custom '
+                          'wal_segment_size (64 MiB or larger); I still leave it here for you to adjust. For the best '
+                          'practice, whilst 16 MiB of single WAL file is good for most cases; a scenario where you '
+                          'need higher WAL size is when dealing with OLTP workload with large amount of data write '
+                          'that would rotate the WAL too frequently. Also, the benchmarking from PostgreSQL team '
+                          'does show improvement but at when the number of connections are large (> 64) with larger '
+                          'than 64 vCPU. Beyond that, the improvement are marginal and you could have same benefit '
+                          'when tuning other variables. Just to remember to adjust the max_wal_size, archive_timeout, '
+                          'and checkpoint_timeout to better suit your workload.')
+    )
     min_wal_ratio_scale: PositiveFloat = (
         Field(default=0.5, gt=0.0, le=3.0,
               description='The WAL ratio scaler for tune the min_wal_size configuration. The min_wal_size is computed '
@@ -208,6 +204,36 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'disk size must be larger 256 Gi / (1 - 0.9) ~ 2.5 TiB to have max_wal_size is 256 GiB less '
                           'than the disk size.')
     )
+
+    # Background Writer Tuning
+    bgwriter_utilization_ratio: PositiveFloat = (
+        Field(default=0.1, gt=0, le=0.3,
+              description='The utilization ratio of the random IOPS of data volume used for the background writer '
+                          'process. The supported range is (0, 0.3], default is 0.1 or 10%. This would determine the '
+                          'efficient estimated WRITE IOPs, but minimum 4 MiB/s of 8K-IOPS. Higher value would make '
+                          'the background writer overflow the data disk, which could be in use for other purposes. ')
+    )
+
+    # Vacuum Tuning
+    autovacuum_utilization_ratio: PositiveFloat = (
+        Field(default=0.80, gt=0.50, le=0.95,
+              description='The utilization ratio of the random IOPS of data volume used for the autovacuum process. '
+                          'Note that this is based on the efficient estimated READ/WRITE IOPs and may not be reflected '
+                          'in your real-world scenario. Our intention is to reduce the un-necessary time of running '
+                          'autovacuum, but be able to serve a small portion of user who want to fetch the data from '
+                          'database. Unless you are using the NVME as data disk (and currently have lots of IOPS), '
+                          'it is not recommended to set this beyond 0.90. The supported range is (0.50, 0.95], default '
+                          'is 0.80.')
+    )
+    # Transaction Rate
+    num_transaction_per_hour_on_workload: PositiveInt = (
+        Field(default=int(5 * M10), ge=K10, le=50 * M10,
+              description='The peak number of transaction per hour. The supported range is [1K, 50M], default is 5M. '
+                          'The current default would translated in around 1.4K transactions per second. Note that this '
+                          'number requires you to have good estimation on how much your server can be handled during '
+                          'its busy workload. This parameter is used to determine the which page is frozen. ')
+    )
+
 
     # =============================================================================
     # Currently unused keywords

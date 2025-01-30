@@ -170,6 +170,7 @@ async function submitConfiguration() {
         'user_options': processedParams,
         'alter_style': document.getElementById('alter_style').checked,
         'backup_settings': document.getElementById('backup_settings').checked,
+        'analyze_with_full_connection_use': document.getElementById('analyze_with_full_connection_use').checked,
         'output_format': document.getElementById('output_format').value,
     };
     body = JSON.stringify(body, null, 2);
@@ -183,13 +184,17 @@ async function submitConfiguration() {
             },
             body: body
         });
-
+        const output_format = document.getElementById('output_format').value;
         if (response.ok) {
             // If the response is successful, show the result based on its content-type
             if (response.headers.get('content-type').includes('application/json')) {
                 const result = await response.json();
                 // Set the response box to be editable, then set the response to the result
-                update_response('response-box', JSON.stringify(result['config'], null, 2));
+                if (output_format === 'json') {
+                    update_response('response-box', JSON.stringify(result['config'], null, 2));
+                } else {
+                    update_response('response-box', result['config']);
+                }
 
                 // Set the memory report box to be editable, then set the response to the result
                 update_response('mem-report', result['mem_report']);

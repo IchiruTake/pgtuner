@@ -82,7 +82,8 @@ class GlobalRateLimitMiddleware(BaseMiddleware):
 # ==============================================================================
 # Header Hardening
 class HeaderManageMiddleware(BaseMiddleware):
-    def __init__(self, app: ASGIApp | ASGI3Application, accept_scope: str | list[str] = 'http'):
+    def __init__(self, app: ASGIApp | ASGI3Application, accept_scope: str | list[str] = 'http',
+                 extra_headers: dict[str, Any] = None):
         super(HeaderManageMiddleware, self).__init__(app, accept_scope=accept_scope)
         # Offload the headers
         # https://scotthelme.co.uk/hardening-your-http-response-headers
@@ -122,6 +123,7 @@ class HeaderManageMiddleware(BaseMiddleware):
         # FUTURE: Disable as in experimental in 2025
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy (Replaces Feature-Policy)
         # self._hard_headers['Permissions-Policy'] = self._hard_headers['Feature-Policy']
+        self.extra_headers: dict[str, Any] = extra_headers or {}
 
     async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
                        send: ASGISendCallable | Send) -> None:

@@ -37,7 +37,7 @@ if WEB_MODE:
 PG_ARCHIVE_DIR = '/mnt/<any-storage-host>/<postgresql-hostname>/postgresql/archive/wal'
 PG_LOG_DIR = '/mnt/<any-storage-host>/<postgresql-hostname>/postgresql/archive/db_log'
 
-BASE_ENTRY_READER_DIR: str = os.path.expanduser(f"./.{APP_NAME_LOWER}")
+BASE_ENTRY_READER_DIR: str = os.path.expanduser(f'./.{APP_NAME_LOWER}')
 BACKUP_ENTRY_READER_DIR: str = os.path.join(BASE_ENTRY_READER_DIR, 'backup')
 SUGGESTION_ENTRY_READER_DIR: str = os.path.join(BASE_ENTRY_READER_DIR, 'suggestions')
 
