@@ -226,12 +226,12 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'is 0.80.')
     )
     # Transaction Rate
-    num_transaction_per_hour_on_workload: PositiveInt = (
+    num_write_transaction_per_hour_on_workload: PositiveInt = (
         Field(default=int(5 * M10), ge=K10, le=50 * M10,
-              description='The peak number of transaction per hour. The supported range is [1K, 50M], default is 5M. '
-                          'The current default would translated in around 1.4K transactions per second. Note that this '
-                          'number requires you to have good estimation on how much your server can be handled during '
-                          'its busy workload. This parameter is used to determine the which page is frozen. ')
+              description='The peak number of workload write transaction per hour. The supported range is [1K, 50M], '
+                          'default is 5M (translated into 1.4K transactions per second). Note that this number requires '
+                          'you to have good estimation on how much your server can be handled during its busy workload. '
+                          'This parameter is used to determine the which page is frozen. ')
     )
 
 

@@ -82,8 +82,8 @@ class GeneralTuner(BaseModel):
         if profile_default is None:
             profile_default = tune_entry['default']
             if profile_fn is None or not isinstance(profile_fn, Callable):
-                _msg = (f"WARNING: Profile-based tuning function collection is not found for this item {key} but the "
-                        f"associated hardware scope '{hw_scope}' is NOT found")
+                _msg = (f"WARNING: Profile-based tuning function collection is not found for this item {key} and the "
+                        f"associated hardware scope '{hw_scope}' is NOT found, pushing to use the generic default.")
         return profile_fn, profile_default, _msg
 
     @time_decorator

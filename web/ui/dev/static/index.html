@@ -363,7 +363,7 @@
         <p class="mb-3"> Warning: If you are using RAID, please ensure below calculation are suitable for RAID0 where READ and WRITE can be scaled equally (not linearly) and all disks has same capacity. If you are wandering if these calculations are correct, benchmark your whole volume in throughput (MiB/s) and random IOPS (with 8KiB page size) and set the number of disks to be 1 to disable the RAID estimation.
         </p>
         <p class="mb-3">
-            Note that for a performant PostgreSQL server, you should host your database on 4 disks or 4 separate volumes: 1 for PostgreSQL binaries, configuration, and transaction management; 1 for WAL; 1 for data and index; and 1 for database logging. Also, if you use tablespace to separate random IOPS for data/index volume then it would be great. You then also need a remote storage to store the backup, WAL archive, and compressed database logs.
+            Note that for a performant PostgreSQL server, you should host your database on at least 4 disks or 4 separate volumes: 1 for PostgreSQL binaries, configuration, and transaction management; 1 for WAL; 1 for data and index; and 1 for database logging. Also, if you use tablespace to separate random IOPS for data/index volume then it would be great. You then also need a remote storage to store the backup, WAL archive, and compressed database logs.
         </p>
 
         <div class="row">
@@ -765,7 +765,7 @@
                     </label>
                     <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                        data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                       data-bs-content="Set to True (default) would take the difference of WAL buffers before the general tuning and correction tuning to be used in temp_buffers and work_mem, by increasing its pool size. This argument is only valid when the WAL buffers is reduced because your disk cannot handle between transaction loss."
+                       data-bs-content="Set to True (default) would take the difference of WAL buffers before the general tuning and correction tuning to be used in temp_buffers and work_mem, by increasing its pool size. This argument is only visible when your WAL buffers is reduced because the WAL volume cannot handle transaction loss ontime."
                        title="Transfer WAL buffers to Working Memory">
                     </i>
                 </div>
@@ -1457,22 +1457,22 @@
                     <!-- num_transaction_per_hour_on_workload -->
                     <div class="col-4 mb-3">
                         <div class="d-flex justify-content-between align-items-center">
-                            <label class="form-label" for="keywords.num_transaction_per_hour_on_workload">
-                                Number of Transaction per Hour On Workload</label>
+                            <label class="form-label" for="keywords.num_write_transaction_per_hour_on_workload">
+                                Workload WRITE Transaction Rate (per hour on 1 server)</label>
                             <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                                data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                               data-bs-content="The peak number of transaction per hour during workload. The supported range is [1K, 50M], default is 5M (translated in around 1.4K transactions per second). Note that this number requires you to have good estimation on how much your server can be handled and will be handled during its busy workload, to mark frozen page for anti-wraparound (aggressive) vacuum."
-                               title="Number of Transaction per Hour On Workload">
+                               data-bs-content="The peak number of workload *write* transaction per hour (regardless commit or rollback). The supported range is [1K, 50M], default is 5M (translated in around 1.4K transactions per second). Note that this number requires you to have good estimation on how much your server can be handled and will be handled during its busy workload, to mark frozen page for anti-wraparound (aggressive) vacuum. "
+                               title="Workload Transaction Rate (per hour on 1 server)">
                             </i>
                         </div>
                         <div class="d-flex align-items-center">
-                            <input class="form-range me-3" name="keywords.num_transaction_per_hour_on_workload"
-                                   id="keywords.num_transaction_per_hour_on_workload_range"
-                                   max="50000000" min="10000" step="100000" value="1000000" type="range"
-                                   onchange="syncSliderToNumber('keywords.num_transaction_per_hour_on_workload')">
-                            <input class="form-control w-auto" id="keywords.num_transaction_per_hour_on_workload"
-                                   max="50000000" min="10000" step="100000" value="1000000" type="number"
-                                   onchange="syncNumberToSlider('keywords.num_transaction_per_hour_on_workload')">
+                            <input class="form-range me-3" name="keywords.num_write_transaction_per_hour_on_workload"
+                                   id="keywords.num_write_transaction_per_hour_on_workload_range"
+                                   max="50000000" min="10000" step="10000" value="1000000" type="range"
+                                   onchange="syncSliderToNumber('keywords.num_write_transaction_per_hour_on_workload')">
+                            <input class="form-control w-auto" id="keywords.num_write_transaction_per_hour_on_workload"
+                                   max="50000000" min="10000" step="10000" value="1000000" type="number"
+                                   onchange="syncNumberToSlider('keywords.num_write_transaction_per_hour_on_workload')">
                         </div>
                     </div>
                 </div>

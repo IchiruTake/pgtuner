@@ -165,6 +165,8 @@ async function submitConfiguration() {
     console.log(body)
 
     try {
+        update_response('response-box', 'Loading...');
+        update_response('mem-report', 'Loading...');
         const response = await fetch('/tune', {
             method: 'POST',
             headers: {
@@ -173,6 +175,7 @@ async function submitConfiguration() {
             body: body
         });
         const output_format = document.getElementById('output_format').value;
+
         if (response.ok) {
             // If the response is successful, show the result based on its content-type
             if (response.headers.get('content-type').includes('application/json')) {

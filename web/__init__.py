@@ -139,10 +139,10 @@ if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
 
 _logger.info('The middlewares have been added to the application ...')
 # ==================================================================================================
-
 _logger.info('Mounting the static files to the application ...')
 # 0: Development, 1: Production
 _app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
+_logger.info(f'Application Developer Mode: {_app_dev_mode}')
 _env_tag = 'dev' if _app_dev_mode else 'prd'
 _default_path = f'./web/ui/{_env_tag}/static'
 _static_mapper = {
@@ -266,9 +266,13 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     # pprint(backend_request.options)
     exclude_names = {'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command'}
     response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
-    content = response.generate_content(target=PGTUNER_SCOPE.DATABASE_CONFIG, request=backend_request,
-                                        output_format=request.output_format, backup_settings=request.backup_settings,
-                                        exclude_names=exclude_names)
+    content = response.generate_content(
+        target=PGTUNER_SCOPE.DATABASE_CONFIG,
+        request=backend_request,
+        output_format=request.output_format,
+        exclude_names=exclude_names,
+        backup_settings=False, # request.backup_settings,
+    )
     mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,
                                    ignore_report=False, skip_logger=True)[0]
     response_header = {

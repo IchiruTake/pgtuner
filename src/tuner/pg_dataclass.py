@@ -227,11 +227,22 @@ class PG_TUNE_RESPONSE(BaseModel):
                                     data_disk_iops=data_iops)
         normal_vacuum = vacuum_scale(managed_cache['autovacuum_vacuum_threshold'],
                                      managed_cache['autovacuum_vacuum_scale_factor'])
-
         normal_analyze = vacuum_scale(managed_cache['autovacuum_analyze_threshold'],
                                       managed_cache['autovacuum_analyze_scale_factor'])
+
         # See the PostgreSQL source code of how they sample randomly to get statistics
         _sampling_rows = 300 * managed_cache['default_statistics_target']
+
+        # Anti-wraparound Vacuum
+        # Transaction ID
+        min_hr_txid = managed_cache['vacuum_freeze_min_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+        norm_hr_txid = managed_cache['vacuum_freeze_table_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+        max_hr_txid = managed_cache['autovacuum_freeze_max_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+
+        # Row Locking in Transaction
+        min_hr_row_lock = managed_cache['vacuum_multixact_freeze_min_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+        norm_hr_row_lock = managed_cache['vacuum_multixact_freeze_table_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+        max_hr_row_lock = managed_cache['autovacuum_multixact_freeze_max_age'] / _kwargs.num_write_transaction_per_hour_on_workload
 
         _report = f'''
 # ===============================================================
@@ -325,10 +336,14 @@ Report Summary (others):
         + Other Scenarios with H:M:D ratio as 5:5:1, or 1:1:1
             -> 5:5:1 (frequent) -> Page on Disk: {vacuum_report['5:5:1_page'] * 6} page -> Throughput: {vacuum_report['5:5:1_data']:.2f} MiB/s
             -> 1:1:1 (rarely) -> Page on Disk: {vacuum_report['1:1:1_page'] * 3} page -> Throughput: {vacuum_report['1:1:1_data']:.2f} MiB/s
+    - Transaction ID Wraparound and Anti-Wraparound Vacuum:
+        + Write Transaction per Hour: {_kwargs.num_write_transaction_per_hour_on_workload}
+        + TXID Vacuum :: Minimum={min_hr_txid:.2f} hrs :: Manual={norm_hr_txid:.2f} hrs :: Auto-forced={max_hr_txid:.2f} hrs
+        + XMIN,XMAX Vacuum :: Minimum={min_hr_row_lock:.2f} hrs :: Manual={norm_hr_row_lock:.2f} hrs :: Auto-forced={max_hr_row_lock:.2f} hrs     
         
 * Background Writers:
     - Delay: {managed_cache['bgwriter_delay']} (ms) for maximum {managed_cache['bgwriter_lru_maxpages']} dirty pages
-        + Throughput in Random WRITE IOPs of Data Disk: {bgwriter_throughput} (MB/s)
+        + Throughput in Random WRITE IOPs of Data Disk: {bgwriter_throughput} (MiB/s)
         + Utilization on data volume: {bgwriter_page_per_second / options.data_index_spec.raid_perf()[1] * 100:.2f} (%) 
         + OK Status: {bgwriter_page_per_second < options.data_index_spec.raid_perf()[1]} 
 

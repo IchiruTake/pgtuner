@@ -530,7 +530,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
 
     # Tune the vacuum_freeze_min_age
     vacuum_freeze_min_age = 'vacuum_freeze_min_age'
-    after_vacuum_freeze_min_age = cap_value(_kwargs.num_transaction_per_hour_on_workload * 6, 500 * K10,
+    after_vacuum_freeze_min_age = cap_value(_kwargs.num_write_transaction_per_hour_on_workload * 6, 500 * K10,
                                             managed_cache['autovacuum_freeze_max_age'] * 0.5)
     after_vacuum_freeze_min_age = realign_value_to_unit(after_vacuum_freeze_min_age, M10)
     _item_tuning(key=vacuum_freeze_min_age, after=after_vacuum_freeze_min_age[request.options.align_index],
@@ -539,7 +539,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
 
     # Tune the vacuum_multixact_freeze_min_age
     vacuum_multixact_freeze_min_age = 'vacuum_multixact_freeze_min_age'
-    after_vacuum_multixact_freeze_min_age = cap_value(_kwargs.num_transaction_per_hour_on_workload * 3, 500 * K10,
+    after_vacuum_multixact_freeze_min_age = cap_value(_kwargs.num_write_transaction_per_hour_on_workload * 3, 500 * K10,
                                                       managed_cache['autovacuum_multixact_freeze_max_age'] * 0.5)
     after_vacuum_multixact_freeze_min_age = realign_value_to_unit(after_vacuum_multixact_freeze_min_age, M10)
     _item_tuning(key=vacuum_multixact_freeze_min_age, after=after_vacuum_multixact_freeze_min_age[request.options.align_index],
@@ -779,13 +779,13 @@ def _wal_integrity_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
                              wal_writer_delay_in_ms=after_wal_writer_delay, wal_throughput=wal_tput)['total_time']
     worst_wal_time = wal_time(managed_cache[wal_buffers_str], 2.0, _kwargs.wal_segment_size,
                               wal_writer_delay_in_ms=after_wal_writer_delay, wal_throughput=wal_tput)['total_time']
-
+    _log_pool.append(f'The WAL buffer (at full) flush time is estimated to be {best_wal_time:.2f} ms and '
+                     f'{worst_wal_time:.2f} ms between cycle.')
     if (best_wal_time > after_wal_writer_delay or
             worst_wal_time > request.options.max_time_transaction_loss_allow_in_millisecond):
-        _logger.warning('The WAL buffers flush time is greater than the wal_writer_delay. It is better to reduce '
-                        'the WAL buffers or increase your WAL file size (to optimize clean throughput).')
-    _logger.info(f'The WAL buffer (at full) flush time is estimated to be {best_wal_time:.2f} ms and '
-                 f'{worst_wal_time:.2f} ms between cycle.')
+        _log_pool.append('NOTICE: The WAL buffers flush time is greater than the wal_writer_delay or the maximum '
+                         'time of transaction loss allowed. It is better to reduce the WAL buffers or increase your '
+                         'WAL file size (to optimize clean throughput).')
 
     # Force enable the WAL buffers adjustment minimally to SPIDEY when the WAL disk is HDD or Network Disk
     if PG_DISK_SIZING.match_disk_series_in_range(wal_tput, THROUGHPUT, 'hdd', 'san'):

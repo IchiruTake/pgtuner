@@ -101,7 +101,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
 
     # Transaction Rate
-    num_transaction_per_hour_on_workload: PositiveInt = Field(default=int(5 * M10), ge=K10, le=50 * M10)
+    num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(1 * M10), ge=K10, le=50 * M10)
 
     def to_backend(self) -> PG_TUNE_USR_KWARGS:
         return PG_TUNE_USR_KWARGS(
@@ -130,7 +130,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             max_wal_size_remain_upper_size=self.max_wal_size_remain_upper_size_in_gib * Gi,
             bgwriter_utilization_ratio=self.bgwriter_utilization_ratio,
             autovacuum_utilization_ratio=self.autovacuum_utilization_ratio,
-            num_transaction_per_hour_on_workload=self.num_transaction_per_hour_on_workload
+            num_write_transaction_per_hour_on_workload=self.num_write_transaction_per_hour_on_workload
         )
 
 
