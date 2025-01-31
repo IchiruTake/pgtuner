@@ -44,7 +44,6 @@ This project is licensed under the MIT License. See the `LICENSE` file for more 
 *These listed version are the current one, please check the latest version on PyPI*
 
 For internal usage
-psutil~=6.1.0
 pydantic~=2.9.2
 rich~=13.9.4
 toml~=0.10.2

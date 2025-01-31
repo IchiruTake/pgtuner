@@ -88,16 +88,9 @@ function ram_calculator() {
     return final_ram;
 }
 ram_calculator();
-
-const checkboxList = document.querySelectorAll('.form-check-input');
-checkboxList.forEach(checkbox => {
+document.querySelectorAll('.form-check-input').forEach(checkbox => {
     syncLabelFromCheckbox(checkbox.id, 'Yes', 'No');
 });
-
-// let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-// let tooltipList = tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
-const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
 
 // ----------------- Fetching API -----------------
 function preprocessParameters(params) {
@@ -122,15 +115,12 @@ function preprocessParameters(params) {
             nestedParams[key] = value;
         }
     }
-
     return nestedParams;
 }
 
 function gatherFormValues() {
-    const formElements = document.querySelectorAll('[name]');
     const params = {};
-
-    formElements.forEach(el => {
+    document.querySelectorAll('[name]').forEach(el => {
         if (el.type === 'range' || el.type === 'number') {
             // parseFloat if element.step in string has dot, parseInt
             params[el.name] = el.step.includes('.') ? parseFloat(el.value) : parseInt(el.value);
@@ -142,11 +132,9 @@ function gatherFormValues() {
     });
 
     // Add checkbox and select values
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach(checkbox => {
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
         params[checkbox.id] = checkbox.checked;
     });
-
     return params;
 }
 

@@ -3,21 +3,25 @@ import logging
 import random
 from contextlib import asynccontextmanager
 import os
-from typing import Literal
+import gzip
+from datetime import datetime
+import time
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, Path
 from fastapi import status
-from fastapi.responses import ORJSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import ORJSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
-from starlette.responses import FileResponse
 from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import pgtuner
-from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, Ki, Gi
+from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, Ki, Gi, MINUTE, \
+    SECOND, DAY
 from src.tuner.data.scope import PGTUNER_SCOPE
-from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
+from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
+from src.utils.env import OsGetEnvBool
 from web.middlewares.compressor import CompressMiddleware
 from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware
 from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
@@ -106,23 +110,40 @@ try:
     import string
     SECRET_KEY = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
     app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=HOUR, https_only=False)  # 1-hour session
-    if __debug__:
-        _logger.debug(f'The session middleware has been added to the application with secret key {SECRET_KEY}')
+    _logger.debug(f'The session middleware has been added to the application with secret key {SECRET_KEY}')
 except (ImportError, ModuleNotFoundError) as e:
     _logger.warning('The session middleware has not been added to the application due to the missing dependencies. '
                     f'\nPlease install more dependencies: {e}')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True,
                    allow_methods=['GET', 'POST'], allow_headers=[], max_age=600)
-REQUEST_SCALE_FACTOR = os.getenv(f'{APP_NAME_UPPER}_REQUEST_SCALE_FACTOR', '1')
-app.add_middleware(GlobalRateLimitMiddleware, max_requests=int(50 * float(REQUEST_SCALE_FACTOR)), interval_by_second=1)
 app.add_middleware(HeaderManageMiddleware)
-app.add_middleware(CompressMiddleware, minimum_size=(Ki >> 1), compress_level=6)
+
+# Rate Limiting
+_request_scale_factor: float = float(os.getenv(f'FASTAPI_REQUEST_LIMIT_FACTOR', '1'))
+app.add_middleware(GlobalRateLimitMiddleware, max_requests=int(50 * _request_scale_factor), interval_by_second=1)
+
+# Compression Hardware
+_gzip = OsGetEnvBool(f'FASTAPI_GZIP', True)
+_gzip_min_size = int(os.getenv(f'FASTAPI_GZIP_MIN_SIZE', '512'))
+_gzip_com_level = int(os.getenv(f'FASTAPI_GZIP_COMPRESSION_LEVEL', '6'))
+_zstd = OsGetEnvBool(f'FASTAPI_ZSTD', True)
+_zstd_min_size = int(os.getenv(f'FASTAPI_ZSTD_MIN_SIZE', '512'))
+_zstd_com_level = int(os.getenv(f'FASTAPI_ZSTD_COMPRESSION_LEVEL', '3'))
+
+if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
+    _base_min_size = int(os.getenv(f'FASTAPI_BASE_MIN_SIZE', '512'))  # 512 bytes or 512 length-unit
+    _base_com_level = int(os.getenv(f'FASTAPI_BASE_COMPRESSION_LEVEL', '6'))  # 6: Default compression level
+    app.add_middleware(CompressMiddleware, minimum_size=_base_min_size, compress_level=_base_com_level,
+                       gzip_enabled=_gzip, gzip_minimum_size=_gzip_min_size, gzip_compress_level=_gzip_com_level,
+                       zstd_enabled=_zstd, zstd_minimum_size=_zstd_min_size, zstd_compress_level=_zstd_com_level)
+
 _logger.info('The middlewares have been added to the application ...')
+# ==================================================================================================
 
 _logger.info('Mounting the static files to the application ...')
 # 0: Development, 1: Production
-CURRENT_ENVIRONMENT: str = os.getenv(f'{APP_NAME_UPPER}_WEB', '0')
-_env_tag = 'dev' if CURRENT_ENVIRONMENT == '0' else 'prd'
+_app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
+_env_tag = 'dev' if _app_dev_mode else 'prd'
 _default_path = f'./web/ui/{_env_tag}/static'
 _static_mapper = {
     '/static': _default_path,
@@ -138,48 +159,91 @@ except (FileNotFoundError, RuntimeError) as e:
     raise e
 _logger.info('The static files have been added to the application ...')
 
-
-CURRENT_ENVIRONMENT: str = os.getenv(f'{APP_NAME_UPPER}_WEB', '0')
-def _get_html(minified: bool = False):
-    return '/static/index.min.html' if minified else '/static/index.html'
-
 # ----------------------------------------------------------------------------------------------
 # UI Directory
 @app.get('/min')
 async def root_min():
-    return RedirectResponse(url=_get_html(minified=True), status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse(
+        url='/static/index.min.html',
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={
+            'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
+        }
+    )
 
 
 @app.get('/dev')
 async def root_dev():
-    return RedirectResponse(url=_get_html(minified=False), status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse(
+        url='/static/index.html',
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={
+            'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
+        }
+    )
 
 
 @app.get('/')
 async def root():
-    return RedirectResponse(url=_get_html(minified=(CURRENT_ENVIRONMENT == '1')),
-                            status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse(
+        url='/static/index.min.html' if _app_dev_mode is False else '/static/index.html',
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={
+            'Cache-Control': f'max-age={HOUR if _app_dev_mode else 30 * SECOND}, '
+                             f'private, must-revalidate, stale-while-revalidate={5 * MINUTE}',
+        }
+    )
 
 @app.get('/js/{javascript_path}')
-async def js(javascript_path: str):
+async def js(
+        javascript_path: str,
+        accept_encoding: Annotated[str | None, Header()]
+):
     _javascript_filepath = f'{_default_path}/js/{javascript_path}'
     if not os.path.exists(_javascript_filepath):
-        return Response(status_code=status.HTTP_404_NOT_FOUND)
+        return Response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            headers={
+                'Cache-Control': f'max-age={MINUTE}, private, must-revalidate',
+            }
+        )
     content = open(_javascript_filepath, 'r').read()
-    return Response(content, status_code=status.HTTP_200_OK, headers={'Content-Type': 'application/javascript'})
+    mtime: str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(os.path.getmtime(_javascript_filepath)))
+
+    response_header: dict[str, str] = {
+        'Content-Type': 'application/javascript',
+        'Last-Modified': mtime,
+        'Etag': str(hash(content)),
+        'Cache-Control': f'max-age={HOUR}, private, must-revalidate, stale-while-revalidate={5 * MINUTE}',
+    }
+    if accept_encoding and 'gzip' in accept_encoding and len(content) > _gzip_min_size:
+        content = gzip.compress(content.encode(), compresslevel=_gzip_com_level)
+        response_header['Content-Encoding'] = 'gzip'
+        response_header['Content-Length'] = f'{len(content)}'
+    return Response(content, status_code=status.HTTP_200_OK, headers=response_header)
 
 
 
 @app.get('/_health', status_code=status.HTTP_200_OK)
 async def health():
-    return {'status': 'HEALTHY'}
+    return ORJSONResponse(
+        content={'status': 'HEALTHY'},
+        status_code=status.HTTP_200_OK,
+        headers={
+            'Cache-Control': f'max-age={30 * SECOND}, s-maxage={30 * SECOND}, private, must-revalidate'
+        }
+    )
 
 
 @app.get('/_version', status_code=status.HTTP_200_OK)
 async def version():
-    return ORJSONResponse(content={'frontend': __version__, 'backend': backend_version}, status_code=status.HTTP_200_OK,
-                          headers={'Cache-Control': 'max-age=360'})
-
+    return ORJSONResponse(
+        content={'frontend': __version__, 'backend': backend_version},
+        status_code=status.HTTP_200_OK,
+        headers={
+            'Cache-Control': f'max-age={DAY}, s-maxage={DAY}, private, must-revalidate'
+        }
+    )
 
 # ----------------------------------------------------------------------------------------------
 # Backend API
@@ -207,8 +271,9 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
                                         exclude_names=exclude_names)
     mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,
                                    ignore_report=False, skip_logger=True)[0]
+    response_header = {
+        'Content-Type': 'application/json',
+        'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
+    }
     return ORJSONResponse(content={'mem_report': mem_report, 'config': content},
-                          status_code=status.HTTP_200_OK, headers={'Cache-Control': 'max-age=30'})
-
-
-
+                          status_code=status.HTTP_200_OK, headers=response_header)

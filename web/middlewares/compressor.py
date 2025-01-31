@@ -55,6 +55,7 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 _SAMPLE_SIZE: int = 300
 seed(datetime.now().timestamp())  # Seed the random number generator
 
+__all__ = ['CompressMiddleware', 'ALG_SELECT',]
 
 class ALG_SELECT(Enum):
     PRIORITY_FIRST = 0
@@ -105,6 +106,20 @@ def _parse_accept_encoding(accept_encoding: str, ignore_wildcard: bool = True) -
 
 def _select_accept_encoding(accept_encoding: dict[str, float], sampling_list: tuple[str, ...],
                             method: ALG_SELECT) -> str:
+    """
+    Select the best compression algorithm based on the Accept-Encoding header and the available compression algorithms.
+    If method is ::
+        - PRIORITY_FIRST: The first algorithm with the highest weight is selected. If multiple algorithms have the same
+        weight, it chooses the first one (by the dictionary insertion order maintained by Python 3.7+)
+        - PRIORITY_SAMPLING: The algorithm is selected based on a sampling algorithm. After choose all algorithms having
+        the same highest weight, a random shuffle is conducted and the first one on the list is selected.
+        - PRIORITY_METHOD: The algorithm is selected based on the method list, regardless of the provided weight.
+        If none of the algorithms are found, it fallbacks to the PRIORITY_FIRST method.
+        - SAMPLING: The algorithm is choose randomly based on the weight and sampling base size. The higher the weight,
+        the more likely the algorithm is selected.
+
+    """
+
     if len(accept_encoding) == 0:
         return ''
     elif len(accept_encoding) == 1:
@@ -207,34 +222,35 @@ _compress_content_types: set[str] = {
 # ==============================================================================
 class CompressMiddleware(BaseMiddleware):
     def __init__(self, app: ASGIApp, *, minimum_size: int = Ki >> 1, compress_level: int = 3,
-                 method: ALG_SELECT = ALG_SELECT.PRIORITY_FIRST, **kwargs) -> None:
+                 method: ALG_SELECT = ALG_SELECT.PRIORITY_METHOD, **kwargs) -> None:
         super(CompressMiddleware, self).__init__(app, accept_scope='http')
         self._method = method
         self._compressor: dict[str, BaseResponder] = defaultdict()
 
         # Compressor Cache to Save State
-        if kwargs.get('zstd-enabled', True):
+        if kwargs.get('zstd_enabled', True):
             self._compressor['zstd'] = (
                 _ZstdResponder(self._app,
-                               minimum_size=kwargs.get('zstd-minimum_size', minimum_size),
-                               compress_level=kwargs.get('zstd-compress_level', compress_level),
-                               include_paths=kwargs.get('zstd-include_paths', None),
-                               exclude_paths=kwargs.get('zstd-exclude_paths', None),
-                               include_content_types=kwargs.get('zstd-include_content_types', None),
-                               exclude_content_types=kwargs.get('zstd-exclude_content_types', None),
+                               minimum_size=kwargs.get('zstd_minimum_size', minimum_size),
+                               compress_level=kwargs.get('zstd_compress_level', compress_level),
+                               include_paths=kwargs.get('zstd_include_paths', None),
+                               exclude_paths=kwargs.get('zstd_exclude_paths', None),
+                               include_content_types=kwargs.get('zstd_include_content_types', None),
+                               exclude_content_types=kwargs.get('zstd_exclude_content_types', None),
                                )
             )
-        if kwargs.get('gzip-enabled', True):
+        if kwargs.get('gzip_enabled', True):
             self._compressor['gzip'] = (
                 _GZipResponder(self._app,
-                               minimum_size=kwargs.get('gzip-minimum_size', minimum_size),
-                               compress_level=kwargs.get('gzip-compress_level', compress_level),
-                               include_paths=kwargs.get('gzip-include_paths', None),
-                               exclude_paths=kwargs.get('gzip-exclude_paths', None),
-                               include_content_types=kwargs.get('gzip-include_content_types', None),
-                               exclude_content_types=kwargs.get('gzip-exclude_content_types', None))
+                               minimum_size=kwargs.get('gzip_minimum_size', minimum_size),
+                               compress_level=kwargs.get('gzip_compress_level', compress_level),
+                               include_paths=kwargs.get('gzip_include_paths', None),
+                               exclude_paths=kwargs.get('gzip_exclude_paths', None),
+                               include_content_types=kwargs.get('gzip_include_content_types', None),
+                               exclude_content_types=kwargs.get('gzip_exclude_content_types', None))
             )
         self._compressor_keys = tuple(self._compressor.keys())
+        print('Allowed Compression: ', self._compressor_keys)
 
     async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
                        send: ASGISendCallable | Send) -> None:
@@ -258,6 +274,7 @@ class CompressMiddleware(BaseMiddleware):
         # Accept-Encoding could be single or in multiple-format
         accept_encoding_dict = _parse_accept_encoding(accept_encoding_string, ignore_wildcard=True)
         alg = _select_accept_encoding(accept_encoding_dict, sampling_list=self._compressor_keys, method=self._method)
+        #print('Selected Algorithm: ', alg)
         if alg == 'zstd':
             _compressor = _ZstdResponder(self._app, minimum_size=self._compressor['zstd'].get_size(),
                                          compress_level=self._compressor['zstd'].get_compress_level())
@@ -266,7 +283,6 @@ class CompressMiddleware(BaseMiddleware):
                                          compress_level=self._compressor['gzip'].get_compress_level())
         else:
             _compressor = self._app  # Redirect back to the app if the algorithm is not found
-
 
         # if not _compressor.content_type_validate(headers) or not _compressor.path_validate(scope):
         #     await self._app(scope, receive, send)
@@ -511,10 +527,12 @@ class _ZstdResponder(BaseResponder):
 
             self._compress_file.write(body)
             if not more_body:
+                self._compress_file.flush(FLUSH_FRAME)
+                message["body"] = self._compress_buffer.getvalue()
                 self._compress_file.close()
-
-            message['body'] = self._compress_buffer.getvalue()
-            self._compress_buffer.seek(0)
-            self._compress_buffer.truncate()
+            else:
+                message['body'] = self._compress_buffer.getvalue()
+                self._compress_buffer.seek(0)
+                self._compress_buffer.truncate()
 
             await self._send(message)

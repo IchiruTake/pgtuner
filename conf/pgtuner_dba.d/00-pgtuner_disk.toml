@@ -1,4 +1,4 @@
-## Note that in thi list, we choose the value based on the minimum of read/write IOPS/throughput, and doing
+## Note that in the list, we choose the value based on the minimum of read/write IOPS/throughput, and doing
 ## some averaging across value (and smally reduce the number); so the value here may not be reflected on your disk
 ## storage. But thinking about disk degradation after time and other factor. Thus to make use of this, it is best to
 ## choose based on the nearest value of minimum of read/write IOPS/throughput and round down (not up).
@@ -21,8 +21,9 @@
 
 [pgtuner_dba.disk.throughput]
 # Throughput of the disk in MB/s
-hddv1 = 100      # Some old HDDs or SD cards
-hddv2 = 250      # Some Western Digital HDDs, or modern HDDs with small SSD/DRAM cache (220 - 290 MiB/s)
+hddv1 = 100      # Some old HDDs or SD cards (efficiency around 80 - 120 MiB/s)
+hddv2 = 200
+hddv3 = 260      # Some Western Digital HDDs, or modern HDDs with small SSD/DRAM cache (220 - 290 MiB/s)
 
 ssdv1 = 350
 ssdv2 = 500
@@ -59,8 +60,9 @@ nvmepciev5x4v6 = 14000
 # Random IOPS of the disk. Note that IOPS is not a linear scale, and it is best to choose the nearest value of the
 # minimum of read/write IOPS and round down (not up). Some Western Digital HDDs, or modern HDDs with small SSD/DRAM
 # cache brings more IOPS https://www.youtube.com/watch?v=lc8CcHnf5HA
-hddv1 = 70
-hddv2 = 250
+hddv1 = 250
+hddv2 = 1000
+hddv3 = 2500
 
 ssdv1 = 20000
 ssdv2 = 30000

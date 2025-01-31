@@ -173,3 +173,32 @@ class HeaderManageMiddleware(BaseMiddleware):
             await send(message)
 
         await self._app(scope, _receive_with_headers, _send_with_headers)
+
+# ==============================================================================
+# This is a cache (NOT used)
+class CacheControlMiddleware(BaseMiddleware):
+    def __init__(self, app: ASGIApp | ASGI3Application, accept_scope: str | list[str] = 'http',
+                 cache_control: str = 'no-cache, no-store, must-revalidate', pragma: str = 'no-cache',
+                 expires: str = '0'):
+        super(CacheControlMiddleware, self).__init__(app, accept_scope=accept_scope)
+        self._cache_control: str = cache_control
+        self._pragma: str = pragma
+        self._expires: str = expires
+
+    async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
+                       send: ASGISendCallable | Send) -> None:
+        if not super()._precheck(scope):
+            await self._app(scope, receive, send)
+            return None
+
+        # ASGI with Send (Response) + Headers
+        async def _send_with_headers(message: Message | ASGISendEvent) -> None:
+            if message['type'] == 'http.response.start':
+                headers = MutableHeaders(scope=message)
+                headers.append('Cache-Control', self._cache_control)
+                headers.append('Pragma', self._pragma)
+                headers.append('Expires', self._expires)
+
+            await send(message)
+
+        await self._app(scope, receive, _send_with_headers)
