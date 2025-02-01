@@ -758,8 +758,8 @@ Effective Connection Ratio </label>
 <div class="col-4 mb-3">
 <div class="d-flex justify-content-between align-items-center">
 <label class=form-label for=keywords.mem_pool_epsilon_to_rollback>
-Memory Precision Epsilon to Rollback </label>
-<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="A small epsilon value if the memory tuning does not exceeded max_normal_memory_usage + epsilon to perform a rollback. We recommend this value to be small. The supported range is [0, 0.02], and default to 1e-2 (1.0%). If the result exceeded, we trigger the rollback to get the previous iteration." title="Memory Precision Epsilon to Rollback">
+Memory Pool Epsilon to Rollback </label>
+<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="A small epsilon value if the memory tuning does not exceeded max_normal_memory_usage + epsilon to perform a rollback. We recommend this value to be small. The supported range is [0, 0.02], and default to 1e-2 (1.0%). If the result exceeded, we trigger the rollback to get the previous iteration." title="Memory Pool Epsilon to Rollback">
 </i>
 </div>
 <div class="d-flex align-items-center">
@@ -770,8 +770,8 @@ Memory Precision Epsilon to Rollback </label>
 <div class="col-4 mb-3">
 <div class="d-flex justify-content-between align-items-center">
 <label class=form-label for=keywords.mem_pool_tuning_increment>
-Memory Precision Tuning Increment </label>
-<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The single increment for the memory pool tuning in correction tuning of shared_buffer_ratio and max_work_buffer_ratio. A lower value means the tuning is more precise but slower. Higher value meant there may have a small room for rollback." title="Memory Precision Tuning Increment">
+Memory Pool Tuning Increment </label>
+<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The single increment for the memory pool tuning in correction tuning of shared_buffer_ratio and max_work_buffer_ratio. A lower value means the tuning is more precise but slower. Higher value meant there may have a small room for rollback." title="Memory Pool Tuning Increment">
 </i>
 </div>
 <div class="d-flex align-items-center">
@@ -782,8 +782,8 @@ Memory Precision Tuning Increment </label>
 <div class="col-4 mb-3">
 <div class="d-flex justify-content-between align-items-center">
 <label class=form-label for=keywords.mem_pool_tuning_ratio>
-Memory Precision Tuning Ratio </label>
-<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The ratio of the memory tuning in correction tuning of shared_buffer_ratio and max_work_buffer_ratio. Supported value is [0, 1] and default is 0.5. Higher value meant the tuning would prefer the shared_buffers_ratio over the max_work_buffer_ratio, and vice versa." title="Memory Precision Tuning Ratio">
+Memory Pool Tuning Ratio </label>
+<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The ratio of the memory tuning in correction tuning of shared_buffer_ratio and max_work_buffer_ratio. Supported value is [0, 1] and default is 0.5. Higher value meant the tuning would prefer the shared_buffers_ratio over the max_work_buffer_ratio, and vice versa." title="Memory Pool Tuning Ratio">
 </i>
 </div>
 <div class="d-flex align-items-center">
@@ -794,8 +794,8 @@ Memory Precision Tuning Ratio </label>
 <div class="col-4 mb-3">
 <div class="d-flex justify-content-between align-items-center">
 <label class=form-label for=keywords.mem_pool_max_iterations>
-Memory Precision Max Iterations </label>
-<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The maximum number of iteration for the memory tuning. The supported range is [0, 1000] and default is 100. Set to 0 to run infinitely until the memory tuning is converged. Higher value could make the tuning run more loops." title="Memory Precision Max Iterations">
+Memory Pool Max Iterations </label>
+<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The maximum number of iteration for the memory tuning. The supported range is [0, 1000] and default is 100. Set to 0 to run infinitely until the memory tuning is converged. Higher value could make the tuning run more loops." title="Memory Pool Max Iterations">
 </i>
 </div>
 <div class="d-flex align-items-center">
@@ -806,7 +806,7 @@ Memory Precision Max Iterations </label>
 <div class="col-4 mb-3">
 <div class="d-flex justify-content-between align-items-center">
 <label class=form-label for=keywords.mem_pool_parallel_estimate>
-Memory Precision Parallel Estimate </label>
+Memory Pool Parallel Estimate </label>
 <i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The flag to use the parallel memory estimation during memory pool tuning." title="Memory Pool Parallel Estimate">
 </i>
 </div>
