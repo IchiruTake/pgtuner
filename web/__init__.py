@@ -186,7 +186,7 @@ async def root_dev():
 @app.get('/')
 async def root():
     return RedirectResponse(
-        url='/static/index.min.html' if _app_dev_mode is False else '/static/index.html',
+        url='/static/index.html',
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={
             'Cache-Control': f'max-age={HOUR if _app_dev_mode else 30 * SECOND}, '

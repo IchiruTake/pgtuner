@@ -5,7 +5,6 @@ from typing import Any, Annotated, Literal
 from pydantic import BaseModel, Field, ByteSize, AfterValidator
 from pydantic.types import PositiveInt
 
-from src.static.c_toml import LoadAppToml
 from src.static.vars import Gi, Mi, APP_NAME_UPPER, DEFAULT_INSTRUCTION_PROFILE, SUPPORTED_POSTGRES_VERSIONS
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
@@ -44,19 +43,16 @@ def _allowed_values(v, values: list[str] | tuple[str, ...]):
     assert v in values, f'Invalid value {v} for the tuning options. The allowed values are {values}'
     return v
 
-
-_backup_itms = list(backup_description().keys())
-_TomlProfileData = list(LoadAppToml()['profile'].keys())
-assert DEFAULT_INSTRUCTION_PROFILE in _TomlProfileData, 'The default instruction profile must be in the profile data.'
+_backup_items = list(backup_description().keys())
 _PG_WORKLOAD_KEYS = PG_WORKLOAD.__members__.values()
 _PG_OPT_KEYS = PG_PROFILE_OPTMODE.__members__.values()
 _PG_OS_KEYS = ['linux', 'windows', 'macos', 'docker', 'k8s', 'containerd', 'wsl', 'PaaS', 'DBaaS']
 
 _allowed_opt_mode = partial(_allowed_values, values=_PG_OPT_KEYS)
 _allowed_workload = partial(_allowed_values, values=_PG_WORKLOAD_KEYS)
-_allowed_profile = partial(_allowed_values, values=_TomlProfileData)
+_allowed_profile = partial(_allowed_values, values=['mini', 'medium', 'large', 'mall', 'bigt'])
 _allowed_postgres_version = partial(_allowed_values, values=list(SUPPORTED_POSTGRES_VERSIONS) + ['latest', 'stable'])
-_allowed_backup_tool = partial(_allowed_values, values=_backup_itms)
+_allowed_backup_tool = partial(_allowed_values, values=list(backup_description().keys()))
 _allowed_os = partial(_allowed_values, values=_PG_OS_KEYS)
 
 
@@ -65,31 +61,31 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     # The basic profile for the system tuning for profile-guided tuning
     workload_profile: Annotated[
         str, AfterValidator(_allowed_profile),
-        Field(default_factory=PydanticFact(f'Enter the workload profile in {_TomlProfileData}: ',
+        Field(default_factory=PydanticFact(f'Enter the workload profile as mini, medium, large, mall, bigt: ',
                                            user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
               description='The workload profile to be used for tuning')
     ]
     cpu_profile: Annotated[
         str, AfterValidator(_allowed_profile),
-        Field(default_factory=PydanticFact(f'Enter the CPU profile in {_TomlProfileData}: ',
+        Field(default_factory=PydanticFact(f'Enter the CPU profile as mini, medium, large, mall, bigt: ',
                                            user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
               description='The CPU profile to be used for profile-based tuning')
     ]
     mem_profile: Annotated[
         str, AfterValidator(_allowed_profile),
-        Field(default_factory=PydanticFact(f'Enter the Memory profile in {_TomlProfileData}: ',
+        Field(default_factory=PydanticFact(f'Enter the Memory profile as mini, medium, large, mall, bigt: ',
                                            user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
               description='The Memory profile to be used for profile-based tuning')
     ]
     net_profile: Annotated[
         str, AfterValidator(_allowed_profile),
-        Field(default_factory=PydanticFact(f'Enter the Network profile in {_TomlProfileData}: ',
+        Field(default_factory=PydanticFact(f'Enter the Network profile as mini, medium, large, mall, bigt: ',
                                            user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
               description='The Network profile to be used for profile-based tuning')
     ]
     disk_profile: Annotated[
         str, AfterValidator(_allowed_profile),
-        Field(default_factory=PydanticFact(f'Enter the Disk profile in {_TomlProfileData}: ',
+        Field(default_factory=PydanticFact(f'Enter the Disk profile as mini, medium, large, mall, bigt: ',
                                            user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
               description='The Disk profile to be used for profile-based tuning')
     ]
@@ -121,7 +117,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     # Data Integrity, Transaction, Crash Recovery, and Replication
     max_backup_replication_tool: Annotated[
         str, AfterValidator(_allowed_backup_tool),
-        Field(default_factory=PydanticFact(f'Enter the backup tool {_backup_itms}: ',
+        Field(default_factory=PydanticFact(f'Enter the backup tool {_backup_items}: ',
                                            user_fn=str, default_value='pg_basebackup'),
               description=f'The backup tool to be used for the PostgreSQL server (3 modes are supported). Default '
                           f'is pg_basebackup. This argument is also helps to set the wal_level variable. The level of '

@@ -4,8 +4,6 @@ merge two or more dictionaries together (usually performed as the configuration 
 can override the default configuration. The solution is honored to diogo's answer on StackOverflow [1] on Mar 31, 2022,
 but we added some custom changes to the function.
 
-
-
 References:
 [1]: https://stackoverflow.com/questions/7204805/deep-merge-dictionaries-of-dictionaries-in-python/71700270#71700270
 
