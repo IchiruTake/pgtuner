@@ -1,5 +1,4 @@
 import string
-from enum import Enum, auto, verify, CONTINUOUS
 from pprint import pformat
 from typing import Any, Callable
 
@@ -10,14 +9,6 @@ __all__ = ["PG_TUNE_ITEM"]
 
 # =============================================================================
 # This section is managed by the application
-@verify(CONTINUOUS)
-class OUTPUT_MODE(int, Enum):
-    BASE = auto()
-    BASE_WITH_COMMENT = auto()
-    FORCE = auto()
-    FORCE_WITH_COMMENT = auto()
-
-
 class PG_TUNE_ITEM(BaseModel):
     key: str = Field(..., description="The key of the sysctl configuration", frozen=True)
     before: Any = Field(..., description="The system information value before tuning", frozen=True)

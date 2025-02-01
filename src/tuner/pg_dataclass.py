@@ -327,25 +327,24 @@ Report Summary (others):
         + Autovacuum cost: {managed_cache['autovacuum_vacuum_cost_limit']} --> Vacuum cost: {managed_cache['vacuum_cost_limit']}
         + Autovacuum delay: {managed_cache['autovacuum_vacuum_cost_delay']} (ms) --> Vacuum delay: {managed_cache['vacuum_cost_delay']} (ms)
         + Vacuum Report on Worst Case Scenario:
-            -> Hit (page in shared_buffers): {vacuum_report['max_num_hit_page']} page -> Throughput: {vacuum_report['max_hit_data']:.2f} MiB/s 
-                Safe to GO: {vacuum_report['max_hit_data'] < 10 * K10} (< 10 GiB/s for low DDR3)
-            -> Miss (page in disk cache): {vacuum_report['max_num_miss_page']} page -> Throughput: {vacuum_report['max_miss_data']:.2f} MiB/s
-                Safe to GO: {vacuum_report['max_miss_data'] < 5 * K10} (< 5 GiB/s for low DDR3)
-            -> Dirty (page in data disk volume): {vacuum_report['max_num_dirty_page']} page -> Throughput: {vacuum_report['max_dirty_data']:.2f} MiB/s
-                Safe to GO: {vacuum_report['max_dirty_data'] < data_iops} (< Data Disk IOPS)
+            -> Hit (page in shared_buffers): Maximum {vacuum_report['max_num_hit_page']} pages or RAM throughput {vacuum_report['max_hit_data']:.2f} MiB/s 
+                RAM Safety: {vacuum_report['max_hit_data'] < 10 * K10} (< 10 GiB/s for low DDR3)
+            -> Miss (page in disk cache): Maximum {vacuum_report['max_num_miss_page']} pages or Disk throughput {vacuum_report['max_miss_data']:.2f} MiB/s
+                RAM Safety: {vacuum_report['max_miss_data'] < 5 * K10} (< 5 GiB/s for low DDR3)
+                Disk Safety: {vacuum_report['max_miss_data'] < data_iops} (< Data Disk IOPS)
+            -> Dirty (page in data disk volume): Maximum {vacuum_report['max_num_dirty_page']} pages or Disk throughput {vacuum_report['max_dirty_data']:.2f} MiB/s
+                Disk Safety: {vacuum_report['max_dirty_data'] < data_iops} (< Data Disk IOPS)
         + Other Scenarios with H:M:D ratio as 5:5:1, or 1:1:1
-            -> 5:5:1 (frequent) -> Page on Disk: {vacuum_report['5:5:1_page'] * 6} page -> Throughput: {vacuum_report['5:5:1_data']:.2f} MiB/s
-            -> 1:1:1 (rarely) -> Page on Disk: {vacuum_report['1:1:1_page'] * 3} page -> Throughput: {vacuum_report['1:1:1_data']:.2f} MiB/s
+            -> 5:5:1 (frequent) -> {vacuum_report['5:5:1_page'] * 6} pages on disk requesting disk throughput of {vacuum_report['5:5:1_data']:.2f} MiB/s
+            -> 1:1:1 (rarely) -> {vacuum_report['1:1:1_page'] * 3} pages on disk requesting disk throughput of {vacuum_report['1:1:1_data']:.2f} MiB/s
     - Transaction ID Wraparound and Anti-Wraparound Vacuum:
-        + Write Transaction per Hour: {_kwargs.num_write_transaction_per_hour_on_workload}
+        + Workload Write Transaction per Hour: {_kwargs.num_write_transaction_per_hour_on_workload}
         + TXID Vacuum :: Minimum={min_hr_txid:.2f} hrs :: Manual={norm_hr_txid:.2f} hrs :: Auto-forced={max_hr_txid:.2f} hrs
         + XMIN,XMAX Vacuum :: Minimum={min_hr_row_lock:.2f} hrs :: Manual={norm_hr_row_lock:.2f} hrs :: Auto-forced={max_hr_row_lock:.2f} hrs     
         
 * Background Writers:
     - Delay: {managed_cache['bgwriter_delay']} (ms) for maximum {managed_cache['bgwriter_lru_maxpages']} dirty pages
-        + Throughput in Random WRITE IOPs of Data Disk: {bgwriter_throughput} (MiB/s)
-        + Utilization on data volume: {bgwriter_page_per_second / options.data_index_spec.raid_perf()[1] * 100:.2f} (%) 
-        + OK Status: {bgwriter_page_per_second < options.data_index_spec.raid_perf()[1]} 
+        + {bgwriter_page_per_second} pages per second or {bgwriter_throughput} MiB/s in random WRITE IOPs
 
 * Query Planning and Optimization:
     - Page Cost :: Sequential={managed_cache['seq_page_cost']:.2f} :: Random={managed_cache['random_page_cost']:.2f}

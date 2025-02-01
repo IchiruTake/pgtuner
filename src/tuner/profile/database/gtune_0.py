@@ -32,7 +32,7 @@ from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
 from src.utils.pydantic_utils import (bytesize_to_postgres_string, bytesize_to_postgres_unit, bytesize_to_hr,
-                                      realign_value_to_unit, cap_value, )
+                                      realign_value, cap_value, )
 
 __all__ = ['DB0_CONFIG_PROFILE', ]
 
@@ -119,7 +119,7 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
 
     # Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
     # probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
-    shared_buffers = realign_value_to_unit(shared_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
+    shared_buffers = realign_value(shared_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'shared_buffers: {bytesize_to_hr(shared_buffers)}')
     return shared_buffers
 
@@ -186,8 +186,8 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
                          1 * Mi, max_cap)
 
     # Realign the number (always use the lower bound for memory safety)
-    temp_buffers = realign_value_to_unit(temp_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
-    work_mem = realign_value_to_unit(work_mem, page_size=DB_PAGE_SIZE)[options.align_index]
+    temp_buffers = realign_value(temp_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
+    work_mem = realign_value(work_mem, page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'temp_buffers: {bytesize_to_hr(temp_buffers)}')
     _logger.debug(f'work_mem: {bytesize_to_hr(work_mem)}')
     return temp_buffers, work_mem
@@ -223,7 +223,10 @@ def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_
 
 
 def __reserved_connections(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: int,
-                           superuser_mode: bool = False) -> int:
+                           superuser_mode: bool = False, base_reserved_connection: int = None) -> int:
+    if base_reserved_connection is None:
+        base_reserved_connection = __BASE_RESERVED_DB_CONNECTION
+
     # 1.5x here is heuristically defined to limit the number of superuser reserved connections
     if not superuser_mode:
         reserved_connections: int = options.vcpu // __DESCALE_FACTOR_RESERVED_DB_CONNECTION
@@ -231,7 +234,7 @@ def __reserved_connections(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: 
         superuser_heuristic_percentage = options.tuning_kwargs.superuser_reserved_connections_scale_ratio
         descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_heuristic_percentage
         reserved_connections: int = int(options.vcpu / descale_factor)
-    return cap_value(reserved_connections, minimum, maximum) + __BASE_RESERVED_DB_CONNECTION
+    return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection
 
 
 def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
@@ -250,7 +253,7 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio
 
     # Re-align the number (always use the lower bound for memory safety)
-    effective_cache_size = realign_value_to_unit(effective_cache_size, page_size=DB_PAGE_SIZE)[options.align_index]
+    effective_cache_size = realign_value(effective_cache_size, page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'effective_cache_size: {bytesize_to_hr(effective_cache_size)}')
     return effective_cache_size
 
@@ -281,25 +284,39 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
         precision = 24 * DB_PAGE_SIZE
     elif usable_ram_noswap > 16 * Gi:
         precision = 32 * DB_PAGE_SIZE
-    return realign_value_to_unit(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[options.align_index]
+    return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[options.align_index]
 
 
 # =============================================================================
 _DB_CONN_PROFILE = {
     # Connections
     'superuser_reserved_connections': {
+        'instructions': {
+            'mini': lambda group_cache, global_cache, options, response:
+                __reserved_connections(options, 0, 3, superuser_mode=True,
+                                       base_reserved_connection=1),
+            'medium': lambda group_cache, global_cache, options, response:
+                __reserved_connections(options, 0, 5, superuser_mode=True,
+                                       base_reserved_connection=2),
+        },
         'tune_op': lambda group_cache, global_cache, options, response:
         __reserved_connections(options, 0, 10, superuser_mode=True),
         'default': __BASE_RESERVED_DB_CONNECTION,
-        'comment': f"Sets the number of connections reserved for superusers. The default is {__BASE_RESERVED_DB_CONNECTION} "
-                   f"plus 1/{__DESCALE_FACTOR_RESERVED_DB_CONNECTION} of logical CPU, maximum at {10 + __BASE_RESERVED_DB_CONNECTION}",
+        'comment': f"Sets the number of connections reserved for superusers."
     },
     'reserved_connections': {
+        'instructions': {
+            'mini': lambda group_cache, global_cache, options, response:
+                __reserved_connections(options, 0, 3, superuser_mode=False,
+                                       base_reserved_connection=1),
+            'medium': lambda group_cache, global_cache, options, response:
+                __reserved_connections(options, 0, 5, superuser_mode=False,
+                                       base_reserved_connection=2),
+        },
         'tune_op': lambda group_cache, global_cache, options, response:
-        __reserved_connections(options, 0, 10, superuser_mode=False),
+            __reserved_connections(options, 0, 10, superuser_mode=False),
         'default': __BASE_RESERVED_DB_CONNECTION,
-        'comment': f"Sets the number of connections reserved for users. The default is {__BASE_RESERVED_DB_CONNECTION} "
-                   f"plus 1/{__DESCALE_FACTOR_RESERVED_DB_CONNECTION} of logical CPU, maximum at {10 + __BASE_RESERVED_DB_CONNECTION}.",
+        'comment': f"Sets the number of connections reserved for users."
     },
     'max_connections': {
         'instructions': {
@@ -428,8 +445,8 @@ _DB_VACUUM_PROFILE = {
                    "you have a large number of databases and you have a lot of CPU to spare",
     },
     'maintenance_work_mem': {
-        'tune_op': lambda group_cache, global_cache, options, response: realign_value_to_unit(cap_value(
-            options.usable_ram_noswap // 16, 64 * Mi, 8 * Gi), page_size=DB_PAGE_SIZE)[options.align_index],
+        'tune_op': lambda group_cache, global_cache, options, response: realign_value(
+            cap_value(options.usable_ram_noswap // 16, 64 * Mi, 8 * Gi), page_size=DB_PAGE_SIZE)[options.align_index],
         'default': 64 * Mi,
         'hardware_scope': 'mem',
         'post-condition-group': lambda value, cache, options:
@@ -592,8 +609,7 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(int(group_cache['autovacuum_freeze_max_age'] * 0.80),
-                                  page_size=M10)[options.align_index],
+            realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.80), page_size=M10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relfrozenxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits every "
@@ -617,8 +633,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_multixact_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value_to_unit(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.80),
-                                  page_size=M10)[options.align_index],
+            realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.80),
+                          page_size=M10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relminmxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits "
@@ -1127,10 +1143,9 @@ _DB_REPLICATION_PROFILE = {
     },
     'wal_keep_size': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value_to_unit(
-            cap_value(global_cache['max_wal_size'] // 20, 10 * options.tuning_kwargs.wal_segment_size,
-                      options.wal_spec.disk_usable_size // 10),
-            page_size=options.tuning_kwargs.wal_segment_size)[options.align_index],
+        realign_value(cap_value(global_cache['max_wal_size'] // 20, 10 * options.tuning_kwargs.wal_segment_size,
+                                options.wal_spec.disk_usable_size // 10),
+                      page_size=options.tuning_kwargs.wal_segment_size)[options.align_index],
         'default': 10 * BASE_WAL_SEGMENT_SIZE,
         'comment': 'Specifies the minimum size of past WAL files kept in the pg_wal directory, in case a standby '
                    'server needs to fetch them for streaming replication. If a standby server connected to the '
@@ -1172,8 +1187,7 @@ _DB_REPLICATION_PROFILE = {
     # Generic
     'logical_decoding_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value_to_unit(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi),
-                              page_size=DB_PAGE_SIZE)[options.align_index],
+        realign_value(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi), page_size=DB_PAGE_SIZE)[options.align_index],
         'default': 64 * Mi,
         'comment': "Specifies the maximum amount of memory to be used by logical decoding, before some of the decoded "
                    "changes are written to local disk. This limits the amount of memory used by logical streaming "
@@ -1595,7 +1609,7 @@ _DB_LIB_PROFILE = {
     # Auto Explain
     'auto_explain.log_min_duration': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value_to_unit(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[options.align_index],
+        realign_value(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[options.align_index],
         'default': -1,
         'comment': "auto_explain.log_min_duration is the minimum statement execution time, in milliseconds, that will "
                    "cause the statement's plan to be logged. Setting this to 0 logs all plans. -1 (the default) "

@@ -95,7 +95,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     max_runtime_ratio_to_explain_slow_query: PositiveFloat = Field(default=1.5, ge=0.1, le=10.0)
 
     # Background Writer Tuning
-    bgwriter_utilization_ratio: PositiveFloat = Field(default=0.1, gt=0, le=0.3)
+    bgwriter_utilization_ratio: PositiveFloat = Field(default=0.15, gt=0, le=0.4)
 
     # Vacuum Tuning
     autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)

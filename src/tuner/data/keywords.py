@@ -207,9 +207,9 @@ class PG_TUNE_USR_KWARGS(BaseModel):
 
     # Background Writer Tuning
     bgwriter_utilization_ratio: PositiveFloat = (
-        Field(default=0.1, gt=0, le=0.3,
+        Field(default=0.15, gt=0, le=0.4,
               description='The utilization ratio of the random IOPS of data volume used for the background writer '
-                          'process. The supported range is (0, 0.3], default is 0.1 or 10%. This would determine the '
+                          'process. The supported range is (0, 0.4], default is 0.15 or 15%. This would determine the '
                           'efficient estimated WRITE IOPs, but minimum 4 MiB/s of 8K-IOPS. Higher value would make '
                           'the background writer overflow the data disk, which could be in use for other purposes. ')
     )

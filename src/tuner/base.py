@@ -76,7 +76,7 @@ class GeneralTuner(BaseModel):
             return fn, default, _msg
 
         # Profile-based Tuning
-        profile_fn = tune_entry['instructions'].get(hw_scope, None)
+        profile_fn = tune_entry['instructions'].get(hw_scope, tune_entry.get('tune_op', None))
         profile_default = tune_entry['instructions'].get(f'{hw_scope}_default', None)
 
         if profile_default is None:
@@ -109,7 +109,7 @@ class GeneralTuner(BaseModel):
 
                 # Check the profile scope of the tuning item, if not found, fallback to the workload_profile;
                 # If found then we use specific scope to choose the profile-based tuning operation.
-                hw_scope_term: str = tune_entry.get('hw_scope_term', 'overall')
+                hw_scope_term: str = tune_entry.get('hardware_scope', 'overall')
                 hw_scope_value: str = request.options.translate_hardware_scope(term=hw_scope_term)
 
                 # We don't want to apply safeguard here to deal with non-sanitized profile from custom user input.

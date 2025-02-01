@@ -18,7 +18,7 @@ from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
 from src.tuner.profile.database.shared import wal_time
 from src.utils.pydantic_utils import bytesize_to_hr
-from src.utils.pydantic_utils import realign_value_to_unit, cap_value
+from src.utils.pydantic_utils import realign_value, cap_value
 from src.utils.timing import time_decorator
 from src.tuner.data.sizing import PG_DISK_SIZING
 
@@ -374,10 +374,10 @@ def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
     _data_iops = request.options.data_index_spec.raid_perf()[1]
     # Minimum is 4 MiB of random IOPS for HDD (default of PostgreSQL)
     max_data_in_pages = max(PG_DISK_PERF.throughput_to_iops(4), floor(_data_iops * _kwargs.bgwriter_utilization_ratio))
-    max_pages_between_interval = max_data_in_pages * (managed_cache['bgwriter_delay'] / K10)
+    max_pages_between_interval = ceil(max_data_in_pages * (managed_cache['bgwriter_delay'] / K10))
+    max_pages_between_interval = realign_value(max_pages_between_interval, page_size=20)
     bgwriter_lru_maxpages = 'bgwriter_lru_maxpages'
-    _item_tuning(key=bgwriter_lru_maxpages, after=realign_value_to_unit(ceil(max_pages_between_interval),
-                                                                        page_size=20)[request.options.align_index],
+    _item_tuning(key=bgwriter_lru_maxpages, after=max_pages_between_interval[request.options.align_index],
                  scope=PG_SCOPE.OTHERS, response=response, before=managed_cache[bgwriter_lru_maxpages],
                  _log_pool=_log_pool)
 
@@ -532,7 +532,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     vacuum_freeze_min_age = 'vacuum_freeze_min_age'
     after_vacuum_freeze_min_age = cap_value(_kwargs.num_write_transaction_per_hour_on_workload * 6, 500 * K10,
                                             managed_cache['autovacuum_freeze_max_age'] * 0.5)
-    after_vacuum_freeze_min_age = realign_value_to_unit(after_vacuum_freeze_min_age, M10)
+    after_vacuum_freeze_min_age = realign_value(after_vacuum_freeze_min_age, M10)
     _item_tuning(key=vacuum_freeze_min_age, after=after_vacuum_freeze_min_age[request.options.align_index],
                  scope=PG_SCOPE.MAINTENANCE, response=response, before=managed_cache[vacuum_freeze_min_age],
                  _log_pool=_log_pool)
@@ -541,7 +541,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     vacuum_multixact_freeze_min_age = 'vacuum_multixact_freeze_min_age'
     after_vacuum_multixact_freeze_min_age = cap_value(_kwargs.num_write_transaction_per_hour_on_workload * 3, 500 * K10,
                                                       managed_cache['autovacuum_multixact_freeze_max_age'] * 0.5)
-    after_vacuum_multixact_freeze_min_age = realign_value_to_unit(after_vacuum_multixact_freeze_min_age, M10)
+    after_vacuum_multixact_freeze_min_age = realign_value(after_vacuum_multixact_freeze_min_age, M10)
     _item_tuning(key=vacuum_multixact_freeze_min_age, after=after_vacuum_multixact_freeze_min_age[request.options.align_index],
                  scope=PG_SCOPE.MAINTENANCE, response=response, before=managed_cache[vacuum_multixact_freeze_min_age],
                  _log_pool=_log_pool)
@@ -677,8 +677,8 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
         after_max_wal_size = _wal_disk_size - _kwargs.max_wal_size_remain_upper_size
     else:
         after_max_wal_size = _wal_disk_size * _kwargs.max_wal_size_ratio
-    after_max_wal_size = realign_value_to_unit(max(1 * Gi, after_max_wal_size),
-                                               _kwargs.wal_segment_size)[request.options.align_index]
+    after_max_wal_size = realign_value(max(1 * Gi, after_max_wal_size),
+                                       _kwargs.wal_segment_size)[request.options.align_index]
     _item_tuning(key=max_wal_size, after=after_max_wal_size, scope=_scope,
                  response=response, before=managed_cache[max_wal_size], _log_pool=_log_pool)
     assert managed_cache[max_wal_size] <= int(_wal_disk_size), 'The max_wal_size is greater than the WAL disk size'
@@ -697,7 +697,7 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
     min_wal_size = 'min_wal_size'
     after_min_wal_size = max(min(10 * _kwargs.wal_segment_size, _wal_disk_size),
                              int((_wal_disk_size - managed_cache[max_wal_size]) * _kwargs.min_wal_ratio_scale))
-    after_min_wal_size = realign_value_to_unit(after_min_wal_size, _kwargs.wal_segment_size)[request.options.align_index]
+    after_min_wal_size = realign_value(after_min_wal_size, _kwargs.wal_segment_size)[request.options.align_index]
     _item_tuning(key=min_wal_size, after=after_min_wal_size, scope=_scope,
                  response=response, before=managed_cache[min_wal_size], _log_pool=_log_pool)
     assert managed_cache[min_wal_size] <= int(_wal_disk_size), 'The min_wal_size is greater than the WAL disk size'
@@ -717,7 +717,7 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
         # 30-seconds of precision
         archive_timeout = 'archive_timeout'
         after_archive_timeout = managed_cache[archive_timeout] + int(_wal_segment_size_scale * base_timeout)
-        after_archive_timeout = realign_value_to_unit(after_archive_timeout, MINUTE // 2)[request.options.align_index]
+        after_archive_timeout = realign_value(after_archive_timeout, MINUTE // 2)[request.options.align_index]
         _item_tuning(key=archive_timeout, after=after_archive_timeout, scope=_scope, response=response,
                      before=managed_cache[archive_timeout], _log_pool=_log_pool)
 
@@ -737,7 +737,7 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
                 request.options.workload_type in _ckpt_wrkl_allow:
             checkpoint_timeout = 'checkpoint_timeout'
             after_checkpoint_timeout = managed_cache[checkpoint_timeout] + int(_wal_segment_size_scale * base_timeout)
-            after_checkpoint_timeout = realign_value_to_unit(after_checkpoint_timeout, MINUTE // 4)[request.options.align_index]
+            after_checkpoint_timeout = realign_value(after_checkpoint_timeout, MINUTE // 4)[request.options.align_index]
             _item_tuning(key=checkpoint_timeout, after=after_checkpoint_timeout,
                          scope=_scope, response=response, before=managed_cache[checkpoint_timeout], _log_pool=_log_pool)
 
@@ -1063,7 +1063,7 @@ def _logger_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     _kwargs = request.options.tuning_kwargs
 
     # Configure the track_activity_query_size, log_parameter_max_length, log_parameter_max_error_length
-    log_length = realign_value_to_unit(_kwargs.max_query_length_in_bytes, 64)[request.options.align_index]
+    log_length = realign_value(_kwargs.max_query_length_in_bytes, 64)[request.options.align_index]
     _item_tuning(key='track_activity_query_size', after=log_length, scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_log_pool)
     _item_tuning(key='log_parameter_max_length', after=log_length, scope=PG_SCOPE.LOGGING, response=response,
@@ -1072,11 +1072,11 @@ def _logger_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
                  _log_pool=_log_pool)
 
     # Configure the log_min_duration_statement, auto_explain.log_min_duration
-    log_min_duration = realign_value_to_unit(_kwargs.max_runtime_ms_to_log_slow_query, 20)[request.options.align_index]
+    log_min_duration = realign_value(_kwargs.max_runtime_ms_to_log_slow_query, 20)[request.options.align_index]
     _item_tuning(key='log_min_duration_statement', after=log_min_duration, scope=PG_SCOPE.LOGGING, response=response,
                  _log_pool=_log_pool)
     explain_min_duration = int(log_min_duration * _kwargs.max_runtime_ratio_to_explain_slow_query)
-    explain_min_duration = realign_value_to_unit(explain_min_duration, 20)[request.options.align_index]
+    explain_min_duration = realign_value(explain_min_duration, 20)[request.options.align_index]
     _item_tuning(key='auto_explain.log_min_duration', after=explain_min_duration,
                  scope=PG_SCOPE.EXTRA, response=response, _log_pool=_log_pool)
 
