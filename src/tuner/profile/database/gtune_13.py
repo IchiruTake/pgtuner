@@ -5,7 +5,7 @@ from pydantic import ByteSize
 from src.static.vars import APP_NAME_UPPER
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
 
-__all__ = ["DB13_CONFIG_PROFILE"]
+__all__ = ['DB13_CONFIG_PROFILE']
 _SIZING = ByteSize | int | float
 _logger = logging.getLogger(APP_NAME_UPPER)
 

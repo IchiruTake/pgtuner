@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import ByteSize, PositiveFloat, PositiveInt
 
-from src.static.vars import (APP_NAME_UPPER, BACKUP_ENTRY_READER_DIR, SUGGESTION_ENTRY_READER_DIR, Gi, K10, )
+from src.static.vars import (APP_NAME_UPPER, SUGGESTION_ENTRY_READER_DIR, Gi, K10, )
 from src.tuner.base import GeneralTuner
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
@@ -51,9 +51,9 @@ __all__ = ['init', 'optimize', 'make_disk', 'make_tuning_keywords', 'make_tune_r
 # ==================================================================================================
 # Initialize folders
 def init() -> None:
-    _logger.info(f'Initializing the {APP_NAME_UPPER} application. Create the two directory structures of '
-                 f'{BACKUP_ENTRY_READER_DIR} and {SUGGESTION_ENTRY_READER_DIR}')
-    os.makedirs(BACKUP_ENTRY_READER_DIR, mode=0o640, exist_ok=True)
+    _logger.info(f'Initializing the {APP_NAME_UPPER} application. Create the directory structure of '
+                 f'{SUGGESTION_ENTRY_READER_DIR}')
+
     os.makedirs(SUGGESTION_ENTRY_READER_DIR, mode=0o640, exist_ok=True)
     return None
 
@@ -161,7 +161,7 @@ def make_tune_request(
         enable_database_general_tuning: bool = True, enable_database_correction_tuning: bool = True,
 
         ## User-Tuning Profiles
-        overall_profile: str = 'large', cpu_profile: str = 'large', mem_profile: str = 'large',
+        workload_profile: str = 'large', cpu_profile: str = 'large', mem_profile: str = 'large',
         net_profile: str = 'large', disk_profile: str = 'large', pgsql_version: str = '17',
 
         ## Disk Performance
@@ -205,7 +205,7 @@ def make_tune_request(
         enable_database_general_tuning=enable_database_general_tuning,
         enable_database_correction_tuning=enable_database_correction_tuning,
         ## User-Tuning Profiles
-        workload_profile=overall_profile,
+        workload_profile=workload_profile,
         cpu_profile=cpu_profile,
         mem_profile=mem_profile,
         net_profile=net_profile,

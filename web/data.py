@@ -4,11 +4,11 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
-from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, DEFAULT_INSTRUCTION_PROFILE, THROUGHPUT, RANDOM_IOPS, \
-    BASE_WAL_SEGMENT_SIZE, M10
+from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, THROUGHPUT, RANDOM_IOPS, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.disks import PG_DISK_PERF, string_disk_to_performance
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.sizing import PG_SIZING
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST
@@ -139,11 +139,11 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     # Also, not all the values are used in a web application. So we decided to prune some of them.
 
     # The basic profile for the system tuning for profile-guided tuning
-    workload_profile: str = Field(default=DEFAULT_INSTRUCTION_PROFILE)
-    cpu_profile: str = Field(default=DEFAULT_INSTRUCTION_PROFILE)
-    mem_profile: str = Field(default=DEFAULT_INSTRUCTION_PROFILE)
-    net_profile: str = Field(default=DEFAULT_INSTRUCTION_PROFILE)
-    disk_profile: str = Field(default=DEFAULT_INSTRUCTION_PROFILE)
+    workload_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    cpu_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    mem_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    disk_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    net_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
     pgsql_version: str = Field(default='17')
 
     # Disk options for data partitions

@@ -20,8 +20,7 @@ from src.tuner.profile.database.shared import wal_time
 from src.utils.pydantic_utils import bytesize_to_hr
 from src.utils.pydantic_utils import realign_value, cap_value
 from src.utils.timing import time_decorator
-from src.tuner.data.sizing import PG_DISK_SIZING
-
+from src.tuner.data.sizing import PG_DISK_SIZING, PG_SIZING
 
 __all__ = ['correction_tune']
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -176,32 +175,32 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
     if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE,
                                          PG_WORKLOAD.TSR_OLAP):
         after_default_statistics_target = 200
-        if hw_scope == 'medium':
+        if hw_scope == PG_SIZING.MEDIUM:
             after_default_statistics_target = 350
-        elif hw_scope == 'large':
+        elif hw_scope == PG_SIZING.LARGE:
             after_default_statistics_target = 500
-        elif hw_scope == 'mall':
+        elif hw_scope == PG_SIZING.MALL:
             after_default_statistics_target = 750
-        elif hw_scope == 'bigt':
+        elif hw_scope == PG_SIZING.BIGT:
             after_default_statistics_target = 1000
     elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP):
         after_default_statistics_target = 200
-        if hw_scope == 'large':
+        if hw_scope == PG_SIZING.LARGE:
             after_default_statistics_target = 300
-        elif hw_scope == 'mall':
+        elif hw_scope == PG_SIZING.MALL:
             after_default_statistics_target = 400
-        elif hw_scope == 'bigt':
+        elif hw_scope == PG_SIZING.BIGT:
             after_default_statistics_target = 500
     elif request.options.workload_type in (PG_WORKLOAD.OLTP, PG_WORKLOAD.SEARCH, PG_WORKLOAD.RAG,
                                            PG_WORKLOAD.GEOSPATIAL):
         after_default_statistics_target = 100
-        if hw_scope == 'medium' and not request.options.workload_type == PG_WORKLOAD.OLTP:
+        if hw_scope == PG_SIZING.MEDIUM:
             after_default_statistics_target = 150
-        elif hw_scope == 'large':
+        elif hw_scope == PG_SIZING.LARGE:
             after_default_statistics_target = 200
-        elif hw_scope == 'mall':
+        elif hw_scope == PG_SIZING.MALL:
             after_default_statistics_target = 300
-        elif hw_scope == 'bigt':
+        elif hw_scope == PG_SIZING.BIGT:
             after_default_statistics_target = 400
     _item_tuning(key=default_statistics_target, after=after_default_statistics_target, scope=PG_SCOPE.QUERY_TUNING,
                  response=response, suffix_text=_suffix_text, _log_pool=_log_pool, before=None)
@@ -241,13 +240,13 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
         else:
             after_commit_delay = 1 * K10
 
-        if commit_delay_hw_scope == 'medium':
+        if commit_delay_hw_scope == PG_SIZING.MEDIUM:
             after_commit_delay *= 3
-        elif commit_delay_hw_scope == 'large':
+        elif commit_delay_hw_scope == PG_SIZING.LARGE:
             after_commit_delay *= 5
-        elif commit_delay_hw_scope == 'mall':
+        elif commit_delay_hw_scope == PG_SIZING.MALL:
             after_commit_delay *= 7.5
-        elif commit_delay_hw_scope == 'bigt':
+        elif commit_delay_hw_scope == PG_SIZING.BIGT:
             after_commit_delay *= 10
 
         pass
@@ -263,11 +262,11 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
         # Thus, even in batch commit, we should prefer a low commit_delay.
         # However, since these workloads are run independently with request, the commit_siblings are good to go.
         after_commit_delay = 1 * K10
-        if commit_delay_hw_scope == 'large':
+        if commit_delay_hw_scope == PG_SIZING.LARGE:
             after_commit_delay = K10 * 5 // 10
-        elif commit_delay_hw_scope == 'mall':
+        elif commit_delay_hw_scope == PG_SIZING.MALL:
             after_commit_delay = K10 * 3 // 10
-        elif commit_delay_hw_scope == 'bigt':
+        elif commit_delay_hw_scope == PG_SIZING.BIGT:
             after_commit_delay = K10 * 2 // 10
 
     elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.OLTP):
@@ -276,11 +275,11 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
         # However, since these workloads are run independently with request, the commit_siblings are good to go.
         # For the TSR_HTAP, I am still not sure about this workload of which
         after_commit_delay = K10 * 5 // 10
-        if commit_delay_hw_scope == 'large':
+        if commit_delay_hw_scope == PG_SIZING.LARGE:
             after_commit_delay = K10 * 3 // 10
-        elif commit_delay_hw_scope == 'mall':
+        elif commit_delay_hw_scope == PG_SIZING.MALL:
             after_commit_delay = K10 * 2 // 10
-        elif commit_delay_hw_scope == 'bigt':
+        elif commit_delay_hw_scope == PG_SIZING.BIGT:
             after_commit_delay = K10 * 1 // 10
     _item_tuning(key=commit_delay, after=int(after_commit_delay), scope=PG_SCOPE.QUERY_TUNING, response=response,
                  suffix_text=_suffix_text, before=managed_cache[commit_delay], _log_pool=_log_pool)
@@ -733,7 +732,7 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
                             PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.TSR_IOT,
                             PG_WORKLOAD.TSR_OLAP)
         if PG_DISK_SIZING.match_disk_series_in_range(_data_iops, RANDOM_IOPS, 'ssd', 'nvme') and \
-                managed_items['checkpoint_timeout'].hardware_scope[1] in ('large', 'mall', 'bigt') and \
+                managed_items['checkpoint_timeout'].hardware_scope[1] >= PG_SIZING.LARGE and \
                 request.options.workload_type in _ckpt_wrkl_allow:
             checkpoint_timeout = 'checkpoint_timeout'
             after_checkpoint_timeout = managed_cache[checkpoint_timeout] + int(_wal_segment_size_scale * base_timeout)

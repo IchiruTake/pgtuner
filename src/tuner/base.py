@@ -7,6 +7,7 @@ from src.static.vars import APP_NAME_UPPER, MULTI_ITEMS_SPLIT, WEB_MODE
 from src.tuner.data.items import PG_TUNE_ITEM
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
+from src.tuner.data.sizing import PG_SIZING
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
 from src.utils.timing import time_decorator
 
@@ -61,13 +62,13 @@ class GeneralTuner(BaseModel):
 
     @staticmethod
     def _make_itm(key: str, before: Any, after: Any, trigger: Any, tune_entry,
-                  hardware_scope: tuple[str, str]) -> PG_TUNE_ITEM:
+                  hardware_scope: tuple[str, PG_SIZING]) -> PG_TUNE_ITEM:
         return PG_TUNE_ITEM(key=key, before=before, after=after, trigger=trigger, hardware_scope=hardware_scope,
                             comment=tune_entry.get('comment', None), style=tune_entry.get('style', None),
                             partial_func=tune_entry.get('partial_func', None))
 
     @staticmethod
-    def _get_fn_default(key: str, tune_entry: dict, hw_scope: str):
+    def _get_fn_default(key: str, tune_entry: dict, hw_scope: PG_SIZING):
         _msg: str = ''
         if 'instructions' not in tune_entry:  # No profile-based tuning
             _msg = f'DEBUG: Profile-based tuning is not found for this item {key} -> Use the general tuning instead.'
@@ -76,8 +77,8 @@ class GeneralTuner(BaseModel):
             return fn, default, _msg
 
         # Profile-based Tuning
-        profile_fn = tune_entry['instructions'].get(hw_scope, tune_entry.get('tune_op', None))
-        profile_default = tune_entry['instructions'].get(f'{hw_scope}_default', None)
+        profile_fn = tune_entry['instructions'].get(hw_scope.value, tune_entry.get('tune_op', None))
+        profile_default = tune_entry['instructions'].get(f'{hw_scope.value}_default', None)
 
         if profile_default is None:
             profile_default = tune_entry['default']
@@ -110,7 +111,7 @@ class GeneralTuner(BaseModel):
                 # Check the profile scope of the tuning item, if not found, fallback to the workload_profile;
                 # If found then we use specific scope to choose the profile-based tuning operation.
                 hw_scope_term: str = tune_entry.get('hardware_scope', 'overall')
-                hw_scope_value: str = request.options.translate_hardware_scope(term=hw_scope_term)
+                hw_scope_value: PG_SIZING = request.options.translate_hardware_scope(term=hw_scope_term)
 
                 # We don't want to apply safeguard here to deal with non-sanitized profile from custom user input.
                 # If they need custom change on the tuning after the profile is applied, they can do it manually

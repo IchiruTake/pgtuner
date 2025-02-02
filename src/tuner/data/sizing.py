@@ -1,5 +1,5 @@
 from enum import Enum
-from functools import lru_cache
+from functools import lru_cache, total_ordering
 from math import floor, ceil
 from typing import Literal
 
@@ -19,7 +19,12 @@ _ascending_specs: dict[str, list] = {
     'network_mbps_max': [500, 1000, 5000, 12500, 30000],
 }
 
-class PG_SIZING(str, Enum):
+@lru_cache(maxsize=len(_ascending_specs['size']))
+def _str_to_num(value: str) -> int:
+    return _ascending_specs['size'].index(value)
+
+@total_ordering
+class PG_SIZING(Enum):
     """
     The PostgreSQL sizing profile. This could help you analyze if your provided server is suitable with our
     defined profiles.
@@ -31,25 +36,13 @@ class PG_SIZING(str, Enum):
     BIGT = 'bigt'
 
     def _num(self) -> int:
-        return _ascending_specs['size'].index(self.value)
+        return _str_to_num(self.value)
 
     def __lt__(self, other: 'PG_SIZING') -> bool:
         return self._num() < other._num()
 
-    def __le__(self, other: 'PG_SIZING') -> bool:
-        return self._num() <= other._num()
-
-    def __gt__(self, other: 'PG_SIZING') -> bool:
-        return self._num() > other._num()
-
-    def __ge__(self, other: 'PG_SIZING') -> bool:
-        return self._num() >= other._num()
-
     def __eq__(self, other: 'PG_SIZING') -> bool:
         return self._num() == other._num()
-
-    def __ne__(self, other: 'PG_SIZING') -> bool:
-        return self._num() != other._num()
 
     def __add__(self, other: 'PG_SIZING') -> 'PG_SIZING':
         return PG_SIZING(_ascending_specs['size'][self._num() + other._num()])

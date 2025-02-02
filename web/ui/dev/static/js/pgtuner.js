@@ -140,7 +140,6 @@ function gatherFormValues() {
 
 function update_response(id, value) {
     const response_box_block = document.getElementById(id);
-    console.log(response_box_block);
     if (response_box_block.readOnly) {
         response_box_block.readOnly = false;
         response_box_block.innerHTML = '';
@@ -162,8 +161,6 @@ async function submitConfiguration() {
         'output_format': document.getElementById('output_format').value,
     };
     body = JSON.stringify(body, null, 2);
-    console.log(body)
-
     try {
         update_response('response-box', 'Loading...');
         update_response('mem-report', 'Loading...');
@@ -178,23 +175,16 @@ async function submitConfiguration() {
 
         if (response.ok) {
             // If the response is successful, show the result based on its content-type
-            if (response.headers.get('content-type').includes('application/json')) {
-                const result = await response.json();
-                // Set the response box to be editable, then set the response to the result
-                if (output_format === 'json') {
-                    update_response('response-box', JSON.stringify(result['config'], null, 2));
-                } else {
-                    update_response('response-box', result['config']);
-                }
-
-                // Set the memory report box to be editable, then set the response to the result
-                update_response('mem-report', result['mem_report']);
-
-            } else if (response.headers.get('content-type').includes('text/plain')) {
-                const result = await response.text();
-                // Set the response box to be editable, then set the response to the result
-                update_response('response-box', result);
+            const result = await response.json();
+            // Set the response box to be editable, then set the response to the result
+            if (output_format === 'json') {
+                update_response('response-box', JSON.stringify(result['config'], null, 2));
+            } else {
+                update_response('response-box', result['config']);
             }
+
+            // Set the memory report box to be editable, then set the response to the result
+            update_response('mem-report', result['mem_report']);
         } else {
             const error = await response.json();
             update_response('response-box', JSON.stringify(error['detail'], null, 2));
@@ -210,7 +200,7 @@ function copyToClipboard() {
     const responseBox = document.getElementById('response-box');
     responseBox.select();
     document.execCommand('copy');
-    alert('Response copied to clipboard!');
+    // alert('Response copied to clipboard!');
 }
 
 function downloadResponse() {

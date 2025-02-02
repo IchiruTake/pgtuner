@@ -5,10 +5,11 @@ from typing import Any, Annotated, Literal
 from pydantic import BaseModel, Field, ByteSize, AfterValidator
 from pydantic.types import PositiveInt
 
-from src.static.vars import Gi, Mi, APP_NAME_UPPER, DEFAULT_INSTRUCTION_PROFILE, SUPPORTED_POSTGRES_VERSIONS
+from src.static.vars import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.sizing import PG_SIZING
 from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.workload import PG_WORKLOAD
 from src.utils.pydantic_utils import bytesize_to_hr
@@ -60,34 +61,34 @@ _allowed_os = partial(_allowed_values, values=_PG_OS_KEYS)
 class PG_TUNE_USR_OPTIONS(BaseModel):
     # The basic profile for the system tuning for profile-guided tuning
     workload_profile: Annotated[
-        str, AfterValidator(_allowed_profile),
+        PG_SIZING,
         Field(default_factory=PydanticFact(f'Enter the workload profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
+                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
               description='The workload profile to be used for tuning')
     ]
     cpu_profile: Annotated[
-        str, AfterValidator(_allowed_profile),
+        PG_SIZING,
         Field(default_factory=PydanticFact(f'Enter the CPU profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
+                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
               description='The CPU profile to be used for profile-based tuning')
     ]
     mem_profile: Annotated[
-        str, AfterValidator(_allowed_profile),
+        PG_SIZING,
         Field(default_factory=PydanticFact(f'Enter the Memory profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
-              description='The Memory profile to be used for profile-based tuning')
-    ]
-    net_profile: Annotated[
-        str, AfterValidator(_allowed_profile),
-        Field(default_factory=PydanticFact(f'Enter the Network profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
-              description='The Network profile to be used for profile-based tuning')
+                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
+              description='The memory profile to be used for profile-based tuning')
     ]
     disk_profile: Annotated[
-        str, AfterValidator(_allowed_profile),
+        PG_SIZING,
         Field(default_factory=PydanticFact(f'Enter the Disk profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=str, default_value=DEFAULT_INSTRUCTION_PROFILE),
-              description='The Disk profile to be used for profile-based tuning')
+                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
+              description='The disk profile to be used for profile-based tuning')
+    ]
+    net_profile: Annotated[
+        PG_SIZING,
+        Field(default_factory=PydanticFact(f'Enter the Network profile as mini, medium, large, mall, bigt: ',
+                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
+              description='The network profile to be used for profile-based tuning')
     ]
     pgsql_version: Annotated[
         str, AfterValidator(_allowed_postgres_version),
@@ -369,12 +370,12 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         return None
 
     @cached_property
-    def hardware_scope(self) -> dict[str, str]:
+    def hardware_scope(self) -> dict[str, PG_SIZING]:
         """ Translate the hardware scope into the dictionary format """
         return {'cpu': self.cpu_profile, 'mem': self.mem_profile, 'net': self.net_profile, 'disk': self.disk_profile,
                 'overall': self.workload_profile}
 
-    def translate_hardware_scope(self, term: str | None) -> str:
+    def translate_hardware_scope(self, term: str | None) -> PG_SIZING:
         if term:
             term = term.lower().strip()
             try:

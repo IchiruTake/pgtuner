@@ -1,11 +1,10 @@
 import string
 from pprint import pformat
 from typing import Any, Callable
-
+from src.tuner.data.sizing import PG_SIZING
 from pydantic import BaseModel, Field
 
-__all__ = ["PG_TUNE_ITEM"]
-
+__all__ = ['PG_TUNE_ITEM']
 
 # =============================================================================
 # This section is managed by the application
@@ -26,7 +25,7 @@ class PG_TUNE_ITEM(BaseModel):
               description="The partial function to output the result after finish the tuning. This override the "
                           "output format on the `after` field.")
     )
-    hardware_scope: tuple[str, str] = (
+    hardware_scope: tuple[str, PG_SIZING] = (
         Field(frozen=True,
               description="The hardware scope of the tuning. The first value is the hardware type, the second value is "
                           "its associated level (mini, medium, large, mall, bigt, ...)")

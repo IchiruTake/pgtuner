@@ -27,23 +27,19 @@ if DEBUG_MODE and os.path.exists('conf/log_debug.toml'):
     LOG_FILE_PATH = "conf/log_debug.toml"
 elif WEB_MODE and os.path.exists('conf/log_web.toml'):
     LOG_FILE_PATH = 'conf/log_web.toml'
-PGTUNER_PROFILE_FILE_PATH = f'conf/{APP_NAME_LOWER}.toml'
-PGTUNER_PROFILE_DIR_PATH = f'conf/{APP_NAME_LOWER}.d'
 
 SERVER_HOSTNAME: str = socket.gethostname()  # We don't use FQDN here
 if WEB_MODE:
     SERVER_HOSTNAME = '<postgres-host>'
 
 PG_ARCHIVE_DIR = '/mnt/<any-storage-host>/<postgresql-hostname>/postgresql/archive/wal'
-PG_LOG_DIR = '/mnt/<any-storage-host>/<postgresql-hostname>/postgresql/archive/db_log'
+PG_LOG_DIR = '/var/log/postgresql'
 
 BASE_ENTRY_READER_DIR: str = os.path.expanduser(f'./.{APP_NAME_LOWER}')
-BACKUP_ENTRY_READER_DIR: str = os.path.join(BASE_ENTRY_READER_DIR, 'backup')
 SUGGESTION_ENTRY_READER_DIR: str = os.path.join(BASE_ENTRY_READER_DIR, 'suggestions')
 
 # ==================================================================================================
 # Instruction Tuning
-DEFAULT_INSTRUCTION_PROFILE: str = 'large'
 MULTI_ITEMS_SPLIT: str = ';'
 
 # ==================================================================================================

@@ -2,6 +2,7 @@ import os.path
 import shutil
 from typing import Literal
 import httpx
+import asyncio
 
 def cleanup_css(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
     from mincss.processor import Processor
@@ -27,7 +28,7 @@ def cleanup_css(website_url: str, store_path: str = './web/ui/static', backup: b
     return None
 
 
-def cleanup_html(html_file: str):
+def cleanup_html_local(html_file: str):
     import minify_html
     with open(html_file, 'r') as f:
         html_doc = f.read()
@@ -40,6 +41,7 @@ def cleanup_html(html_file: str):
             f_min.write(minified_html)
         return minified_html_filepath
 
+
 def cleanup_js(js_file: str, client: httpx.Client):
     url = 'https://www.toptal.com/developers/javascript-minifier/api/raw'
     with open(js_file, 'r') as f:
@@ -47,7 +49,7 @@ def cleanup_js(js_file: str, client: httpx.Client):
         if js_file.endswith('.js'):
             minified_js_filepath = js_file[:-3] + '.min.js'
         else:
-            minified_js_filepath = js_file.replace('.js', '.min.js')
+            minified_js_filepath = js_file + '.min.js'
         if response.status_code // 100 == 2:
             minified_js = response.text
             with open(minified_js_filepath, 'w') as f_min:
@@ -58,29 +60,65 @@ def cleanup_js(js_file: str, client: httpx.Client):
             return None
 
 
-def chrome_coverage_to_css_js_html(json_file: str, store_path: str = './'):
-    # DO NOT USE
-    import json
+def cleanup_html(html_file: str, client: httpx.Client):
+    url = 'https://www.toptal.com/developers/html-minifier/api/raw'
+    with open(html_file, 'r') as f:
+        response = client.post(url, data={'input': f.read()})
+        if html_file.endswith('.html'):
+            minified_html_filepath = html_file[:-5] + '.min.html'
+        else:
+            minified_html_filepath = html_file + '.min.html'
+        if response.status_code // 100 == 2:
+            minified_html = response.text
+            with open(minified_html_filepath, 'w') as f_min:
+                f_min.write(minified_html)
+            return minified_html_filepath
+        else:
+            print(f'Failed to minify the HTML file: {html_file}')
 
-    with open(json_file, 'r') as f:
-        data = json.load(f)
-        for rq in data:
-            url_value: str = rq['url']
-            url_text = rq['text']
-            filename = url_value.split('/')[-1]
-            file_crack = filename.split('.')
-            file_crack[-1] = f'chrome.{file_crack[-1]}'
-            new_filename = '.'.join(file_crack)
-
-            content = [url_text[scope['start']:scope['end']] for scope in rq['ranges']]
-            with open(os.path.join(store_path, new_filename), 'w') as f_url:
-                f_url.write(''.join(content))
-    pass
+    return None
 
 
-def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web/ui/prd/static',
-            old_html_treatment: Literal['replace', 'backup', 'remove', 'skip', 'override'] = 'replace',
-            old_js_treatment: Literal['replace', 'backup', 'remove', 'skip', 'override'] = 'replace'):
+async def cleanup_html_async(html_file: str, client: httpx.AsyncClient):
+    url = 'https://www.toptal.com/developers/html-minifier/api/raw'
+    with open(html_file, 'r') as f:
+        response = await client.post(url, data={'input': f.read()})
+        if html_file.endswith('.html'):
+            minified_html_filepath = html_file[:-5] + '.min.html'
+        else:
+            minified_html_filepath = html_file + '.min.html'
+        if response.status_code // 100 == 2:
+            minified_html = response.text
+            with open(minified_html_filepath, 'w') as f_min:
+                f_min.write(minified_html)
+            return minified_html_filepath
+        else:
+            print(f'Failed to minify the HTML file: {html_file}')
+
+    return None
+
+
+async def cleanup_js_async(js_file: str, client: httpx.AsyncClient):
+    url = 'https://www.toptal.com/developers/javascript-minifier/api/raw'
+    with open(js_file, 'r') as f:
+        response = await client.post(url, data={'input': f.read()})
+        if js_file.endswith('.js'):
+            minified_js_filepath = js_file[:-3] + '.min.js'
+        else:
+            minified_js_filepath = js_file + '.min.js'
+        if response.status_code // 100 == 2:
+            minified_js = response.text
+            with open(minified_js_filepath, 'w') as f_min:
+                f_min.write(minified_js)
+            return minified_js_filepath
+        else:
+            print(f'Failed to minify the JS file: {js_file}')
+    return None
+
+
+async def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web/ui/prd/static',
+                  old_html_treatment: Literal['replace', 'backup', 'remove', 'skip', 'override'] = 'replace',
+                  old_js_treatment: Literal['replace', 'backup', 'remove', 'skip', 'override'] = 'replace'):
     def _resolve_old_asset(origin: str, target: str, treatment: str) -> None:
         if treatment == 'replace':
             os.remove(origin)
@@ -105,7 +143,7 @@ def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web/ui/pr
         shutil.copytree(dev_path, prod_path)
 
     # Scan the whole directory recursively, then apply the HTML minification if the file extension is .html
-    client = httpx.Client()
+    client = httpx.AsyncClient()
     for root, dirs, files in os.walk(prod_path):
         for file in files:
             if file.endswith('.html'):
@@ -115,7 +153,9 @@ def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web/ui/pr
                     continue
 
                 html_filepath = os.path.join(root, file)
-                minified_html_filepath = cleanup_html(html_filepath)
+                # minified_html_filepath = cleanup_html_local(html_filepath)
+                minified_html_filepath = await cleanup_html_async(html_filepath, client)
+
                 print(f'Found HTML file: {html_filepath} --> {minified_html_filepath} :: Resolve legacy HTML by {old_html_treatment}')
                 _resolve_old_asset(origin=html_filepath, target=minified_html_filepath, treatment=old_html_treatment)
             if file.endswith('.js'):
@@ -124,11 +164,10 @@ def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web/ui/pr
                     print(f'Skip the minified JS file: {os.path.join(root, file)}')
                     continue
                 js_filepath = os.path.join(root, file)
-                minified_js_filepath = cleanup_js(js_filepath, client)
+                minified_js_filepath = await cleanup_js_async(js_filepath, client)
                 print(f'Found JS file: {js_filepath} --> {minified_js_filepath} :: Resolve legacy JS by {old_js_treatment}')
                 _resolve_old_asset(origin=js_filepath, target=minified_js_filepath, treatment=old_js_treatment)
-    client.close()
-
+    await client.aclose()
     return None
 
 
@@ -144,8 +183,11 @@ if __name__ == '__main__':
     # chrome_coverage_to_css_js_html('./Coverage-20250124T221919.json')
 
     # Proceed the PRD first then DEV later
-    migrate(dev_path='./web/ui/dev/static', prod_path='./web/ui/prd/static',
-            old_html_treatment='override', old_js_treatment='replace')
-    migrate(dev_path='./web/ui/dev/static', prod_path='./web/ui/dev/static',
-            old_html_treatment='skip', old_js_treatment='skip')
+    dev_to_prd_future = migrate(dev_path='./web/ui/dev/static', prod_path='./web/ui/prd/static',
+                                old_html_treatment='override', old_js_treatment='remove')
+    dev_to_dev_future = migrate(dev_path='./web/ui/dev/static', prod_path='./web/ui/dev/static',
+                                old_html_treatment='skip', old_js_treatment='skip')
+    asyncio.run(dev_to_prd_future)
+    asyncio.run(dev_to_dev_future)
+
     print('Done')

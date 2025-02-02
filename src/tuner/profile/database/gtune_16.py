@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from pydantic import ByteSize
 
-from src.static.vars import K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE
+from src.static.vars import K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, Ki
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, rewrite_items, type_validation
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
@@ -37,13 +37,13 @@ _DB_VACUUM_PROFILE = {
                    'range from 128 kB to 16 GB. If the specified size would exceed 1/8 the size of shared_buffers, '
                    'the size is silently capped to that value. The default value is 2MB. Our result is based on the '
                    'memory profile which can be ranged from 1/16 to 1/64 of shared buffers',
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, Mi)}MB",
+        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi, min_unit=Ki)}MB",
     }
 }
 
 _DB_WAL_PROFILE = {
     'wal_compression': {
-        'default': 'zstd-3',
+        'default': 'zstd',
         'comment': 'This parameter enables compression of WAL using the specified compression method. When enabled, '
                    'the PostgreSQL server compresses full page images written to WAL when full_page_writes is on or '
                    'during a base backup. A compressed page image will be decompressed during WAL replay.'
