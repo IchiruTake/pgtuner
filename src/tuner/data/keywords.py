@@ -74,23 +74,13 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'active connections are running complex queries that requires high work_mem or temp_buffers.')
     )
     temp_buffers_ratio: PositiveFloat = (
-        Field(default=2 / 3, ge=0.25, le=0.95,
-              description='The ratio of temp_buffers to the work_buffer pool above. The supported range is [0.25, '
-                          '0.95], default is 2/3. Increase this value make the temp_buffers larger than the work_mem. '
+        Field(default=1 / 3, ge=0.05, le=0.95,
+              description='The ratio of temp_buffers to the work_buffer pool above. The supported range is [0.05, '
+                          '0.95], default is 1/3. Increase this value make the temp_buffers larger than the work_mem. '
                           'If you have query that use much temporary object (temporary table, CTE, ...) then you can '
                           'increase this value slowly (1-3% increment is recommended). If you have query involving '
                           'more WRITE and/or the WRITE query plan is complex involving HASH, JOIN, MERGE, ... then '
                           'it is better to decrease this value (1-3% decrement is recommended).')
-    )
-    work_mem_scale_factor: PositiveFloat = (
-        Field(default=1.0, gt=0.0, le=5.0,
-              description='The scale factor of the work_mem. This property should only be changed if the result of '
-                          'our global formula does not meet your expectation, and it is dedicated to the work_mem only. '
-                          'Note that setting this attribute over 1.0 would make sum(temp_buffers + work_mem) with '
-                          'the active_user_connections exceed the defined max_work_buffer_ratio. The supported range '
-                          'is (0, 5.0], default is 1.0. Only change it if you push the HASH, SORT, JOIN, or MERGE '
-                          'managed by the database instead of the application. If you intend to have large work_mem '
-                          'without impacting the temp_buffers, then increase this scale factor and reduce the pool')
     )
     # These are used for memory_precision_tuning
     max_normal_memory_usage: PositiveFloat = (
@@ -124,12 +114,6 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'max_work_buffer_ratio. Supported value is [0, 1] and default is 0.5. Higher value meant '
                           'the tuning would prefer the shared_buffers over the max_work_buffer_ratio. Lower value '
                           'meant the tuning would prefer the max_work_buffer_ratio over the shared_buffers.')
-    )
-    mem_pool_max_iterations: int = (
-        Field(default=100, ge=0, le=1000,
-              description='The maximum number of iteration for the memory tuning. The supported range is [0, 1000] '
-                          'and default is 100. Set to 0 to run infinitely until the memory tuning is converged. '
-                          'Higher value could make the tuning run more loops.')
     )
     mem_pool_parallel_estimate: bool = (
         Field(default=False,

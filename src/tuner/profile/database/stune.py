@@ -31,7 +31,7 @@ _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
 
 
 def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE,
-                    _log_pool: list[str]) -> None:
+                    _log_pool: list[str] | None) -> None:
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     change_list = []
     for scope, items in keys.items():
@@ -43,22 +43,24 @@ def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQU
                 managed_cache[key] = t_itm.after
                 if old_result != t_itm.after:
                     change_list.append((key, t_itm.out_display()))
-    if change_list:
-        _log_pool.append(f'The following items are updated: {change_list}')
-    else:
-        _log_pool.append('No change is detected in the trigger tuning.')
+    if isinstance(_log_pool, list):
+        if change_list:
+            _log_pool.append(f'The following items are updated: {change_list}')
+        else:
+            _log_pool.append('No change is detected in the trigger tuning.')
     return None
 
 
-def _item_tuning(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPONSE, _log_pool: list[str],
+def _item_tuning(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPONSE, _log_pool: list[str] | None,
                  suffix_text: str = '', before: Any = None) -> bool:
     if before is None:
         before = response.get_managed_cache(_TARGET_SCOPE)[key]
 
     if before is None or before != after:
         items, cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=scope)
-        _log_pool.append(f'The {key} is updated from {before} (or {items[key].out_display()}) to '
-                         f'{after} (or {items[key].out_display(override_value=after)}) {suffix_text}.')
+        if isinstance(_log_pool, list):
+            _log_pool.append(f'The {key} is updated from {before} (or {items[key].out_display()}) to '
+                             f'{after} (or {items[key].out_display(override_value=after)}) {suffix_text}.')
         try:
             items[key].after = after
             cache[key] = after
@@ -230,60 +232,38 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
 
         # This is just the rough estimation so don't fall for it.
         if PG_DISK_SIZING.match_disk_series(mixed_iops, RANDOM_IOPS, 'hdd', interval='weak'):
-            after_commit_delay = 5 * K10
-        elif PG_DISK_SIZING.match_disk_series(mixed_iops, RANDOM_IOPS, 'hdd', interval='strong'):
-            after_commit_delay = 4 * K10
-        elif PG_DISK_SIZING.match_disk_series(mixed_iops, RANDOM_IOPS, 'san', interval='weak'):
             after_commit_delay = 3 * K10
-        elif PG_DISK_SIZING.match_disk_series(mixed_iops, RANDOM_IOPS, 'san', interval='strong'):
+        elif PG_DISK_SIZING.match_disk_series(mixed_iops, RANDOM_IOPS, 'hdd', interval='strong'):
+            after_commit_delay = int(2.5 * K10)
+        elif PG_DISK_SIZING.match_disk_series(mixed_iops, RANDOM_IOPS, 'san'):
             after_commit_delay = 2 * K10
         else:
             after_commit_delay = 1 * K10
-
-        if commit_delay_hw_scope == PG_SIZING.MEDIUM:
-            after_commit_delay *= 3
-        elif commit_delay_hw_scope == PG_SIZING.LARGE:
-            after_commit_delay *= 5
-        elif commit_delay_hw_scope == PG_SIZING.MALL:
-            after_commit_delay *= 7.5
-        elif commit_delay_hw_scope == PG_SIZING.BIGT:
-            after_commit_delay *= 10
-
-        pass
     elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE,
                                            PG_WORKLOAD.TSR_OLAP):
+        # Workload: OLAP, Data Warehouse, Data Lake, TSR_OLAP
         # These workloads are critical but not require end-user and internally managed and transformed by the
-        # application side so a high commit_delay is allowed (but may not bring much benefit) unless the database
-        # is used on multiple tenants or business requirements. However, since these workloads are run independently
-        # and assumed the application side do not mess thing up, the commit_siblings are good to go.
+        # application side so a high commit_delay is allowed, but it does not bring large impact since commit_delay
+        # affected group/batched commit of small transactions.
         after_commit_delay = 2 * K10
     elif request.options.workload_type in (PG_WORKLOAD.SEARCH, PG_WORKLOAD.RAG, PG_WORKLOAD.GEOSPATIAL):
-        # Since these workloads don't risk the data integrity but the latency are important but not as critical.
-        # Thus, even in batch commit, we should prefer a low commit_delay.
-        # However, since these workloads are run independently with request, the commit_siblings are good to go.
-        after_commit_delay = 1 * K10
-        if commit_delay_hw_scope == PG_SIZING.LARGE:
-            after_commit_delay = K10 * 5 // 10
-        elif commit_delay_hw_scope == PG_SIZING.MALL:
-            after_commit_delay = K10 * 3 // 10
-        elif commit_delay_hw_scope == PG_SIZING.BIGT:
-            after_commit_delay = K10 * 2 // 10
+        # Workload: Search, RAG, Geospatial
+        # The workload pattern of this is usually READ, the indexing is added incrementally if user make new
+        # or updated resources. Since update patterns are rarely done, the commit_delay still not have much
+        # impact.
+        after_commit_delay = int(K10 // 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
 
     elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.OLTP):
+        # Workload: HTAP, TSR_HTAP, OLTP
         # These workloads have highest and require the data integrity. Thus, the commit_delay should be set to the
-        # minimum value. The commit_siblings are tuned by sizing at gtune phase so no actions here.
-        # However, since these workloads are run independently with request, the commit_siblings are good to go.
-        # For the TSR_HTAP, I am still not sure about this workload of which
-        after_commit_delay = K10 * 5 // 10
-        if commit_delay_hw_scope == PG_SIZING.LARGE:
-            after_commit_delay = K10 * 3 // 10
-        elif commit_delay_hw_scope == PG_SIZING.MALL:
-            after_commit_delay = K10 * 2 // 10
-        elif commit_delay_hw_scope == PG_SIZING.BIGT:
-            after_commit_delay = K10 * 1 // 10
+        # minimum value. The higher data rate change, the burden caused on the disk is large, so we want to minimize
+        # the disk impact, but hopefully we got UPS or BBU for the disk.
+        after_commit_delay = K10
     _item_tuning(key=commit_delay, after=int(after_commit_delay), scope=PG_SCOPE.QUERY_TUNING, response=response,
                  suffix_text=_suffix_text, before=managed_cache[commit_delay], _log_pool=_log_pool)
-
+    _item_tuning(key='commit_siblings', after=5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
+                 scope=PG_SCOPE.QUERY_TUNING, response=response,
+                 suffix_text=_suffix_text, before=managed_cache['commit_siblings'], _log_pool=_log_pool)
     return None
 
 
@@ -497,7 +477,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
         # The time resolution is 10 - 50 us on Linux (too small value could take a lot of CPU interrupts)
         # 10 us added here to prevent some CPU fluctuation could be observed in real-life
         _delay = max(0.05, after_autovacuum_vacuum_cost_delay + 0.02)
-
+    _delay += 0.005     # Adding 5us for the CPU interrupt and context switch
     autovacuum_max_page_per_cycle = floor(autovacuum_max_page_per_sec / K10 * _delay)
 
     # Since I tune for auto-vacuum, it is best to stick with MISS:DIRTY ratio is 4:1 ~ 6:1 --> 5:1 (5 pages reads, 1
@@ -554,7 +534,8 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
 def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
     _log_pool.append('Start tuning the WAL of the PostgreSQL database server based on the data integrity and HA '
                      'requirements. \nImpacted Attributes: wal_level, max_wal_senders, max_replication_slots, '
-                     'wal_sender_timeout, log_replication_commands, synchronous_commit, full_page_writes, fsync')
+                     'wal_sender_timeout, log_replication_commands, synchronous_commit, full_page_writes, fsync, '
+                     'logical_decoding_work_mem')
 
     replication_level: int = backup_description()[request.options.max_backup_replication_tool][1]
     num_replicas: int = (request.options.max_num_logical_replicas_on_primary +
@@ -604,21 +585,7 @@ def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: l
                  response=response, before=managed_cache[max_wal_senders], _log_pool=_log_pool)
 
     max_replication_slots = 'max_replication_slots'
-    reserved_replication_slots = _DEFAULT_WAL_SENDERS[0]
-    if request.options.versioning()[0] >= 15 and managed_cache[wal_level] == 'logical':
-        # Before PostgreSQL 15, conditional logical replication is not available and not completed, so we use
-        # num_replicas instead; but now the schema-based, row filter, partitioned tables can be replicated
-        # so we switch to use the max_num_logical_replicas_on_primary instead.
-        if request.options.max_num_logical_replicas_on_primary >= 8:
-            reserved_replication_slots = _DEFAULT_WAL_SENDERS[1]
-        elif request.options.max_num_logical_replicas_on_primary >= 16:
-            reserved_replication_slots = _DEFAULT_WAL_SENDERS[2]
-        after_max_replication_slots = reserved_replication_slots + request.options.max_num_logical_replicas_on_primary
-    else:
-        reserved_replication_slots = reserved_wal_senders
-        after_max_replication_slots = reserved_replication_slots + num_replicas  # Equivalent to max_wal_senders
-    _item_tuning(key=max_replication_slots, after=after_max_replication_slots,
-                 scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _item_tuning(key=max_replication_slots, after=after_max_wal_senders, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, before=managed_cache[max_replication_slots], _log_pool=_log_pool)
 
     # Tune the wal_sender_timeout
@@ -628,6 +595,12 @@ def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: l
         _item_tuning(key=wal_sender_timeout, after=after_wal_sender_timeout,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                      response=response, before=managed_cache[wal_sender_timeout], _log_pool=_log_pool)
+
+    # Tune the logical_decoding_work_mem
+    if managed_cache[wal_level] != 'logical':
+        _item_tuning(key='logical_decoding_work_mem', after=64 * Mi,
+                     scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+                     response=response, before=managed_cache['logical_decoding_work_mem'], _log_pool=_log_pool)
 
     # -------------------------------------------------------------------------
     # Tune the synchronous_commit, full_page_writes, fsync
@@ -850,8 +823,53 @@ def _get_wrk_mem_func():
         PG_PROFILE_OPTMODE.PRIMORDIAL: _func_v2,
     }
 
+
 def _get_wrk_mem(optmode: PG_PROFILE_OPTMODE, options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
     return _get_wrk_mem_func()[optmode](options, response)
+
+
+def _hash_mem_adjust(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
+    # -------------------------------------------------------------------------
+    # Tune the hash_mem_multiplier to use more memory when work_mem become large enough. Integrate between the
+    # iterative tuning.
+    hash_mem_multiplier = 'hash_mem_multiplier'
+    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    current_work_mem = managed_cache['work_mem']
+
+    after_hash_mem_multiplier = managed_cache[hash_mem_multiplier]
+    if request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.SEARCH,
+                                         PG_WORKLOAD.RAG, PG_WORKLOAD.GEOSPATIAL):
+        after_hash_mem_multiplier = min(2.0 + 0.125 * (current_work_mem // (40 * Mi)), 3.0)
+    elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE,
+                                           PG_WORKLOAD.TSR_OLAP):
+        after_hash_mem_multiplier = min(2.0 + 0.150 * (current_work_mem // (40 * Mi)), 3.0)
+    _item_tuning(key=hash_mem_multiplier, after=after_hash_mem_multiplier, scope=PG_SCOPE.MEMORY, response=response,
+                 suffix_text=f'by workload: {request.options.workload_type} and working memory {current_work_mem}',
+                 before=managed_cache[hash_mem_multiplier], _log_pool=None)
+
+
+def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, _log_pool: list[str], shared_buffers_ratio_increment: float,
+                          max_work_buffer_ratio_increment: float) -> tuple[bool, bool]:
+    # Trigger the increment / decrement
+    _kwargs = request.options.tuning_kwargs
+    sbuf_ok = False
+    wbuf_ok = False
+    try:
+        _kwargs.shared_buffers_ratio += shared_buffers_ratio_increment
+        sbuf_ok = True
+    except ValidationError as e:
+        _log_pool.append(f'WARNING: The shared_buffers_ratio cannot be incremented more. \nDetail: {e}')
+    try:
+        _kwargs.max_work_buffer_ratio += max_work_buffer_ratio_increment
+        wbuf_ok = True
+    except ValidationError as e:
+        _log_pool.append(f'WARNING: The max_work_buffer_ratio cannot be incremented more. \nDetail: {e}')
+
+    if not sbuf_ok and not wbuf_ok:
+        _log_pool.append(f'WARNING: The shared_buffers and work_mem are not increased as the condition is met '
+                         f'or being unchanged, or converged -> Stop ...')
+
+    return sbuf_ok, wbuf_ok
 
 
 @time_decorator
@@ -862,6 +880,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
     # Note that at this phase, we don't trigger auto-tuning from other function
 
     # Additional workload for specific workload
+    _hash_mem_adjust(request, response) # Ensure the hash_mem adjustment is there before the tuning.
     if request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
         # Disable the additional memory tuning as these workload does not make benefits when increase the memory
         request.options.opt_mem_pool = PG_PROFILE_OPTMODE.NONE
@@ -888,6 +907,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
                 PG_SCOPE.QUERY_TUNING: ('effective_cache_size',),
                 PG_SCOPE.MAINTENANCE: ('vacuum_buffer_usage_limit',),
             }, request, response, _log_pool)
+            _hash_mem_adjust(request, response)
 
         return None
     elif request.options.opt_mem_pool == PG_PROFILE_OPTMODE.NONE:
@@ -923,78 +943,47 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
                                    for scope, func in _get_wrk_mem_func().items()])
     _log_pool.append(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.'
                      f'\nNOTICE: Expected maximum memory usage in normal condition: {stop_point * 100:.2f} (%) of '
-                     f'{srv_mem_str}')
+                     f'{srv_mem_str} or {bytesize_to_hr(int(usable_ram_noswap * stop_point))}.')
 
     # Trigger the tuning
-    count: int = 0
     shared_buffers_ratio_increment = boost_ratio * 2.0 * _kwargs.mem_pool_tuning_ratio
     max_work_buffer_ratio_increment = boost_ratio * 2.0 * (1 - _kwargs.mem_pool_tuning_ratio)
     working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
 
-    # Save state before to stop if convergent is not met
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
-    state = (managed_cache['shared_buffers'], managed_cache['temp_buffers'], managed_cache['work_mem'])
-    while working_memory / usable_ram_noswap < stop_point:
-        # Trigger the increment
-        sbuf_ok = False
-        wbuf_ok = False
-        try:
-            _kwargs.shared_buffers_ratio += shared_buffers_ratio_increment
-            sbuf_ok = True
-        except ValidationError as e:
-            _log_pool.append(f'WARNING: The shared_buffers_ratio cannot be incremented more. \nDetail: {e}')
-        try:
-            _kwargs.max_work_buffer_ratio += max_work_buffer_ratio_increment
-            wbuf_ok = True
-        except ValidationError as e:
-            _log_pool.append(f'WARNING: The max_work_buffer_ratio cannot be incremented more. \nDetail: {e}')
+    # Here is our expected algorithms:
+    # connection_mem (const) + shared_buffers_ratio * usable_ram + (1 - shared_buffers_ratio) * usable_ram
+    # * work_buffer_ratio < stop_point. Since the connection_memory is always larger than zero, we can make estimation
+    # and then of a large initial jump and reduce back later. We don't care whether is it too over the limit or not.
+    # Since on average user want to fully utilize their RAM usage better so think this as a fast path.
 
-        if not sbuf_ok and not wbuf_ok:
-            _log_pool.append(f'WARNING: The shared_buffers and work_mem are not increased as the condition is met '
-                             f'or being unchanged, or converged -> Stop ...')
-            break
+    # Find x so that (shared_buffers_ratio + x * shared_buffers_ratio_increment) + (1 - shared_buffers_ratio) *
+    # (max_work_buffer_ratio + x * max_work_buffer_ratio_increment) < stop_point
+    # >> x < (stop_point - shared_buffers_ratio - (1 - shared_buffers_ratio) * max_work_buffer_ratio) /
+    # (shared_buffers_ratio_increment + (1 - shared_buffers_ratio) * max_work_buffer_ratio_increment)
 
-        _trigger_tuning(keys, request, response, _log_pool)
+    # Use ceil to gain higher bound
+    x = ceil((stop_point - _kwargs.shared_buffers_ratio - (1 - _kwargs.shared_buffers_ratio) * _kwargs.max_work_buffer_ratio) / (
+            shared_buffers_ratio_increment + (1 - _kwargs.shared_buffers_ratio) * max_work_buffer_ratio_increment))
+    if x > 0:
+        # We don't care whether is it too over the limit or not. Since on average user want to fully utilize their
+        # RAM usage better so think this as a fast path.
+        _wrk_mem_tune_oneshot(request, _log_pool, shared_buffers_ratio_increment * x,
+                              max_work_buffer_ratio_increment * x)
+        _trigger_tuning(keys, request, response, _log_pool=None)
+        _hash_mem_adjust(request, response)
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
-        working_memory_ratio = working_memory / usable_ram_noswap
-        _logger.debug(f'Iteration #{count}: The working memory usage based on memory profile increased to '
-                      f'{bytesize_to_hr(working_memory)} or {working_memory_ratio * 100:.2f} (%) of {srv_mem_str}.')
-        if working_memory_ratio >= stop_point:
-            _log_pool.append(f'WARNING: The working memory usage is over the expected condition. Check if '
-                             f'require rollback ...')
-            if working_memory_ratio >= rollback_point:
-                _log_pool.append(f'WARNING: The working memory usage ratio is over the expected condition by '
-                                 f'{(working_memory_ratio - rollback_point) * 100:.2f} (%). Requesting a rollback ...')
-                if sbuf_ok:
-                    _kwargs.shared_buffers_ratio -= shared_buffers_ratio_increment
-                if wbuf_ok:
-                    _kwargs.max_work_buffer_ratio -= max_work_buffer_ratio_increment
-                _trigger_tuning(keys, request, response, _log_pool)
-            else:
-                _log_pool.append(f'NOTICE: The working memory usage is a bit over the expected condition but no '
-                                 f'rollback is requested ...')
-            break
+        _logger.debug(f'Large jump by {x} steps: The working memory usage based on memory profile increased to '
+                      f'{bytesize_to_hr(working_memory)} or {working_memory / usable_ram_noswap * 100:.2f} (%) '
+                      f'of {srv_mem_str}.')
 
-        # Result verbose
-        count += 1
-        if count % 5 == 0:
-            _show_tuning_result(f'Result (Iteration #{count}): ')
+    # Now we trigger our one-step decay until we find the optimal point.
+    while working_memory >= rollback_point * usable_ram_noswap:
+        _wrk_mem_tune_oneshot(request, _log_pool, 0 - shared_buffers_ratio_increment,
+                              0 - max_work_buffer_ratio_increment)
+        _trigger_tuning(keys, request, response, _log_pool=None)
+        _hash_mem_adjust(request, response)
+        working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
 
-        # If we have been capped by the algorithm during the general tuning phase
-        new_state = (managed_cache['shared_buffers'], managed_cache['temp_buffers'], managed_cache['work_mem'])
-        if all(old == new for old, new in zip(state, new_state)):
-            break
-
-        # Iteration check
-        if _kwargs.mem_pool_max_iterations == 0:
-            continue
-        elif count >= _kwargs.mem_pool_max_iterations:
-            _log_pool.append(f'WARNING: The shared_buffers and work_mem are not increased as the maximum iteration '
-                             f'({_kwargs.mem_pool_max_iterations}) is reached -> Stop ...')
-            break
-
-    # Result display here
-    _log_pool.append(f'The shared_buffers and work_mem are increased by {count} iteration(s).')
     _log_pool.append(f'The shared_buffers_ratio is now {_kwargs.shared_buffers_ratio:.5f}.')
     _log_pool.append(f'The max_work_buffer_ratio is now {_kwargs.max_work_buffer_ratio:.5f}.')
     _show_tuning_result('Result (after): ')
@@ -1003,54 +992,6 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
     _log_pool.append(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.')
 
     return None
-
-
-@time_decorator
-def _wrk_mem_tune_final(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
-    # -------------------------------------------------------------------------
-    # Tune the hash_mem_multiplier to use more memory.
-    # TODO: I don't think hash_mem_multiplier is a good idea to tune here. It should be tuned under the while loop a
-    # above, but there is not any effective way. But because not everything is hash-based operation so I think it is
-    # OK then
-    _log_pool.append('Start tuning the hash_mem_multiplier of the PostgreSQL database server based on the database '
-                     'workload and working memory. \nImpacted Attributes: hash_mem_multiplier')
-    hash_mem_multiplier = 'hash_mem_multiplier'
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
-    current_work_mem = managed_cache['work_mem']
-
-    after_hash_mem_multiplier = managed_cache[hash_mem_multiplier]
-    if request.options.workload_type in (PG_WORKLOAD.OLTP,):
-        if current_work_mem >= 40 * Mi:
-            after_hash_mem_multiplier = 2.25
-    elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.SEARCH,
-                                           PG_WORKLOAD.RAG, PG_WORKLOAD.GEOSPATIAL):
-        if current_work_mem >= 40 * Mi:
-            after_hash_mem_multiplier = 2.25
-        elif current_work_mem >= 70 * Mi:
-            after_hash_mem_multiplier = 2.50
-        elif current_work_mem >= 100 * Mi:
-            after_hash_mem_multiplier = 2.75
-    elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE,
-                                           PG_WORKLOAD.TSR_OLAP):
-        if current_work_mem >= 40 * Mi:
-            after_hash_mem_multiplier = 2.50
-        elif current_work_mem >= 80 * Mi:
-            after_hash_mem_multiplier = 2.75
-        elif current_work_mem >= 120 * Mi:
-            after_hash_mem_multiplier = 3.0
-    else:
-        _log_pool.append('WARNING: The hash_mem_multiplier is not updated due to the workload type is not matched our '
-                         'experience.')
-
-    if after_hash_mem_multiplier != managed_cache[hash_mem_multiplier]:
-        _log_pool.append(f'WARNING The hash_mem_multiplier is updated to {after_hash_mem_multiplier} due to the '
-                         f'over-sized of the work_mem and the workload type. The keywords max_normal_memory_usage is '
-                         f'expected to be bypassed, but hopefully not too much.')
-
-    _item_tuning(key=hash_mem_multiplier, after=after_hash_mem_multiplier, scope=PG_SCOPE.MEMORY, response=response,
-                 suffix_text=f'by workload: {request.options.workload_type} and working memory {current_work_mem}',
-                 before=managed_cache[hash_mem_multiplier], _log_pool=_log_pool)
-
 
 # =============================================================================
 @time_decorator
@@ -1080,13 +1021,13 @@ def _logger_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
                  scope=PG_SCOPE.EXTRA, response=response, _log_pool=_log_pool)
 
     # Tune the IO timing
-    _item_tuning(key='track_counts', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_log_pool)
-    _item_tuning(key='track_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
-                 _log_pool=_log_pool)
-    _item_tuning(key='track_wal_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
-                 _log_pool=_log_pool)
-    _item_tuning(key='auto_explain.log_timing', after='on', scope=PG_SCOPE.EXTRA, response=response,
-                 _log_pool=_log_pool)
+    # _item_tuning(key='track_counts', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_log_pool)
+    # _item_tuning(key='track_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
+    #              _log_pool=_log_pool)
+    # _item_tuning(key='track_wal_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
+    #              _log_pool=_log_pool)
+    # _item_tuning(key='auto_explain.log_timing', after='on', scope=PG_SCOPE.EXTRA, response=response,
+    #              _log_pool=_log_pool)
     return None
 
 
@@ -1153,7 +1094,6 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     # Working Memory Tuning
     _wrk_mem_log = ['\n ===== Working Memory Tuning =====']
     _wrk_mem_tune(request, response, _wrk_mem_log)
-    _wrk_mem_tune_final(request, response, _wrk_mem_log)
 
     if len(_wrk_mem_log) > 1:
         _logger.info('\n'.join(_wrk_mem_log))

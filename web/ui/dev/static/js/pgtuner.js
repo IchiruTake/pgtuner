@@ -151,6 +151,8 @@ function update_response(id, value) {
 }
 
 async function submitConfiguration() {
+    update_response('response-box', 'Loading...');
+    update_response('mem-report', 'Loading...');
     const rawParams = gatherFormValues();
     const processedParams = preprocessParameters(rawParams);
     let body = {
@@ -162,8 +164,6 @@ async function submitConfiguration() {
     };
     body = JSON.stringify(body, null, 2);
     try {
-        update_response('response-box', 'Loading...');
-        update_response('mem-report', 'Loading...');
         const response = await fetch('/tune', {
             method: 'POST',
             headers: {

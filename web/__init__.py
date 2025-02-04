@@ -4,11 +4,10 @@ import random
 from contextlib import asynccontextmanager
 import os
 import gzip
-from datetime import datetime
 import time
 from typing import Annotated
 
-from fastapi import FastAPI, Header, Path
+from fastapi import FastAPI, Header
 from fastapi import status
 from fastapi.responses import ORJSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
@@ -17,13 +16,13 @@ from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import pgtuner
-from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, Ki, Gi, MINUTE, \
+from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
     SECOND, DAY
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.utils.env import OsGetEnvBool
 from web.middlewares.compressor import CompressMiddleware
-from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware
+from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware, AutoCacheControlMiddleware
 from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
 
 # ==================================================================================================
@@ -69,7 +68,7 @@ async def app_lifespan(application: ASGIApp | FastAPI):
 
 
 # ==================================================================================================
-__version__ = '0.0.1'
+__version__ = '0.1.0'
 app: FastAPI = FastAPI(
     debug=False,
     title=APP_NAME_UPPER,
@@ -105,6 +104,8 @@ to be a structured approach for various profiles and settings (easily customizab
 
 # ==================================================================================================
 _logger.info('The FastAPI application has been initialized. Adding the middlewares ...')
+# 0: Development, 1: Production
+_app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
 try:
     from starlette.middleware.sessions import SessionMiddleware # itsdangerous
     import string
@@ -129,7 +130,6 @@ _gzip_com_level = int(os.getenv(f'FASTAPI_GZIP_COMPRESSION_LEVEL', '6'))
 _zstd = OsGetEnvBool(f'FASTAPI_ZSTD', True)
 _zstd_min_size = int(os.getenv(f'FASTAPI_ZSTD_MIN_SIZE', '512'))
 _zstd_com_level = int(os.getenv(f'FASTAPI_ZSTD_COMPRESSION_LEVEL', '3'))
-
 if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
     _base_min_size = int(os.getenv(f'FASTAPI_BASE_MIN_SIZE', '512'))  # 512 bytes or 512 length-unit
     _base_com_level = int(os.getenv(f'FASTAPI_BASE_COMPRESSION_LEVEL', '6'))  # 6: Default compression level
@@ -137,11 +137,17 @@ if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
                        gzip_enabled=_gzip, gzip_minimum_size=_gzip_min_size, gzip_compress_level=_gzip_com_level,
                        zstd_enabled=_zstd, zstd_minimum_size=_zstd_min_size, zstd_compress_level=_zstd_com_level)
 
+# Auto-Cache Middleware
+_private_cache = 'private, must-revalidate'
+_static_cache = (f'max-age={45 * SECOND if _app_dev_mode else 30 * MINUTE}, {_private_cache}, '
+                 f'stale-while-revalidate={30 * SECOND if _app_dev_mode else 3 * MINUTE}')
+_dynamic_cache = 'no-cache'
+app.add_middleware(AutoCacheControlMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
+
 _logger.info('The middlewares have been added to the application ...')
 # ==================================================================================================
 _logger.info('Mounting the static files to the application ...')
-# 0: Development, 1: Production
-_app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
+
 _logger.info(f'Application Developer Mode: {_app_dev_mode}')
 _env_tag = 'dev' if _app_dev_mode else 'prd'
 _default_path = f'./web/ui/{_env_tag}/static'
@@ -167,7 +173,7 @@ async def root_min():
         url='/static/index.min.html',
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={
-            'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
+            'Cache-Control': _static_cache,
         }
     )
 
@@ -178,7 +184,7 @@ async def root_dev():
         url='/static/index.html',
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={
-            'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
+            'Cache-Control': _static_cache,
         }
     )
 
@@ -189,8 +195,7 @@ async def root():
         url='/static/index.html',
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={
-            'Cache-Control': f'max-age={HOUR if _app_dev_mode else 30 * SECOND}, '
-                             f'private, must-revalidate, stale-while-revalidate={5 * MINUTE}',
+            'Cache-Control': _static_cache,
         }
     )
 
@@ -214,7 +219,7 @@ async def js(
         'Content-Type': 'application/javascript',
         'Last-Modified': mtime,
         'Etag': str(hash(content)),
-        'Cache-Control': f'max-age={HOUR}, private, must-revalidate, stale-while-revalidate={5 * MINUTE}',
+        'Cache-Control': _static_cache,
     }
     if accept_encoding and 'gzip' in accept_encoding and len(content) > _gzip_min_size:
         content = gzip.compress(content.encode(), compresslevel=_gzip_com_level)
@@ -230,7 +235,7 @@ async def health():
         content={'status': 'HEALTHY'},
         status_code=status.HTTP_200_OK,
         headers={
-            'Cache-Control': f'max-age={30 * SECOND}, s-maxage={30 * SECOND}, private, must-revalidate'
+            'Cache-Control': f'max-age={45 * SECOND}, s-maxage={45 * SECOND}, {_private_cache}'
         }
     )
 
@@ -264,7 +269,8 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
         )
 
     # pprint(backend_request.options)
-    exclude_names = {'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command'}
+    exclude_names = {'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
+                     'log_directory',}
     response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
     content = response.generate_content(
         target=PGTUNER_SCOPE.DATABASE_CONFIG,

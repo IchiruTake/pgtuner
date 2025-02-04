@@ -119,6 +119,12 @@ class PG_TUNE_RESPONSE(BaseModel):
 
     def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
                  ignore_report: bool = True, skip_logger: bool = False) -> tuple[str, int | float]:
+        def pow_avg(*args: int | float, level: int | float = 2, round_ndigits: int | None = 4):
+            if level == 0:
+                _logger.debug('The level must be different than 0. Set to 1e-8')
+                level = 1e-8
+            return round((sum(arg ** level for arg in args) / len(args)) ** (1 / level), ndigits=round_ndigits)
+
         # Cache result first
         _kwargs = options.tuning_kwargs
         usable_ram_noswap = options.usable_ram_noswap
@@ -144,7 +150,12 @@ class PG_TUNE_RESPONSE(BaseModel):
         temp_buffers = managed_cache['temp_buffers']
         work_mem = managed_cache['work_mem']
         hash_mem_multiplier = managed_cache['hash_mem_multiplier']
-        total_working_memory = (temp_buffers + work_mem * hash_mem_multiplier)
+
+        # Higher level would assume more hash-based operations, which reduce the work_mem in correction-tuning phase
+        # Smaller level would assume less hash-based operations, which increase the work_mem in correction-tuning phase
+        # real_world_work_mem = work_mem * hash_mem_multiplier
+        real_world_work_mem = work_mem * pow_avg(1, hash_mem_multiplier, level=-2)
+        total_working_memory = (temp_buffers + real_world_work_mem)
         total_working_memory_hr = bytesize_to_hr(total_working_memory)
 
         max_total_memory_used = shared_buffers + wal_buffers + os_conn_overhead
@@ -159,13 +170,13 @@ class PG_TUNE_RESPONSE(BaseModel):
         num_parallel_workers = min(managed_cache['max_parallel_workers'], managed_cache['max_worker_processes'])
         num_sessions, remain_workers = divmod(num_parallel_workers, managed_cache['max_parallel_workers_per_gather'])
         num_sessions_in_parallel = num_sessions + (1 if remain_workers > 0 else 0)
-        parallel_work_mem_total: int = hash_mem_multiplier * work_mem * (num_parallel_workers + num_sessions_in_parallel)
-        parallel_work_mem_in_session = hash_mem_multiplier * work_mem * (1 + managed_cache['max_parallel_workers_per_gather'])
+        parallel_work_mem_total: int = real_world_work_mem * (num_parallel_workers + num_sessions_in_parallel)
+        parallel_work_mem_in_session = real_world_work_mem * (1 + managed_cache['max_parallel_workers_per_gather'])
 
         # Ensure the number of active user connections always larger than the num_sessions
         # The maximum 0 here is meant that all connections can have full parallelism
         num_sessions_not_in_parallel = max(0, num_user_conns - num_sessions_in_parallel)
-        single_work_mem_total = hash_mem_multiplier * work_mem * num_sessions_not_in_parallel
+        single_work_mem_total = real_world_work_mem * num_sessions_not_in_parallel
 
         max_total_memory_used_with_parallel = shared_buffers + wal_buffers + os_conn_overhead
         max_total_memory_used_with_parallel += (parallel_work_mem_total + single_work_mem_total)
@@ -190,15 +201,15 @@ class PG_TUNE_RESPONSE(BaseModel):
         wal20 = wal_time_partial(data_amount_ratio=2.0)
 
         # Vacuum and Maintenance
-        autovacuum_work_mem_real_value = managed_cache['autovacuum_work_mem']
-        if autovacuum_work_mem_real_value == -1:
-            autovacuum_work_mem_real_value = managed_cache['maintenance_work_mem']
+        real_autovacuum_work_mem = managed_cache['autovacuum_work_mem']
+        if real_autovacuum_work_mem == -1:
+            real_autovacuum_work_mem = managed_cache['maintenance_work_mem']
         if options.versioning()[0] < 17:
             # The VACUUM use adaptive radix tree which performs better and not being silently capped at 1 GiB
             # since PostgreSQL 17+
             # https://www.postgresql.org/docs/17/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM
             # and https://www.postgresql.org/docs/16/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM
-            autovacuum_work_mem_real_value = min(1 * Gi, autovacuum_work_mem_real_value)
+            real_autovacuum_work_mem = min(1 * Gi, real_autovacuum_work_mem)
 
         # Checkpoint Timing
         data_iops = options.data_index_spec.raid_perf()[1]
@@ -206,6 +217,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         checkpoint_completion_target = managed_cache['checkpoint_completion_target']
         checkpoint_time_partial = partial(checkpoint_time, checkpoint_timeout_second=checkpoint_timeout,
                                           checkpoint_completion_target=checkpoint_completion_target,
+                                          wal_disk_tput=options.wal_spec.raid_perf()[0],
                                           data_disk_iops=data_iops, wal_buffers=wal_buffers,
                                           wal_segment_size=_kwargs.wal_segment_size)
         ckpt01 = checkpoint_time_partial(data_amount_ratio=_kwargs.wal_segment_size / wal_buffers)  # 1 WAL buffers
@@ -215,7 +227,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         ckpt10k = checkpoint_time_partial(data_amount_ratio=1000.0)
 
         # Background Writers
-        bgwriter_page_per_second = managed_cache['bgwriter_lru_maxpages'] * (K10 / managed_cache['bgwriter_delay'])
+        bgwriter_page_per_second = ceil(managed_cache['bgwriter_lru_maxpages'] * (K10 / managed_cache['bgwriter_delay']))
         bgwriter_throughput = PG_DISK_PERF.iops_to_throughput(bgwriter_page_per_second)
 
         # Auto-vacuum and Maintenance Calculator
@@ -265,24 +277,20 @@ Report Summary (memory, over usable RAM):
     - The total maximum working memory (assuming with one full use of work_mem and temp_buffers):
         + SINGLE: {total_working_memory_hr} per user connections or {total_working_memory / usable_ram_noswap * 100:.2f} (%)
             -> Temp Buffers: {bytesize_to_hr(temp_buffers)} :: Work Mem: {bytesize_to_hr(work_mem)}
-            -> Hash Mem Multiplier: {hash_mem_multiplier}
-            -> Total Working Memory: {total_working_memory / usable_ram_noswap * 100:.2f} (%)
-        + Parallel Estimation (ignore temp_buffers): 
-            -> Parallel Workers: 
-                * Gather Workers: {managed_cache['max_parallel_workers_per_gather']}
-                * Worker in Pool: {managed_cache['max_parallel_workers']} << Workers Process: {managed_cache['max_worker_processes']}
+            -> Hash Mem Multiplier: {hash_mem_multiplier} :: Real-World Work Mem: {bytesize_to_hr(real_world_work_mem)}
+        + PARALLEL: 
+            -> Workers :: Gather Workers={managed_cache['max_parallel_workers_per_gather']} :: Worker in Pool={managed_cache['max_parallel_workers']} << Workers Process={managed_cache['max_worker_processes']} 
             -> Parallelized Session: {num_sessions_in_parallel} :: Non-parallelized Session: {num_sessions_not_in_parallel}
             -> Work memory assuming single query (1x work_mem)
                 * Total parallelized sessions = {num_sessions} with {num_sessions_in_parallel - num_sessions} leftover session
-                * Maximum work memory in parallelized session(s):
+                * Maximum work memory in parallelized session(s) without temp_buffers :
                     - 1 parallelized session: {bytesize_to_hr(parallel_work_mem_in_session)} or {parallel_work_mem_in_session / usable_ram_noswap * 100:.2f} (%)
                     - Total (in parallel): {bytesize_to_hr(parallel_work_mem_total)} or {parallel_work_mem_total / usable_ram_noswap * 100:.2f} (%)
                     - Total (in single): {bytesize_to_hr(single_work_mem_total)} or {single_work_mem_total / usable_ram_noswap * 100:.2f} (%)
-                * Maximum work memory in parallelized session with temp_buffers:
+                * Maximum work memory in parallelized session(s) with temp_buffers:
                     - 1 parallelized session: {bytesize_to_hr(parallel_work_mem_in_session + temp_buffers)} or {(parallel_work_mem_in_session + temp_buffers) / usable_ram_noswap * 100:.2f} (%)
                     - Total (in parallel): {bytesize_to_hr(parallel_work_mem_total + temp_buffers * num_sessions_in_parallel)} or {(parallel_work_mem_total + temp_buffers * num_sessions_in_parallel) / usable_ram_noswap * 100:.2f} (%)
                     - Total (in single): {bytesize_to_hr(single_work_mem_total + temp_buffers * num_sessions_not_in_parallel)} or {(single_work_mem_total + temp_buffers * num_sessions_not_in_parallel) / usable_ram_noswap * 100:.2f} (%)
-    - Work mem scale factor: {_kwargs.work_mem_scale_factor} -> Followed the normal calculation: {_kwargs.work_mem_scale_factor == 1.0}
     - Effective Cache Size: {bytesize_to_hr(effective_cache_size)} or {effective_cache_size / usable_ram_noswap * 100:.2f} (%)
 
 * Zero parallelized session >> Memory in use: {max_total_memory_used_hr}
@@ -302,9 +310,9 @@ Report Summary (others):
 ----------------------- 
 * Maintenance and (Auto-)Vacuum:
     - Autovacuum working memory (by definition): {managed_cache['autovacuum_work_mem']} --> Maintenance Work Mem: {bytesize_to_hr(managed_cache['maintenance_work_mem'])}
-        + Autovacuum working memory on 1 worker: {bytesize_to_hr(autovacuum_work_mem_real_value)}
+        + Autovacuum working memory on 1 worker: {bytesize_to_hr(real_autovacuum_work_mem)}
         + Autovacuum max workers: {managed_cache['autovacuum_max_workers']}
-        + Autovacuum total memory: {bytesize_to_hr(autovacuum_work_mem_real_value * managed_cache['autovacuum_max_workers'])} or {autovacuum_work_mem_real_value * managed_cache['autovacuum_max_workers'] / usable_ram_noswap * 100:.2f} (%)
+        + Autovacuum total memory: {bytesize_to_hr(real_autovacuum_work_mem * managed_cache['autovacuum_max_workers'])} or {real_autovacuum_work_mem * managed_cache['autovacuum_max_workers'] / usable_ram_noswap * 100:.2f} (%)
         + Parallelism:
             -> Maintenance workers: {managed_cache['max_parallel_maintenance_workers']}
             -> Maintenance total memory: {bytesize_to_hr(managed_cache['maintenance_work_mem'] * managed_cache['max_parallel_maintenance_workers'])} or {managed_cache['maintenance_work_mem'] * managed_cache['max_parallel_maintenance_workers'] / usable_ram_noswap * 100:.2f} (%)
@@ -334,9 +342,9 @@ Report Summary (others):
                 Disk Safety: {vacuum_report['max_miss_data'] < data_iops} (< Data Disk IOPS)
             -> Dirty (page in data disk volume): Maximum {vacuum_report['max_num_dirty_page']} pages or Disk throughput {vacuum_report['max_dirty_data']:.2f} MiB/s
                 Disk Safety: {vacuum_report['max_dirty_data'] < data_iops} (< Data Disk IOPS)
-        + Other Scenarios with H:M:D ratio as 5:5:1, or 1:1:1
-            -> 5:5:1 (frequent) -> {vacuum_report['5:5:1_page'] * 6} pages on disk requesting disk throughput of {vacuum_report['5:5:1_data']:.2f} MiB/s
-            -> 1:1:1 (rarely) -> {vacuum_report['1:1:1_page'] * 3} pages on disk requesting disk throughput of {vacuum_report['1:1:1_data']:.2f} MiB/s
+        + Other Scenarios with H:M:D ratio as 5:5:1 (frequent), or 1:1:1 (rarely)
+            5:5:1 or {vacuum_report['5:5:1_page'] * 6} disk pages -> IOPS capacity of {vacuum_report['5:5:1_data']:.2f} MiB/s (write={vacuum_report['5:5:1_data'] * 1 / 6:.2f} MiB/s)
+            1:1:1 or {vacuum_report['1:1:1_page'] * 3} disk pages -> IOPS capacity of {vacuum_report['1:1:1_data']:.2f} MiB/s (write={vacuum_report['1:1:1_data'] * 1 / 2:.2f} MiB/s)
     - Transaction ID Wraparound and Anti-Wraparound Vacuum:
         + Workload Write Transaction per Hour: {_kwargs.num_write_transaction_per_hour_on_workload}
         + TXID Vacuum :: Minimum={min_hr_txid:.2f} hrs :: Manual={norm_hr_txid:.2f} hrs :: Auto-forced={max_hr_txid:.2f} hrs
@@ -353,29 +361,39 @@ Report Summary (others):
     - Parallelism :: Setup={managed_cache['parallel_setup_cost']} :: Tuple={managed_cache['parallel_tuple_cost']:.2f}
     - Batched Commit Delay: {managed_cache['commit_delay']} (ms)
     - Checkpoint: 
-        + Timeout at {checkpoint_timeout} seconds with Checkpoint Completion Target: {checkpoint_completion_target}
-        + Analyze Checkpoint Time (ensure the checkpoint can be written within the timeout):
+        + Effective Timeout: {checkpoint_timeout * checkpoint_completion_target:.1f} seconds ({checkpoint_timeout}::{checkpoint_completion_target})
+        + Analyze Checkpoint Time (ensure the checkpoint can be written within the timeout and ignore dirty buffers on-the-go):
             -> 1 WAL file:
                 * Data Amount: {bytesize_to_hr(ckpt01['data_amount'])} :: {ckpt01['page_amount']} pages :: {ckpt01['wal_amount']} WAL files
-                * Expected Time: {ckpt01['data_written_time']} seconds with {ckpt01['data_disk_utilization'] * 100:.2f} (%) of WRITE utilization
-                * Safe Test :: Time-based Check <- {ckpt01['data_written_time'] <= checkpoint_timeout} :: Utilization-based Check <- {ckpt01['data_disk_utilization'] <= 1.0}            
+                * Expected Time:
+                    - READ: {ckpt01['wal_read_time']} seconds with {ckpt01['wal_disk_utilization'] * 100:.2f} (%) utilization
+                    - WRITE: {ckpt01['data_write_time']} seconds with {ckpt01['data_disk_utilization'] * 100:.2f} (%) utilization
+                * Safe Test :: Time-based Check <- {ckpt01['data_write_time'] + ckpt01['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}            
             -> 5.0x WAL Buffers (General):
                 * Data Amount: {bytesize_to_hr(ckpt50['data_amount'])} :: {ckpt50['page_amount']} pages :: {ckpt50['wal_amount']} WAL files
-                * Expected Time: {ckpt50['data_written_time']} seconds with {ckpt50['data_disk_utilization'] * 100:.2f} (%) of WRITE utilization
-                * Safe Test :: Time-based Check <- {ckpt50['data_written_time'] <= checkpoint_timeout} :: Utilization-based Check <- {ckpt50['data_disk_utilization'] <= 1.0}
+                * Expected Time:
+                    - READ: {ckpt50['wal_read_time']} seconds with {ckpt50['wal_disk_utilization'] * 100:.2f} (%) utilization
+                    - WRITE: {ckpt50['data_write_time']} seconds with {ckpt50['data_disk_utilization'] * 100:.2f} (%) utilization
+                * Safe Test :: Time-based Check <- {ckpt50['data_write_time'] + ckpt50['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
             -> 50.0x WAL Buffers (Heavy):
                 * Data Amount: {bytesize_to_hr(ckpt500['data_amount'])} :: {ckpt500['page_amount']} pages :: {ckpt500['wal_amount']} WAL files
-                * Expected Time: {ckpt500['data_written_time']} seconds with {ckpt500['data_disk_utilization'] * 100:.2f} (%) of WRITE utilization
-                * Safe Test :: Time-based Check <- {ckpt500['data_written_time'] <= checkpoint_timeout} :: Utilization-based Check <- {ckpt500['data_disk_utilization'] <= 1.0}
+                * Expected Time:
+                    - READ: {ckpt500['wal_read_time']} seconds with {ckpt500['wal_disk_utilization'] * 100:.2f} (%) utilization
+                    - WRITE: {ckpt500['data_write_time']} seconds with {ckpt500['data_disk_utilization'] * 100:.2f} (%) utilization
+                * Safe Test :: Time-based Check <- {ckpt500['data_write_time'] + ckpt500['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
             -> 250.0x WAL Buffers (Extreme):
                 * Data Amount: {bytesize_to_hr(ckpt2500['data_amount'])} :: {ckpt2500['page_amount']} pages :: {ckpt2500['wal_amount']} WAL files
-                * Expected Time: {ckpt2500['data_written_time']} seconds with {ckpt2500['data_disk_utilization'] * 100:.2f} (%) of WRITE utilization
-                * Safe Test :: Time-based Check <- {ckpt2500['data_written_time'] <= checkpoint_timeout} :: Utilization-based Check <- {ckpt2500['data_disk_utilization'] <= 1.0}
+                * Expected Time:
+                    - READ: {ckpt2500['wal_read_time']} seconds with {ckpt2500['wal_disk_utilization'] * 100:.2f} (%) utilization
+                    - WRITE: {ckpt2500['data_write_time']} seconds with {ckpt2500['data_disk_utilization'] * 100:.2f} (%) utilization
+                * Safe Test :: Time-based Check <- {ckpt2500['data_write_time'] + ckpt2500['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
             -> 1000.0x WAL Buffers (Crazy to Insane):
                 * Data Amount: {bytesize_to_hr(ckpt10k['data_amount'])} :: {ckpt10k['page_amount']} pages :: {ckpt10k['wal_amount']} WAL files
-                * Expected Time: {ckpt10k['data_written_time']} seconds with {ckpt10k['data_disk_utilization'] * 100:.2f} (%) of WRITE utilization
-                * Safe Test :: Time-based Check <- {ckpt10k['data_written_time'] <= checkpoint_timeout} :: Utilization-based Check <- {ckpt10k['data_disk_utilization'] <= 1.0}
-            
+                * Expected Time:
+                    - READ: {ckpt10k['wal_read_time']} seconds with {ckpt10k['wal_disk_utilization'] * 100:.2f} (%) utilization
+                    - WRITE: {ckpt10k['data_write_time']} seconds with {ckpt10k['data_disk_utilization'] * 100:.2f} (%) utilization
+                * Safe Test :: Time-based Check <- {ckpt10k['data_write_time'] + ckpt10k['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
+                
 * Write-Ahead Logging and Data Integrity:
     - WAL Level: {managed_cache['wal_level']} with {managed_cache['wal_compression']} compression algorithm 
     - WAL Segment Size (1 file): {bytesize_to_hr(_kwargs.wal_segment_size)}

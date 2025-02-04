@@ -32,7 +32,7 @@ SERVER_HOSTNAME: str = socket.gethostname()  # We don't use FQDN here
 if WEB_MODE:
     SERVER_HOSTNAME = '<postgres-host>'
 
-PG_ARCHIVE_DIR = '/mnt/<any-storage-host>/<postgresql-hostname>/postgresql/archive/wal'
+PG_ARCHIVE_DIR = '/var/lib/postgresql/mnt/archive/wal'
 PG_LOG_DIR = '/var/log/postgresql'
 
 BASE_ENTRY_READER_DIR: str = os.path.expanduser(f'./.{APP_NAME_LOWER}')

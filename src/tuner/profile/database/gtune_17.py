@@ -8,9 +8,9 @@ from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, rewrite_items, type_validation
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
 from src.utils.dict_deepmerge import deepmerge
-from src.utils.pydantic_utils import bytesize_to_postgres_unit, realign_value, cap_value
+from src.utils.pydantic_utils import realign_value, cap_value
 
-__all__ = ["DB17_CONFIG_PROFILE"]
+__all__ = ['DB17_CONFIG_PROFILE']
 _SIZING = ByteSize | int | float
 _logger = logging.getLogger(APP_NAME_UPPER)
 
@@ -39,7 +39,7 @@ _DB_VACUUM_PROFILE = {
                    'range from 128 kB to 16 GB. If the specified size would exceed 1/8 the size of shared_buffers, '
                    'the size is silently capped to that value. The default value is 2MB. Our result is based on the '
                    'memory profile which can be ranged from 1/16 to 1/64 of shared buffers',
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi, min_unit=Ki)}MB",
+        'partial_func': lambda value: f"{value // Mi}MB",
     }
 }
 

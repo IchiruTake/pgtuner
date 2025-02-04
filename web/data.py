@@ -72,15 +72,13 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     shared_buffers_fill_ratio: PositiveFloat = Field(default=0.995, ge=0.95, le=1.0)
     max_work_buffer_ratio: PositiveFloat = Field(default=0.075, gt=0, le=0.50)
     effective_connection_ratio: PositiveFloat = Field(default=0.75, ge=0.25, le=1.0)
-    temp_buffers_ratio: PositiveFloat = Field(default=2/3, ge=0.25, le=0.95)
-    work_mem_scale_factor: PositiveFloat = Field(default=1.0, gt=0, le=3.0)
+    temp_buffers_ratio: PositiveFloat = Field(default=1/3, ge=0.05, le=0.95)
 
     # These are used for memory_precision_tuning
     max_normal_memory_usage: PositiveFloat = Field(default=0.45, ge=0.35, le=0.85)
     mem_pool_epsilon_to_rollback: PositiveFloat = Field(default=0.01, ge=0, le=0.02)
     mem_pool_tuning_increment: PositiveFloat = Field(default=1 / 280, ge=1 / 2000, le=0.01)
     mem_pool_tuning_ratio: float = Field(default=0.5, ge=0, le=1)
-    mem_pool_max_iterations: int = Field(default=100, ge=0, le=1000)
     mem_pool_parallel_estimate: bool = Field(default=False)
 
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
@@ -114,12 +112,10 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             max_work_buffer_ratio=self.max_work_buffer_ratio,
             effective_connection_ratio=self.effective_connection_ratio,
             temp_buffers_ratio=self.temp_buffers_ratio,
-            work_mem_scale_factor=self.work_mem_scale_factor,
             max_normal_memory_usage=self.max_normal_memory_usage,
             mem_pool_epsilon_to_rollback=self.mem_pool_epsilon_to_rollback,
             mem_pool_tuning_increment=self.mem_pool_tuning_increment,
             mem_pool_tuning_ratio=self.mem_pool_tuning_ratio,
-            mem_pool_max_iterations=self.mem_pool_max_iterations,
             mem_pool_parallel_estimate=self.mem_pool_parallel_estimate,
             wal_segment_size=self.wal_segment_size * BASE_WAL_SEGMENT_SIZE,
             max_query_length_in_bytes=self.max_query_length_in_bytes,

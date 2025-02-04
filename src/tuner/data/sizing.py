@@ -35,20 +35,20 @@ class PG_SIZING(Enum):
     MALL = 'mall'
     BIGT = 'bigt'
 
-    def _num(self) -> int:
+    def num(self) -> int:
         return _str_to_num(self.value)
 
     def __lt__(self, other: 'PG_SIZING') -> bool:
-        return self._num() < other._num()
+        return self.num() < other.num()
 
     def __eq__(self, other: 'PG_SIZING') -> bool:
-        return self._num() == other._num()
+        return self.num() == other.num()
 
     def __add__(self, other: 'PG_SIZING') -> 'PG_SIZING':
-        return PG_SIZING(_ascending_specs['size'][self._num() + other._num()])
+        return PG_SIZING(_ascending_specs['size'][self.num() + other.num()])
 
     def __sub__(self, other: 'PG_SIZING') -> 'PG_SIZING':
-        return PG_SIZING(_ascending_specs['size'][self._num() - other._num()])
+        return PG_SIZING(_ascending_specs['size'][self.num() - other.num()])
 
 # -----------------------------------------------------------------------------
 ## Note that in the list, we choose the value based on the minimum of read/write IOPS/throughput, and doing

@@ -31,7 +31,7 @@ from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
-from src.utils.pydantic_utils import (bytesize_to_postgres_unit, bytesize_to_hr, realign_value, cap_value, )
+from src.utils.pydantic_utils import (bytesize_to_hr, realign_value, cap_value, )
 
 __all__ = ['DB0_CONFIG_PROFILE', ]
 
@@ -108,17 +108,13 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
         _logger.warning('The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended '
                         'the starting point is 25% of RAM or over. Please consider increasing the ratio.')
 
-    shared_buffers: int = max(int(options.usable_ram_noswap * shared_buffers_ratio), 128 * Mi)
+    shared_buffers: int = max(options.usable_ram_noswap * shared_buffers_ratio, 128 * Mi)
     if shared_buffers == 128 * Mi:
         _logger.warning('No benefit is found on tuning this variable')
 
-    # If these two met conditions meant that your database server is hard to get any better performance
-    if shared_buffers > options.usable_ram_noswap:
-        _logger.error('The memory used for PostgreSQL or database would exceed the total memory.')
-
     # Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
     # probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
-    shared_buffers = realign_value(shared_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
+    shared_buffers = realign_value(int(shared_buffers), page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'shared_buffers: {bytesize_to_hr(shared_buffers)}')
     return shared_buffers
 
@@ -159,9 +155,9 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     # For the connection memory estimation, we assumed not all connections required work_mem, but idle connections
     # persist.
     pgmem_available = int(options.usable_ram_noswap)  # Copy the value
-    pgmem_available -= int(group_cache['shared_buffers'])
+    pgmem_available -= group_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
-    pgmem_available -= int(_mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio)
+    pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
     if 'wal_buffers' in global_cache:
         pgmem_available -= global_cache['wal_buffers']
 
@@ -171,7 +167,7 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     total_buffers = int(pgmem_available * max_work_buffer_ratio) // active_connections
 
     # Minimum to 1 MiB and maximum is varied between workloads
-    max_cap: int = 2 * Gi
+    max_cap: int = int(1.5 * Gi)
     if options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
         max_cap = 256 * Mi
     if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.OLAP, PG_WORKLOAD.TSR_OLAP,
@@ -180,13 +176,12 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
         max_cap = 8 * Gi
 
     temp_buffer_ratio = options.tuning_kwargs.temp_buffers_ratio
-    temp_buffers = cap_value(int(total_buffers * temp_buffer_ratio), 1 * Mi, max_cap)
-    work_mem = cap_value(int(total_buffers * (1 - temp_buffer_ratio) * options.tuning_kwargs.work_mem_scale_factor),
-                         1 * Mi, max_cap)
+    temp_buffers = cap_value(total_buffers * temp_buffer_ratio, 1 * Mi, max_cap)
+    work_mem = cap_value(total_buffers * (1 - temp_buffer_ratio), 1 * Mi, max_cap)
 
     # Realign the number (always use the lower bound for memory safety)
-    temp_buffers = realign_value(temp_buffers, page_size=DB_PAGE_SIZE)[options.align_index]
-    work_mem = realign_value(work_mem, page_size=DB_PAGE_SIZE)[options.align_index]
+    temp_buffers = realign_value(int(temp_buffers), page_size=DB_PAGE_SIZE)[options.align_index]
+    work_mem = realign_value(int(work_mem), page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'temp_buffers: {bytesize_to_hr(temp_buffers)}')
     _logger.debug(f'work_mem: {bytesize_to_hr(work_mem)}')
     return temp_buffers, work_mem
@@ -243,16 +238,14 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     # memory (RAM - shared_buffers): https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/server-parameters-table-query-tuning-planner-cost-constants?pivots=postgresql-17#effective_cache_size
     # and https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
     # Default is half of physical RAM memory on most tuning guideline
-    pgmem_available = int(options.usable_ram_noswap)
-    pgmem_available -= int(global_cache['shared_buffers'])
-
-    # Add the memory used in connection setting here.
+    pgmem_available = int(options.usable_ram_noswap)    # Make a copy
+    pgmem_available -= global_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
-    pgmem_available -= int(_mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio)
-    effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio
+    pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
 
     # Re-align the number (always use the lower bound for memory safety)
-    effective_cache_size = realign_value(effective_cache_size, page_size=DB_PAGE_SIZE)[options.align_index]
+    effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio
+    effective_cache_size = realign_value(int(effective_cache_size), page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'effective_cache_size: {bytesize_to_hr(effective_cache_size)}')
     return effective_cache_size
 
@@ -265,7 +258,7 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
     shared_buffers = global_cache['shared_buffers']
     usable_ram_noswap = options.usable_ram_noswap
     fn = lambda x: 1024 * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
-    if shared_buffers <= 512 * Mi or usable_ram_noswap <= 4 * Gi:
+    if shared_buffers <= 512 * Mi or usable_ram_noswap <= 4.25 * Gi:
         oldstyle_wal_buffers = shared_buffers // 32  # Measured in bytes
         wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki)
     else:
@@ -273,16 +266,16 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
 
     precision: int = DB_PAGE_SIZE
     # With low server usage, we push it to exploited 1 page of precision
-    if 2.5 * Gi < usable_ram_noswap <= 4 * Gi:
-        precision = 4 * DB_PAGE_SIZE
-    elif 4 * Gi < usable_ram_noswap <= 6 * Gi:
-        precision = 8 * DB_PAGE_SIZE
-    elif 6 * Gi < usable_ram_noswap <= 8 * Gi:
-        precision = 16 * DB_PAGE_SIZE
-    elif 8 * Gi < usable_ram_noswap <= 16 * Gi:
-        precision = 24 * DB_PAGE_SIZE
-    elif usable_ram_noswap > 16 * Gi:
-        precision = 32 * DB_PAGE_SIZE
+    # if 2.5 * Gi < usable_ram_noswap <= 4 * Gi:
+    #     precision = 4 * DB_PAGE_SIZE
+    # elif 4 * Gi < usable_ram_noswap <= 6 * Gi:
+    #     precision = 8 * DB_PAGE_SIZE
+    # elif 6 * Gi < usable_ram_noswap <= 8 * Gi:
+    #     precision = 16 * DB_PAGE_SIZE
+    # elif 8 * Gi < usable_ram_noswap <= 16 * Gi:
+    #     precision = 24 * DB_PAGE_SIZE
+    # elif usable_ram_noswap > 16 * Gi:
+    #     precision = 32 * DB_PAGE_SIZE
     return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[options.align_index]
 
 
@@ -368,7 +361,7 @@ _DB_RESOURCE_PROFILE = {
                    "a smaller amount. Larger settings for shared_buffers usually require a corresponding increase in "
                    "max_wal_size, in order to spread out the process of writing large quantities of new or changed data "
                    "over a longer period of time.",
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi, min_unit=DB_PAGE_SIZE)}MB',
+        'partial_func': lambda value: f'{value // Mi}MB',
     },
     'temp_buffers': {
         'tune_op': __temp_buffers,
@@ -381,7 +374,7 @@ _DB_RESOURCE_PROFILE = {
                    "additional 8192 bytes will be consumed for it (or in general, BLCKSZ bytes). If you worked with "
                    "OLAP/HTAP or any window function or CTE results in large value, you can increase this value but "
                    "remind",
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi, min_unit=DB_PAGE_SIZE)}MB',
+        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
     },
     'work_mem': {
         'tune_op': __work_mem,
@@ -392,7 +385,7 @@ _DB_RESOURCE_PROFILE = {
                    "accounted OS used memory and shared_buffers) divided by the number of connections expected in "
                    "parallel. For the best value, find your greatest query returns and multiply by 1.5 of its return."
                    "For best practice, when either hash or sort such as ORDER BY, making sure it is the last value.",
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi, min_unit=DB_PAGE_SIZE)}MB',
+        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
     },
     'hash_mem_multiplier': {
         'default': 2.0,
@@ -466,7 +459,7 @@ _DB_VACUUM_PROFILE = {
                    "need to allocate up to 1/4 of RAM to support large bulk vacuums. Note that each autovacuum "
                    "worker may use this much, so if using multiple autovacuum workers you may want to decrease this "
                    "value so that they can't claim over 1/8 or 1/4 of available RAM (our is capped at 1/3).",
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi, min_unit=Ki)}MB',
+        'partial_func': lambda value: f'{value // Mi}MB',
     },
     'autovacuum_work_mem': {
         'default': -1,
@@ -656,18 +649,18 @@ _DB_BGWRITER_PROFILE = {
     # to tune it
     'bgwriter_delay': {
         'instructions': {
-            'mini_default': 5 * K10,  # Make it big as we don't need actually a lot of write here
-            'medium_default': 500,
+            'mini_default': 500,  # Make it big as we don't need actually a lot of write here
+            'medium_default': 400,
             'mall_default': 150,
             'bigt_default': 100,
         },
-        'default': 200,
+        'default': 250,
         'hardware_scope': 'overall',
         'comment': "Specifies the delay between activity rounds for the background writer. In each round the writer "
                    "issues writes for some number of dirty buffers (controllable by the following parameters). It "
                    "then sleeps for the length of :var:`bgwriter_delay`, and repeats. When there are no dirty buffers "
                    "in the buffer pool, though, it goes into a longer sleep regardless of :var:`bgwriter_delay`. "
-                   "Default value is 200 milliseconds (200ms) on large server and 0.5 - 5 second on small server",
+                   "Default value is 250 milliseconds (250ms) on large server and 0.1 - 0.5 second on small server",
         'partial_func': lambda value: f"{value}ms",
     },
     'bgwriter_lru_maxpages': {
@@ -703,7 +696,7 @@ _DB_BGWRITER_PROFILE = {
                    "Often that will result in greatly reduced transaction latency, but there also are some cases, "
                    "especially with workloads that are bigger than shared_buffers, but smaller than the OS's page "
                    "cache, where performance might degrade.",
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=DB_PAGE_SIZE)}kB",
+        'partial_func': lambda value: f"{value // Ki}kB",
     },
 }
 
@@ -802,7 +795,7 @@ _DB_ASYNC_CPU_PROFILE = {
                    "be less. The default is 8 megabytes (8MB). But you can see the 'driving' rule in video [34] to "
                    "benefit better when your server is large. This variable is set to ensure that the parallel scan"
                    "query plan only benefit with table or index with this size or larger.",
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi, min_unit=DB_PAGE_SIZE)}MB',
+        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
     },
     'min_parallel_index_scan_size': {
         'tune_op': lambda group_cache, global_cache, options, response:
@@ -813,7 +806,7 @@ _DB_ASYNC_CPU_PROFILE = {
                    "number of pages which the planner believes will actually be touched by the scan which is relevant. "
                    "This variable is set to be the maximum of 1/16 of min_parallel_table_scan_size or 512 KiB (by "
                    "default of official PostgreSQL documentation).",
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=DB_PAGE_SIZE, min_unit=DB_PAGE_SIZE)}kB',
+        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
     },
 }
 
@@ -916,7 +909,7 @@ _DB_WAL_PROFILE = {
                    'produced since, then WAL is only written to the operating system, not flushed to disk. If '
                    ':var:`wal_writer_flush_after` is set to 0 then WAL data is always flushed immediately. Default to '
                    '1 MiB followed by the official PostgreSQL documentation.',
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi, min_unit=DB_PAGE_SIZE)}MB",
+        'partial_func': lambda value: f"{value // Mi}MB",
     },
     # This setting means that when you have at least 5 transactions in pending, the delay (interval by commit_delay)
     # would be triggered (assuming maybe more transactions are coming from the client or application level)
@@ -925,18 +918,16 @@ _DB_WAL_PROFILE = {
     # but reducing un-necessary read/write operation
     'checkpoint_timeout': {
         'instructions': {
-            'mini_default': 60 * MINUTE,
-            'medium_default': 30 * MINUTE,
-            'mall_default': 15 * MINUTE,
-            'bigt_default': 15 * MINUTE,
+            'mall_default': 10 * MINUTE,
+            'bigt_default': 10 * MINUTE,
         },
-        'default': 20 * MINUTE,
+        'default': 15 * MINUTE,
         'hardware_scope': 'overall',
-        'comment': 'Specifies the maximum amount of time between automatic WAL checkpoints. Default to 20 minutes'
-                   'on normal system and 15 minutes on large system. However, if you care about data consistency with '
+        'comment': 'Specifies the maximum amount of time between automatic WAL checkpoints. Default to 15 minutes'
+                   'on normal system and 10 minutes on large system. However, if you care about data consistency with '
                    'minimal data loss, consider the replication as you just need to failover to the standby server '
                    'as the checkpoint section is more focused on un-cleaned PostgreSQL crash or shutdown.',
-        'partial_func': lambda value: f"{value // MINUTE}min",
+        'partial_func': lambda value: f'{value // MINUTE}min',
     },
     'checkpoint_flush_after': {
         'default': 512 * Ki,
@@ -947,7 +938,7 @@ _DB_WAL_PROFILE = {
                    "Often that will result in greatly reduced transaction latency, but there also are some cases, "
                    "especially with workloads that are bigger than shared_buffers, but smaller than the OS's page "
                    "cache, where performance might degrade.",
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=DB_PAGE_SIZE)}kB",
+        'partial_func': lambda value: f'{value // Ki}kB',
     },
     'checkpoint_completion_target': {
         'default': 0.9,
@@ -974,7 +965,7 @@ _DB_WAL_PROFILE = {
                    'reserved to handle spikes in WAL usage, for example when running large batch jobs. If this value '
                    'is specified without units, it is taken as megabytes. The default is 80 MiB, scaled to 160 MiB on '
                    'larger system.',
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi)}MB',
+        'partial_func': lambda value: f'{value // Mi}MB',
     },
     'max_wal_size': {
         'instructions': {
@@ -988,7 +979,7 @@ _DB_WAL_PROFILE = {
         'comment': 'Maximum size to let the WAL grow during automatic checkpoints (soft limit only); WAL size can '
                    'exceed :var:`max_wal_size` under special circumstances such as heavy load, a failing '
                    ':var:`archive_command` or :var:`archive_library`, or a high :var:`wal_keep_size` setting.',
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi)}MB',
+        'partial_func': lambda value: f'{value // Mi}MB',
     },
     'wal_buffers': {
         'tune_op': partial(__wal_buffers, minimum=BASE_WAL_SEGMENT_SIZE // 2, maximum=BASE_WAL_SEGMENT_SIZE * 16),
@@ -1002,7 +993,8 @@ _DB_WAL_PROFILE = {
                    'https://postgresqlco.nf/doc/en/param/wal_buffers/. But if you having a large write in OLAP workload '
                    'then it is best to increase this attribute. Our auto-tuning are set to be range from 16-128 MiB on '
                    'small servers and 32-512 MiB on large servers (ratio from shared_buffers are varied).',
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi, min_unit=DB_PAGE_SIZE)}MB',
+        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
+        # 'partial_func': lambda value: f'{value // Mi}MB',   # No need high-precision result to translate as KiB
     },
 
     # ============================== ARCHIVE && RECOVERY ==============================
@@ -1154,7 +1146,7 @@ _DB_REPLICATION_PROFILE = {
                    'the standby server can recover by fetching the segment from archive, if WAL archiving is in use). '
                    'We set this value to be 5% of the max_wal_size instead of zero in official PostgreSQL '
                    'documentation.',
-        'partial_func': lambda value: f'{bytesize_to_postgres_unit(value, unit=Mi)}MB',
+        'partial_func': lambda value: f'{value // Mi}MB',
     },
     'wal_sender_timeout': {
         'instructions': {
@@ -1195,7 +1187,7 @@ _DB_REPLICATION_PROFILE = {
                    "connections concurrently (as limited by max_wal_senders), it's safe to set this value significantly "
                    "higher than work_mem, reducing the amount of decoded changes written to disk. Note that this "
                    "variable is available on the subscribers or the receiving server, not the sending server.",
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi, min_unit=Ki)}MB",
+        'partial_func': lambda value: f'{value // Mi}MB',
     },
 
 }
@@ -1246,7 +1238,7 @@ _DB_QUERY_PROFILE = {
                    "on the size of shared memory allocated by PostgreSQL, nor does it reserve kernel disk cache; it is "
                    "used only for estimation purposes. The system also does not assume data remains in the disk cache "
                    "between queries.",
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi, min_unit=Ki)}MB",
+        'partial_func': lambda value: f"{value // Mi}MB",
     },
     'default_statistics_target': {
         'default': 100,
@@ -1359,7 +1351,7 @@ _DB_LOG_PROFILE = {
                    ':var:`logging_collector` is also enabled.'
     },
     'log_directory': {
-        'default': PG_LOG_DIR,
+        'default': 'log', # PG_LOG_DIR,
         'comment': 'When :var:`logging_collector` is enabled, this parameter determines the directory in which log '
                    'files will be created. It can be specified as an absolute path, or relative to the cluster data '
                    'directory. '
@@ -1399,7 +1391,7 @@ _DB_LOG_PROFILE = {
                    'the log if needed. We dont expect the log file to reach by this size (thus we are in more favor of'
                    'time-based rotation) but this size is normally enough to accommodate most scenarios, even when a '
                    'lot of transactions or DB-DDoS attack can help us. ',
-        'partial_func': lambda value: f"{bytesize_to_postgres_unit(value, unit=Mi)}MB",
+        'partial_func': lambda value: f"{value // Mi}MB",
     },
     'log_truncate_on_rotation': {
         'default': 'on',

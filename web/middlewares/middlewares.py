@@ -176,14 +176,60 @@ class HeaderManageMiddleware(BaseMiddleware):
 
 # ==============================================================================
 # This is a cache (NOT used)
-class CacheControlMiddleware(BaseMiddleware):
+class AutoCacheControlMiddleware(BaseMiddleware):
     def __init__(self, app: ASGIApp | ASGI3Application, accept_scope: str | list[str] = 'http',
-                 cache_control: str = 'no-cache, no-store, must-revalidate', pragma: str = 'no-cache',
-                 expires: str = '0'):
-        super(CacheControlMiddleware, self).__init__(app, accept_scope=accept_scope)
-        self._cache_control: str = cache_control
-        self._pragma: str = pragma
-        self._expires: str = expires
+                 static_cache_control: str = 'max-age=600, private, must-revalidate, stale-while-revalidate=60',
+                 dynamic_cache_control: str = 'no-cache'):
+        super(AutoCacheControlMiddleware, self).__init__(app, accept_scope=accept_scope)
+        # Static Types:
+        _static_fonts = {
+            'application/eot', 'application/font', 'application/font-sfnt', 'application/font-woff',
+            'application/opentype', 'application/otf', 'application/truetype', 'application/ttf',
+            'application/vnd.ms-fontobject', 'application/x-opentype', 'application/x-otf', 'application/x-ttf',
+            'font/eot', 'font/otf', 'font/ttf', 'font/x-woff',
+        }
+        _static_images = {
+            'image/bmp', 'image/gif', 'image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml',
+            'image/vnd.microsoft.icon', 'image/x-icon'
+        }
+        _static_docs = {
+            'text/plain', 'text/cache-manifest', 'text/markdown', 'text/x-markdown', 'text/calendar',
+            'text/richtext', 'text/vcard', 'text/vnd.rim.location.xloc', 'text/vtt',
+            'application/xhtml+xml', 'application/x-web-app-manifest+json', 'application/vnd.ms-fontobject',
+            'application/vnd.ms-opentype', 'application/vnd.ms-ttf', 'application/vnd.ms-excel',
+            # 'text/html', 'text/xml', 'application/xml',
+        } # 'text/html', 'text/xml', 'application/xml' if you are served pre-rendered HTML,
+        _static_scripts = {
+            'application/ecmascript', 'application/javascript', 'application/x-javascript',
+            'text/css', 'application/css', 'text/javascript', 'text/x-javascript', 'text/x-json',
+        }
+        _static = _static_fonts.union(_static_images).union(_static_docs).union(_static_scripts)
+
+        # Dynamic Types:
+        # _dynamic_api = {
+        #     'application/json', 'application/ld+json', 'application/vnd.api+json', 'application/geo+json',
+        #     'application/graphql+json', 'application/manifest+json', 'application/rdf+xml',
+        # }
+        # _dynamic_scripts = {
+        #     'application/x-httpd-cgi', 'application/x-perl', 'application/x-protobuf',
+        # }
+        # _dynamic_feeds = {
+        #     'application/rss+xml', 'application/atom+xml', 'application/gpx+xml',
+        # }
+        # _dynamic_binary = {
+        #     'application/wasm', 'application/vnd.mapbox-vector-tile',
+        # }
+        # _dynamic_multipart = {
+        #     'multipart/bag', 'multipart/mixed',
+        # }
+        # _dynamic_web = {
+        #     'text/html', 'application/xhtml+xml', 'text/x-java-source',
+        # }
+        self._static = _static
+        self._static_cache_control: str = static_cache_control
+
+        self._dynamic = None
+        self._dynamic_cache_control: str = dynamic_cache_control
 
     async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
                        send: ASGISendCallable | Send) -> None:
@@ -195,9 +241,12 @@ class CacheControlMiddleware(BaseMiddleware):
         async def _send_with_headers(message: Message | ASGISendEvent) -> None:
             if message['type'] == 'http.response.start':
                 headers = MutableHeaders(scope=message)
-                headers.append('Cache-Control', self._cache_control)
-                headers.append('Pragma', self._pragma)
-                headers.append('Expires', self._expires)
+                if 'Cache-Control' not in headers:  # Override only if not set
+                    content_type = headers.get('Content-Type', '').split(';')[0].strip()
+                    if self._static and content_type in self._static:
+                        headers.append('Cache-Control', self._static_cache_control)
+                    # elif self._dynamic and content_type in self._dynamic:
+                    #     headers.append('Cache-Control', self._dynamic_cache_control)
 
             await send(message)
 

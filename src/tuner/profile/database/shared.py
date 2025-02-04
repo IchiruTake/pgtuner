@@ -51,8 +51,9 @@ def wal_time(wal_buffers: ByteSize, data_amount_ratio: int | float, wal_segment_
         'msg': _msg
     }
 
-def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target, data_disk_iops: int,
-                    wal_buffers: ByteSize, data_amount_ratio: int | float, wal_segment_size: ByteSize ) -> dict:
+def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target,
+                    wal_disk_tput: int, data_disk_iops: int,
+                    wal_buffers: ByteSize, data_amount_ratio: int | float, wal_segment_size: ByteSize) -> dict:
     # Validate the maximum number of times to complete the checkpoint
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
@@ -63,24 +64,26 @@ def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target
     data_amount = int(wal_buffers * data_amount_ratio)  # Measured in bytes
     page_amount: int = floor(data_amount / DB_PAGE_SIZE)
     wal_amount: int = floor(data_amount / wal_segment_size)
-    data_written_time: int = floor((data_amount / Mi) / data_disk_translated_tput)  # Measured in seconds
-    data_disk_utilization = data_written_time / checkpoint_duration
 
-    # Assume the WRITE is spread out evenly during the checkpoint_duration
-    _msg = (f'Within the expected checkpoint duration of {checkpoint_duration} seconds, the data disk can write at '
-            f'most {data_disk_max_mib_written} MiB of data. With the data amount of {bytesize_to_hr(data_amount)}, '
-            f'the expected time to complete checkpoint is {data_written_time} seconds or having '
-            f'{data_disk_utilization * 100:.2f} of WRITE utilization.')
+    wal_read_time: int = floor((data_amount / Mi) / wal_disk_tput)  # Measured in seconds
+    wal_disk_utilization = wal_read_time / checkpoint_duration
+
+    data_write_time: int = floor((data_amount / Mi) / data_disk_translated_tput)  # Measured in seconds
+    data_disk_utilization = data_write_time / checkpoint_duration
+
     return {
-        'data_amount': data_amount,
-        'page_amount': page_amount,
-        'wal_amount': wal_amount,
         'checkpoint_duration': checkpoint_duration,
         'data_disk_translated_tput': data_disk_translated_tput,
         'data_disk_max_mib_written': data_disk_max_mib_written,
-        'data_written_time': data_written_time,
+
+        'data_amount': data_amount,
+        'page_amount': page_amount,
+        'wal_amount': wal_amount,
+
+        'wal_read_time': wal_read_time,
+        'wal_disk_utilization': wal_disk_utilization,
+        'data_write_time': data_write_time,
         'data_disk_utilization': data_disk_utilization,
-        'msg': _msg
     }
 
 

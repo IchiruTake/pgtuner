@@ -127,7 +127,7 @@
                        title="Operating System">
                     </i>
                 </div>
-                <select class="form-select" id="operating_system" name="operating_system">
+                <select class="form-select" id="operating_system" name="operating_system" onchange="ram_calculator()">
                     <option selected value="linux">Linux</option>
                     <option value="windows">Windows</option>
                     <option value="containerd">Container (K8s, Docker, containerd)</option>
@@ -1103,31 +1103,11 @@
                         <div class="d-flex align-items-center">
                             <input class="form-range me-3" name="keywords.temp_buffers_ratio"
                                    id="keywords.temp_buffers_ratio_range"
-                                   max="0.95" min="0.25" step="0.01" value="0.66" type="range"
+                                   max="0.95" min="0.05" step="0.01" value="0.33" type="range"
                                    onchange="syncSliderToNumber('keywords.temp_buffers_ratio')">
                             <input class="form-control w-auto" id="keywords.temp_buffers_ratio"
-                                   max="0.95" min="0.25" step="0.01" value="0.66" type="number"
+                                   max="0.95" min="0.05" step="0.01" value="0.33" type="number"
                                    onchange="syncNumberToSlider('keywords.temp_buffers_ratio')">
-                        </div>
-                    </div>
-                    <!-- work_mem_scale_factor -->
-                    <div class="col-4 mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <label class="form-label" for="keywords.work_mem_scale_factor"> Work Memory Scale Factor </label>
-                            <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-                               data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                               data-bs-content="The scale factor of the work_mem. This property should only be changed if the result of our global formula does not meet your expectation, and it is dedicated to the work_mem only. Note that setting this attribute over 1.0 would make sum(temp_buffers + work_mem) with the active_user_connections exceed the defined max_work_buffer_ratio. The supported range is (0, 3.0], default is 1.0."
-                               title="Work Memory Scale Factor">
-                            </i>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <input class="form-range me-3" name="keywords.work_mem_scale_factor"
-                                   id="keywords.work_mem_scale_factor_range"
-                                   max="3.0" min="0.1" step="0.1" value="1.0" type="range"
-                                   onchange="syncSliderToNumber('keywords.work_mem_scale_factor')">
-                            <input class="form-control w-auto" id="keywords.work_mem_scale_factor"
-                                   max="3.0" min="0.1" step="0.1" value="1.0" type="number"
-                                   onchange="syncNumberToSlider('keywords.work_mem_scale_factor')">
                         </div>
                     </div>
                 </div>
@@ -1215,27 +1195,6 @@
                             <input class="form-control w-auto" id="keywords.mem_pool_tuning_ratio"
                                    max="1.0" min="0.0" step="0.01" value="0.5" type="number"
                                    onchange="syncNumberToSlider('keywords.mem_pool_tuning_ratio')">
-                        </div>
-                    </div>
-                    <!-- mem_pool_max_iterations -->
-                    <div class="col-4 mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <label class="form-label" for="keywords.mem_pool_max_iterations">
-                                Memory Pool Max Iterations </label>
-                            <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-                               data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                               data-bs-content="The maximum number of iteration for the memory tuning. The supported range is [0, 1000] and default is 100. Set to 0 to run infinitely until the memory tuning is converged. Higher value could make the tuning run more loops."
-                               title="Memory Pool Max Iterations">
-                            </i>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <input class="form-range me-3" name="keywords.mem_pool_max_iterations"
-                                   id="keywords.mem_pool_max_iterations_range"
-                                   max="1000" min="0" step="20" value="100" type="range"
-                                   onchange="syncSliderToNumber('keywords.mem_pool_max_iterations')">
-                            <input class="form-control w-auto" id="keywords.mem_pool_max_iterations"
-                                   max="1000" min="0" step="20" value="100" type="number"
-                                   onchange="syncNumberToSlider('keywords.mem_pool_max_iterations')">
                         </div>
                     </div>
                     <!-- mem_pool_parallel_estimate -->
@@ -1458,7 +1417,7 @@
                     <div class="col-4 mb-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <label class="form-label" for="keywords.num_write_transaction_per_hour_on_workload">
-                                Workload WRITE Transaction Rate (per hour on 1 server)</label>
+                                Workload WRITE Transaction Rate Per Hour</label>
                             <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                                data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
                                data-bs-content="The peak number of workload *write* transaction per hour (regardless commit or rollback). The supported range is [1K, 50M], default is 5M (translated in around 1.4K transactions per second). Note that this number requires you to have good estimation on how much your server can be handled and will be handled during its busy workload, to mark frozen page for anti-wraparound (aggressive) vacuum. "
