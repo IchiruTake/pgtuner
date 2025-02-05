@@ -1,5 +1,6 @@
 function syncNumberToSlider(id) {
     const slider = document.getElementById(id + "_range");
+    if (!slider) return;
     const numberInput = document.getElementById(id);
     let result = Math.min(Math.max(numberInput.min, numberInput?.value), numberInput.max);
     slider.value = result;
@@ -7,6 +8,7 @@ function syncNumberToSlider(id) {
 }
 function syncSliderToNumber(id) {
     const slider = document.getElementById(id + "_range");
+    if(!slider) return;
     const numberInput = document.getElementById(id);
     let result = Math.min(Math.max(slider.min, slider?.value), slider.max);
     numberInput.value = result;
