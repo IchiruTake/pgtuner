@@ -11,6 +11,7 @@ from fastapi import FastAPI, Header
 from fastapi import status
 from fastapi.responses import ORJSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
+from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -167,27 +168,26 @@ _logger.info('The static files have been added to the application ...')
 
 # ----------------------------------------------------------------------------------------------
 # UI Directory
-@app.get('/min')
-async def root_min():
-    return RedirectResponse(
-        url='/static/index.min.html',
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={
-            'Cache-Control': _static_cache,
-        }
-    )
+if _app_dev_mode:
+    @app.get('/min')
+    async def root_min():
+        return RedirectResponse(
+            url='/static/index.min.html',
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={
+                'Cache-Control': _static_cache,
+            }
+        )
 
-
-@app.get('/dev')
-async def root_dev():
-    return RedirectResponse(
-        url='/static/index.html',
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={
-            'Cache-Control': _static_cache,
-        }
-    )
-
+    @app.get('/dev')
+    async def root_dev():
+        return RedirectResponse(
+            url='/static/index.html',
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={
+                'Cache-Control': _static_cache,
+            }
+        )
 
 @app.get('/')
 async def root():
@@ -196,6 +196,16 @@ async def root():
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={
             'Cache-Control': _static_cache,
+        }
+    )
+
+@app.get('/robots.txt', status_code=status.HTTP_200_OK)
+async def robots():
+    return PlainTextResponse(
+        content=open(f'{_default_path}/robots.txt', 'r').read(),
+        status_code=status.HTTP_200_OK,
+        headers={
+            'Cache-Control': _static_cache
         }
     )
 

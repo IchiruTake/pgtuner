@@ -13,6 +13,7 @@ from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.profile.database.shared import wal_time, checkpoint_time, vacuum_time, vacuum_scale
+from src.utils.avg import pow_avg
 from src.utils.pydantic_utils import bytesize_to_hr
 
 __all__ = ['PG_TUNE_REQUEST', 'PG_TUNE_RESPONSE']
@@ -119,12 +120,6 @@ class PG_TUNE_RESPONSE(BaseModel):
 
     def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
                  ignore_report: bool = True, skip_logger: bool = False) -> tuple[str, int | float]:
-        def pow_avg(*args: int | float, level: int | float = 2, round_ndigits: int | None = 4):
-            if level == 0:
-                _logger.debug('The level must be different than 0. Set to 1e-8')
-                level = 1e-8
-            return round((sum(arg ** level for arg in args) / len(args)) ** (1 / level), ndigits=round_ndigits)
-
         # Cache result first
         _kwargs = options.tuning_kwargs
         usable_ram_noswap = options.usable_ram_noswap
@@ -137,10 +132,11 @@ class PG_TUNE_RESPONSE(BaseModel):
         # Number of Connections
         max_user_conns = (managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] -
                           managed_cache['reserved_connections'])
-        active_user_conns = ceil(max_user_conns * _kwargs.effective_connection_ratio)
-        num_user_conns = (max_user_conns if use_full_connection else active_user_conns)
-        os_conn_overhead = (num_user_conns * _kwargs.single_memory_connection_overhead *
+        os_conn_overhead = (max_user_conns * _kwargs.single_memory_connection_overhead *
                             _kwargs.memory_connection_to_dedicated_os_ratio)
+        num_user_conns = max_user_conns
+        if not use_full_connection:
+            num_user_conns = ceil(max_user_conns * _kwargs.effective_connection_ratio)
 
         # Shared Buffers and WAL buffers
         shared_buffers = managed_cache['shared_buffers']
@@ -154,7 +150,8 @@ class PG_TUNE_RESPONSE(BaseModel):
         # Higher level would assume more hash-based operations, which reduce the work_mem in correction-tuning phase
         # Smaller level would assume less hash-based operations, which increase the work_mem in correction-tuning phase
         # real_world_work_mem = work_mem * hash_mem_multiplier
-        real_world_work_mem = work_mem * pow_avg(1, hash_mem_multiplier, level=-2)
+        real_world_mem_scale = pow_avg(1, hash_mem_multiplier, level=_kwargs.hash_mem_usage_level)
+        real_world_work_mem = work_mem * real_world_mem_scale
         total_working_memory = (temp_buffers + real_world_work_mem)
         total_working_memory_hr = bytesize_to_hr(total_working_memory)
 
@@ -270,14 +267,17 @@ Report Summary (memory, over usable RAM):
 * PostgreSQL memory (estimate): {max_total_memory_used_hr} or {max_total_memory_used_ratio * 100:.2f} (%) over usable RAM.
     - The Shared Buffers is {bytesize_to_hr(shared_buffers)} or {shared_buffers / usable_ram_noswap * 100:.2f} (%)
     - The Wal Buffers is {bytesize_to_hr(wal_buffers)} or {wal_buffers / usable_ram_noswap * 100:.2f} (%)
-    - The total connections overhead ratio is {bytesize_to_hr(os_conn_overhead)} with {num_user_conns} idle user connections 
+    - The connection overhead is {bytesize_to_hr(os_conn_overhead)} with {num_user_conns} total user connections
+        + Active user connections: {max_user_conns}
         + Peak assumption is at {bytesize_to_hr(os_conn_overhead / _kwargs.memory_connection_to_dedicated_os_ratio)}
         + Reserved & Superuser Reserved Connections: {managed_cache['max_connections'] - max_user_conns}
         + Need Connection Pool such as PgBouncer: {num_user_conns >= 100}
     - The total maximum working memory (assuming with one full use of work_mem and temp_buffers):
         + SINGLE: {total_working_memory_hr} per user connections or {total_working_memory / usable_ram_noswap * 100:.2f} (%)
+            -> Real-World Mem Scale: {_kwargs.temp_buffers_ratio + (1 - _kwargs.temp_buffers_ratio) * real_world_mem_scale} 
             -> Temp Buffers: {bytesize_to_hr(temp_buffers)} :: Work Mem: {bytesize_to_hr(work_mem)}
-            -> Hash Mem Multiplier: {hash_mem_multiplier} :: Real-World Work Mem: {bytesize_to_hr(real_world_work_mem)}
+            -> Hash Mem Multiplier: {hash_mem_multiplier} ::  Real-World Work Mem: {bytesize_to_hr(real_world_work_mem)}
+            -> Total: {total_working_memory * num_user_conns / usable_ram_noswap * 100:.2f} (%)
         + PARALLEL: 
             -> Workers :: Gather Workers={managed_cache['max_parallel_workers_per_gather']} :: Worker in Pool={managed_cache['max_parallel_workers']} << Workers Process={managed_cache['max_worker_processes']} 
             -> Parallelized Session: {num_sessions_in_parallel} :: Non-parallelized Session: {num_sessions_not_in_parallel}
@@ -450,3 +450,34 @@ best performance and reliability of the database system.
             _logger.info(_report)
         return _report, (max_total_memory_used if not _kwargs.mem_pool_parallel_estimate else
                          max_total_memory_used_with_parallel)
+
+    def calc_worker_in_parallel(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False) -> dict[str, int]:
+        managed_cache = self.get_managed_cache(PGTUNER_SCOPE.DATABASE_CONFIG)
+        _kwargs = options.tuning_kwargs
+
+        # Number of Connections
+        max_user_conns = (managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] -
+                          managed_cache['reserved_connections'])
+        active_user_conns = ceil(max_user_conns * _kwargs.effective_connection_ratio)
+        num_user_conns = (max_user_conns if use_full_connection else active_user_conns)
+
+        # Calculate the number of parallel workers
+        num_parallel_workers = min(managed_cache['max_parallel_workers'], managed_cache['max_worker_processes'])
+
+        # How many sessions can be in parallel
+        num_sessions, remain_workers = divmod(num_parallel_workers, managed_cache['max_parallel_workers_per_gather'])
+        num_sessions_in_parallel = num_sessions + (1 if remain_workers > 0 else 0)
+
+        # Ensure the number of active user connections always larger than the num_sessions
+        # The maximum 0 here is meant that all connections can have full parallelism
+        num_sessions_not_in_parallel = max(0, num_user_conns - num_sessions_in_parallel)
+
+        return {
+            'num_user_conns': num_user_conns,
+            'num_parallel_workers': num_parallel_workers,
+            'num_sessions': num_sessions,
+            'num_sessions_in_parallel': num_sessions_in_parallel,
+            'num_sessions_not_in_parallel': num_sessions_not_in_parallel,
+            'parallel_scale': (num_parallel_workers + num_sessions_in_parallel) / num_user_conns
+        }
+

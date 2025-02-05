@@ -119,6 +119,13 @@ class PG_TUNE_USR_KWARGS(BaseModel):
         Field(default=False,
               description='The flag to switch to the memory estimation in parallelism. The default is False. ')
     )
+    hash_mem_usage_level: int = (
+        Field(default=-4, ge=-75, le=75,
+              description='The level of the hash memory usage. The supported range is [-75, 75], default is -4. Larger '
+                          'value would prefer hash-based operations than normal operations. This value is used to '
+                          'control the average of memory usage.'
+              )
+    )
 
     # Tune logging behaviour (query size, and query runtime)
     max_query_length_in_bytes: ByteSize = (

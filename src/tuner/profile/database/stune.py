@@ -3,6 +3,7 @@ This module is to perform specific tuning on the PostgreSQL database server.
 
 """
 import logging
+from http.client import responses
 from math import ceil, sqrt, floor
 from typing import Callable, Any
 
@@ -17,6 +18,7 @@ from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
 from src.tuner.profile.database.shared import wal_time
+from src.utils.avg import pow_avg
 from src.utils.pydantic_utils import bytesize_to_hr
 from src.utils.pydantic_utils import realign_value, cap_value
 from src.utils.timing import time_decorator
@@ -836,8 +838,8 @@ def _hash_mem_adjust(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     current_work_mem = managed_cache['work_mem']
 
-    after_hash_mem_multiplier = managed_cache[hash_mem_multiplier]
-    if request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.SEARCH,
+    after_hash_mem_multiplier = 2.0
+    if request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.SEARCH,
                                          PG_WORKLOAD.RAG, PG_WORKLOAD.GEOSPATIAL):
         after_hash_mem_multiplier = min(2.0 + 0.125 * (current_work_mem // (40 * Mi)), 3.0)
     elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE,
@@ -848,8 +850,9 @@ def _hash_mem_adjust(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
                  before=managed_cache[hash_mem_multiplier], _log_pool=None)
 
 
-def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, _log_pool: list[str], shared_buffers_ratio_increment: float,
-                          max_work_buffer_ratio_increment: float) -> tuple[bool, bool]:
+def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str],
+                          shared_buffers_ratio_increment: float, max_work_buffer_ratio_increment: float,
+                          tuning_items: dict[PG_SCOPE, tuple[str, ...]]) -> tuple[bool, bool]:
     # Trigger the increment / decrement
     _kwargs = request.options.tuning_kwargs
     sbuf_ok = False
@@ -868,7 +871,8 @@ def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, _log_pool: list[str], shared
     if not sbuf_ok and not wbuf_ok:
         _log_pool.append(f'WARNING: The shared_buffers and work_mem are not increased as the condition is met '
                          f'or being unchanged, or converged -> Stop ...')
-
+    _trigger_tuning(tuning_items, request, response, _log_pool=None)
+    _hash_mem_adjust(request, response)
     return sbuf_ok, wbuf_ok
 
 
@@ -917,8 +921,8 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
     _log_pool.append('Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: '
                      'shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size')
     _kwargs = request.options.tuning_kwargs
-    usable_ram_noswap = request.options.usable_ram_noswap
-    srv_mem_str = bytesize_to_hr(usable_ram_noswap)
+    ram  = request.options.usable_ram_noswap
+    srv_mem_str = bytesize_to_hr(ram)
 
     stop_point: float = _kwargs.max_normal_memory_usage
     rollback_point: float = min(stop_point + _kwargs.mem_pool_epsilon_to_rollback, 1.0)
@@ -943,47 +947,78 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
                                    for scope, func in _get_wrk_mem_func().items()])
     _log_pool.append(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.'
                      f'\nNOTICE: Expected maximum memory usage in normal condition: {stop_point * 100:.2f} (%) of '
-                     f'{srv_mem_str} or {bytesize_to_hr(int(usable_ram_noswap * stop_point))}.')
+                     f'{srv_mem_str} or {bytesize_to_hr(int(ram * stop_point))}.')
 
     # Trigger the tuning
     shared_buffers_ratio_increment = boost_ratio * 2.0 * _kwargs.mem_pool_tuning_ratio
     max_work_buffer_ratio_increment = boost_ratio * 2.0 * (1 - _kwargs.mem_pool_tuning_ratio)
-    working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
 
-    # Here is our expected algorithms:
-    # connection_mem (const) + shared_buffers_ratio * usable_ram + (1 - shared_buffers_ratio) * usable_ram
-    # * work_buffer_ratio < stop_point. Since the connection_memory is always larger than zero, we can make estimation
-    # and then of a large initial jump and reduce back later. We don't care whether is it too over the limit or not.
-    # Since on average user want to fully utilize their RAM usage better so think this as a fast path.
-
-    # Find x so that (shared_buffers_ratio + x * shared_buffers_ratio_increment) + (1 - shared_buffers_ratio) *
-    # (max_work_buffer_ratio + x * max_work_buffer_ratio_increment) < stop_point
-    # >> x < (stop_point - shared_buffers_ratio - (1 - shared_buffers_ratio) * max_work_buffer_ratio) /
-    # (shared_buffers_ratio_increment + (1 - shared_buffers_ratio) * max_work_buffer_ratio_increment)
+    # Here is our expected algorithms, but its reversing algorithm is extremely complex.
+    # TODO: And it is not ready for parallel estimation to be correct
 
     # Use ceil to gain higher bound
-    x = ceil((stop_point - _kwargs.shared_buffers_ratio - (1 - _kwargs.shared_buffers_ratio) * _kwargs.max_work_buffer_ratio) / (
-            shared_buffers_ratio_increment + (1 - _kwargs.shared_buffers_ratio) * max_work_buffer_ratio_increment))
-    if x > 0:
-        # We don't care whether is it too over the limit or not. Since on average user want to fully utilize their
-        # RAM usage better so think this as a fast path.
-        _wrk_mem_tune_oneshot(request, _log_pool, shared_buffers_ratio_increment * x,
-                              max_work_buffer_ratio_increment * x)
-        _trigger_tuning(keys, request, response, _log_pool=None)
-        _hash_mem_adjust(request, response)
-        working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
-        _logger.debug(f'Large jump by {x} steps: The working memory usage based on memory profile increased to '
-                      f'{bytesize_to_hr(working_memory)} or {working_memory / usable_ram_noswap * 100:.2f} (%) '
-                      f'of {srv_mem_str}.')
+    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    num_conn = managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] - managed_cache['reserved_connections']
+    mem_conn = num_conn * _kwargs.single_memory_connection_overhead * _kwargs.memory_connection_to_dedicated_os_ratio / ram
+    active_connection_ratio = {
+        PG_PROFILE_OPTMODE.SPIDEY: 1.0 / _kwargs.effective_connection_ratio,
+        PG_PROFILE_OPTMODE.OPTIMUS_PRIME: (1.0 + _kwargs.effective_connection_ratio) / (2 * _kwargs.effective_connection_ratio),
+        PG_PROFILE_OPTMODE.PRIMORDIAL: 1.0,
+    }
+    TBk = pow_avg(1, managed_cache['hash_mem_multiplier'], level=_kwargs.hash_mem_usage_level)
+    # if _kwargs.mem_pool_parallel_estimate:
+    #     # NOT TODO: If parallel estimation is enabled, the correct algorithm to define it is hard to determine
+    #     # due to its non-continuous function
+    #     parallel_scale = response.calc_worker_in_parallel(request.options)['parallel_scale']
+    #     TBk = _kwargs.temp_buffers_ratio + (1 - _kwargs.temp_buffers_ratio) * TBk
+
+    TBk = _kwargs.temp_buffers_ratio + (1 - _kwargs.temp_buffers_ratio) * TBk
+    Limit = stop_point * ram - mem_conn
+
+
+    # Interpret as below:
+    A = _kwargs.shared_buffers_ratio * ram
+    B = shared_buffers_ratio_increment * ram
+    C = max_work_buffer_ratio_increment
+    D = _kwargs.max_work_buffer_ratio
+    E = ram - mem_conn - A
+    F = TBk * active_connection_ratio[request.options.opt_mem_pool]
+
+    # Transform as quadratic function we have:
+    a = C * F * (0 - B)
+    b = B + F * C * E - B * D * F
+    c = A + F * E * D - Limit
+    x = ceil((-b + sqrt(b ** 2 - 4 * a * c)) / (2 * a))
+    print(a, b, c)
+    _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment * x,
+                          max_work_buffer_ratio_increment * x, tuning_items=keys)
+    working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
+
+    _mem_check_string = '; '.join([f'{scope}={bytesize_to_hr(func(request.options, response))}'
+                                   for scope, func in _get_wrk_mem_func().items()])
+    _log_pool.append('---------')
+    _log_pool.append(f'DEBUG: The working memory usage based on memory profile increased to {bytesize_to_hr(working_memory)} '
+                     f'or {working_memory / ram * 100:.2f} (%) of {srv_mem_str} after {x} steps.')
+    _log_pool.append(f'DEBUG: The working memory usage based on memory profile on all profiles are {_mem_check_string} '
+                     f'after {x} steps.')
 
     # Now we trigger our one-step decay until we find the optimal point.
-    while working_memory >= rollback_point * usable_ram_noswap:
-        _wrk_mem_tune_oneshot(request, _log_pool, 0 - shared_buffers_ratio_increment,
-                              0 - max_work_buffer_ratio_increment)
-        _trigger_tuning(keys, request, response, _log_pool=None)
-        _hash_mem_adjust(request, response)
+    bump_step = 0
+    while working_memory < stop_point * ram:
+        _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment,
+                              max_work_buffer_ratio_increment, tuning_items=keys)
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
+        bump_step += 1
 
+    decay_step = 0
+    while working_memory >= rollback_point * ram:
+        _wrk_mem_tune_oneshot(request, response, _log_pool, 0 - shared_buffers_ratio_increment,
+                              0 - max_work_buffer_ratio_increment, tuning_items=keys)
+        working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
+        decay_step += 1
+
+    _log_pool.append('---------')
+    _log_pool.append(f'DEBUG: Optimal point is found after {bump_step} bump steps and {decay_step} decay steps')
     _log_pool.append(f'The shared_buffers_ratio is now {_kwargs.shared_buffers_ratio:.5f}.')
     _log_pool.append(f'The max_work_buffer_ratio is now {_kwargs.max_work_buffer_ratio:.5f}.')
     _show_tuning_result('Result (after): ')

@@ -79,6 +79,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     mem_pool_epsilon_to_rollback: PositiveFloat = Field(default=0.01, ge=0, le=0.02)
     mem_pool_tuning_increment: PositiveFloat = Field(default=1 / 280, ge=1 / 2000, le=0.01)
     mem_pool_tuning_ratio: float = Field(default=0.5, ge=0, le=1)
+    hash_mem_usage_level: int = Field(default=-4, ge=-75, le=75)
     mem_pool_parallel_estimate: bool = Field(default=False)
 
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
@@ -113,6 +114,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             effective_connection_ratio=self.effective_connection_ratio,
             temp_buffers_ratio=self.temp_buffers_ratio,
             max_normal_memory_usage=self.max_normal_memory_usage,
+            hash_mem_usage_level=self.hash_mem_usage_level,
             mem_pool_epsilon_to_rollback=self.mem_pool_epsilon_to_rollback,
             mem_pool_tuning_increment=self.mem_pool_tuning_increment,
             mem_pool_tuning_ratio=self.mem_pool_tuning_ratio,

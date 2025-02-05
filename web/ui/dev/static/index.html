@@ -34,7 +34,7 @@
     <!--    <script crossorigin="anonymous"-->
     <!--            integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"-->
     <!--            src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>-->
-    <script defer type="application/javascript" src="/js/pgtuner.min.js"></script>
+    <script type="application/javascript" src="/js/pgtuner.min.js"></script>
 
     <!-- SEO Meta Tags -->
     <meta name="description" content="PGTuner: The :project:`pgtuner` (or PostgreSQL: DBA & Tuner) is a SQL/Python-based project designed to manage and optimize kernel parameters and database settings, focusing on TCP networking (connection management, retries, timeouts, and **buffering**) and memory/VM management (swappiness, dirty ratios, over-commit memory, hugepages, and cache pressure); whilst maintaining high performance, stability, security, and concurrency for various system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, and many DBA's experts at PostgreSQL community. This project is a combination of those experiences and designed to be a structured approach for various profiles and settings (easily customizable and extendable). ">
@@ -1138,7 +1138,7 @@
                                    onchange="syncSliderToNumber('keywords.max_normal_memory_usage')">
                             <input class="form-control w-auto" id="keywords.max_normal_memory_usage"
                                    max="0.85" min="0.35" step="0.01" value="0.45" type="number"
-                                   onchange="syncNumberToSlider('max_normal_memory_usage')">
+                                   onchange="syncNumberToSlider('keywords.max_normal_memory_usage')">
                         </div>
                     </div>
                     <!-- mem_pool_epsilon_to_rollback -->
@@ -1202,6 +1202,27 @@
                             <input class="form-control w-auto" id="keywords.mem_pool_tuning_ratio"
                                    max="1.0" min="0.0" step="0.01" value="0.5" type="number"
                                    onchange="syncNumberToSlider('keywords.mem_pool_tuning_ratio')">
+                        </div>
+                    </div>
+                    <!-- hash_mem_usage_level -->
+                    <div class="col-4 mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label" for="keywords.hash_mem_usage_level">
+                                Hash Mem Usage Level </label>
+                            <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                               data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                               data-bs-content="The level to estimate your real-world work_mem. A higher value meant that most of your query plan is hash-based operations. If you don't know what to set then just leave it to default."
+                               title="Hash Mem Usage Level">
+                            </i>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <input class="form-range me-3" name="keywords.hash_mem_usage_level"
+                                   id="keywords.hash_mem_usage_level_range"
+                                   max="75" min="-75" step="1" value="-4" type="range"
+                                   onchange="syncSliderToNumber('keywords.hash_mem_usage_level')">
+                            <input class="form-control w-auto" id="keywords.hash_mem_usage_level"
+                                   max="75" min="-75" step="1" value="-4" type="number"
+                                   onchange="syncNumberToSlider('keywords.hash_mem_usage_level')">
                         </div>
                     </div>
                     <!-- mem_pool_parallel_estimate -->
