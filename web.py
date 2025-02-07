@@ -65,7 +65,7 @@ if __name__ == "__main__":
         ('X-XSS-Protection', '1; mode=block'),
 
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
-        ('X-Frames-Options', 'DENY'),
+        ('X-Frame-Options', 'DENY'),
 
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
         ('Content-Security-Policy', '; '.join(_content_security)),
@@ -90,7 +90,6 @@ if __name__ == "__main__":
     # FUTURE: Disable as in experimental in 2025
     # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy (Replaces Feature-Policy)
     # self._hard_headers['Permissions-Policy'] = self._hard_headers['Feature-Policy']
-
 
     uvicorn.run(web.app, host=_host, port=_port, access_log=_access_log, workers=_workers,
                 http=_http, loop=_loop, limit_concurrency=_limit_concurrency,
