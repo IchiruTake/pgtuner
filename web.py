@@ -70,16 +70,16 @@ if __name__ == "__main__":
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
         ('Content-Security-Policy', '; '.join(_content_security)),
 
-        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Feature-Policy -> Replaced by
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy
         # TODO: Need to evaluate this settings
-        # 'Feature-Policy': "geolocation none; midi none; notifications none; push none; sync-xhr none; "
+        # 'Permissions-Policy': "geolocation none; midi none; notifications none; push none; sync-xhr none; "
         #                   "microphone none; camera none; magnetometer none; gyroscope none; speaker self; "
         #                   "vibrate none; fullscreen self; payment none;",
 
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy
-        # TODO: Need to evaluate this settings
-        # 'Referrer-Policy': 'strict-origin-when-cross-origin',
+        # https://scotthelme.co.uk/a-new-security-header-referrer-policy/
+        ('Referrer-Policy', 'strict-origin-when-cross-origin'),
+
         # TODO: Need to evaluate this settings
         # 'Access-Control-Expose-Headers': ','.join(_expose_headers),
 
