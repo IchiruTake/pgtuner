@@ -1,8 +1,0 @@
-# ======================== LARGE-PROFILE ========================
-[pgtuner_dba.profile.large]
-memory_gib_min = 24
-memory_gib_max = 64
-cpu_core_min = 6
-cpu_core_max = 16
-storage_gib_max = 1024
-network_mbps_max = 5000

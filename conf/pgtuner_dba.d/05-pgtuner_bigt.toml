@@ -1,8 +1,0 @@
-# ======================== BIGT-PROFILE ========================
-[pgtuner_dba.profile.bigt]
-memory_gib_min = 128
-memory_gib_max = 512
-cpu_core_min = 32
-cpu_core_max = 128
-storage_gib_max = 32768
-network_mbps_max = 30000

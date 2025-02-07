@@ -3,12 +3,6 @@ import logging
 import typing
 from src.static.vars import APP_NAME_UPPER
 
-try:
-    import rich
-except ImportError as e:
-    rich = None
-    print(f"Failed to import rich: {e}")
-
 __all__ = ['TranslateNone']
 _logger = logging.getLogger(APP_NAME_UPPER)
 _max_depth: int = 6

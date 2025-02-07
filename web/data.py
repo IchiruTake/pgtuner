@@ -37,8 +37,8 @@ class _PG_WEB_DISK_PERF_STRING(_PG_WEB_DISK_PERF_BASE):
         _translate = string_disk_to_performance
         iops = _translate(self.random_iops, mode=RANDOM_IOPS)
         tput = _translate(self.throughput, mode=THROUGHPUT)
-        return PG_DISK_PERF(read_random_iops_spec=iops, write_random_iops_spec=iops, read_throughput_spec=tput,
-                            write_throughput_spec=tput, random_iops_scale_factor=self.random_iops_scale_factor,
+        return PG_DISK_PERF(random_iops_spec=iops, throughput_spec=tput,
+                            random_iops_scale_factor=self.random_iops_scale_factor,
                             throughput_scale_factor=self.throughput_scale_factor, num_disks=self.num_disks,
                             per_scale_in_raid=self.per_scale_in_raid, disk_usable_size=self.disk_usable_size_in_gib * Gi)
 
@@ -48,8 +48,7 @@ class _PG_WEB_DISK_PERF_INT(_PG_WEB_DISK_PERF_BASE):
     throughput: PositiveInt = Field(default=string_disk_to_performance(_DEFAULT_DISK_STRING_CODE, mode=THROUGHPUT))
 
     def to_backend(self) -> PG_DISK_PERF:
-        return PG_DISK_PERF(read_random_iops_spec=self.random_iops, write_random_iops_spec=self.random_iops,
-                            read_throughput_spec=self.throughput, write_throughput_spec=self.throughput,
+        return PG_DISK_PERF(random_iops_spec=self.random_iops, throughput_spec=self.throughput,
                             random_iops_scale_factor=self.random_iops_scale_factor,
                             throughput_scale_factor=self.throughput_scale_factor, num_disks=self.num_disks,
                             per_scale_in_raid=self.per_scale_in_raid, disk_usable_size=self.disk_usable_size_in_gib * Gi)

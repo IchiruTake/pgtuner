@@ -8,30 +8,14 @@ the first-party tzdata package available on PyPI.
 
 """
 
-from functools import lru_cache
 from zoneinfo import ZoneInfo
 
+__all__ = ['GetTimezone']
 # ==================================================================================================
 __ZONE: str = "Asia/Saigon"  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'
 __TIMEZONE: ZoneInfo = ZoneInfo(__ZONE)  # ZoneInfo('UTC') or ZoneInfo('Europe/Paris')
 
 
-def SwitchTimezone(zone: str) -> None:
-    global __ZONE, __TIMEZONE
-    try:
-        timezone = ZoneInfo(zone)
-    except Exception as e:
-        print(f"{e} Invalid timezone: {zone}")
-        return None
-    __ZONE = zone
-    __TIMEZONE = timezone
-    return None
-
-
 def GetTimezone() -> tuple[ZoneInfo, str]:
     return __TIMEZONE, __ZONE
 
-
-@lru_cache(maxsize=1)
-def PreloadGetUTC() -> tuple[ZoneInfo, str]:
-    return ZoneInfo("UTC"), "UTC"

@@ -4,7 +4,7 @@
 """
 
 import logging
-from functools import partial, lru_cache
+from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, Field, ByteSize, PositiveFloat, PositiveInt
@@ -43,34 +43,19 @@ def string_disk_to_performance(value: str | int | ByteSize, mode: str) -> int | 
     _logger.warning(f'The disk performance value of {value} is not found in the TOML file. Fallback to default')
     return PG_DISK_SIZING.SSDv2.iops() if mode == RANDOM_IOPS else PG_DISK_SIZING.SSDv2.throughput()
 
-
 _string_disk_to_iops = partial(string_disk_to_performance, mode=RANDOM_IOPS)
 _string_disk_to_throughput = partial(string_disk_to_performance, mode=THROUGHPUT)
 
 
 class PG_DISK_PERF(BaseModel):
-    read_random_iops_spec: _SIZING | str = (
+    random_iops_spec: _SIZING | str = (
         Field(default_factory=PydanticFact('Enter the read performance of the single disk in random IOPs metric: ',
                                            default_value=PG_DISK_SIZING.SSDv2.iops(), user_fn=_string_disk_to_iops),
-              description='The read specification of the disk performance measured as either 4 KiB (OS default) or '
-                          'using 8 KiB in random IOPS metric. In Linux general, the filesystem blocksize is compiled '
-                          'with 4K and change to 8 KiB may not be feasible. Since most of the time the measured IOPs '
-                          'is less than the number advertised so it is best to use the 4 KiB blocksize in measurement. '
-                          'Note that this setup does not pair well with heterogeneous disk type. For example, the '
-                          'performance of the SATA SSD is non-comparable to the NVMe SSD. When empty capacity, reduce'
-                          'this value by measurement again.',
-              )
-    )
-    write_random_iops_spec: _SIZING | str = (
-        Field(default_factory=PydanticFact('Enter the write performance of the single disk in random IOPs metric: ',
-                                           default_value=PG_DISK_SIZING.SSDv2.iops(), user_fn=_string_disk_to_iops),
-              description='The write specification of the disk performance measured as either 4 KiB (OS default) or '
-                          'using 8 KiB in random IOPS metric. In Linux general, the filesystem blocksize is compiled '
-                          'with 4K and change to 8 KiB may not be feasible. Since most of the time the measured IOPs '
-                          'is less than the number advertised so it is best to use the 4 KiB blocksize in measurement. '
-                          'Note that this setup does not pair well with heterogeneous disk type. For example, the '
-                          'performance of the SATA SSD is non-comparable to the NVMe SSD. When empty capacity, reduce'
-                          'this value by measurement again.',
+              description='The random IOPS metric of a single disk measured as either the 4 KiB page size (OS default) '
+                          'or using 8 KiB as PostgreSQL block size. It is best that user should provided measured '
+                          'result from the benchmark (fio, CrystalDiskMark). If you are working on NVME SSD drive, '
+                          'and the performance is strongly dependent on the current disk capacity, then you should '
+                          'provide it with lower value, or reduce our scale factor.',
               )
     )
     random_iops_scale_factor: PositiveFloat = (
@@ -85,20 +70,11 @@ class PG_DISK_PERF(BaseModel):
                           'and submit your value here rather than using the manufacturers specification.',
               )
     )
-    read_throughput_spec: _SIZING | str = (
+    throughput_spec: _SIZING | str = (
         Field(default_factory=PydanticFact('Enter the read performance of the single disk in MiB/s: ',
                                            default_value=PG_DISK_SIZING.SSDv2.throughput(),
                                            user_fn=_string_disk_to_throughput),
               description='The read specification of the disk performance. Its value can be random IOPS or read/write '
-                          'throughput in MiB/s. Note that this setup does not pair well with heterogeneous disk type. '
-                          'For example, the performance of the SATA SSD is non-comparable to the NVMe SSD.',
-              )
-    )
-    write_throughput_spec: _SIZING | str = (
-        Field(default_factory=PydanticFact('Enter the write performance of the single disk in MiB/s: ',
-                                           default_value=PG_DISK_SIZING.SSDv2.throughput(),
-                                           user_fn=_string_disk_to_throughput),
-              description='The write specification of the disk performance. Its value can be random IOPS or read/write '
                           'throughput in MiB/s. Note that this setup does not pair well with heterogeneous disk type. '
                           'For example, the performance of the SATA SSD is non-comparable to the NVMe SSD.',
               )
@@ -145,14 +121,10 @@ class PG_DISK_PERF(BaseModel):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        if isinstance(self.read_random_iops_spec, str):
-            self.read_random_iops_spec = _string_disk_to_iops(self.read_random_iops_spec)
-        if isinstance(self.write_random_iops_spec, str):
-            self.write_random_iops_spec = _string_disk_to_iops(self.write_random_iops_spec)
-        if isinstance(self.read_throughput_spec, str):
-            self.read_throughput_spec = _string_disk_to_throughput(self.read_throughput_spec)
-        if isinstance(self.write_throughput_spec, str):
-            self.write_throughput_spec = _string_disk_to_throughput(self.write_throughput_spec)
+        if isinstance(self.random_iops_spec, str):
+            self.random_iops_spec = _string_disk_to_iops(self.random_iops_spec)
+        if isinstance(self.throughput_spec, str):
+            self.throughput_spec = _string_disk_to_throughput(self.throughput_spec)
 
         pass
 
@@ -160,8 +132,8 @@ class PG_DISK_PERF(BaseModel):
         return round(max(1.0, (self.num_disks - 1) * self.per_scale_in_raid + 1.0), 2)
 
     def single_perf(self) -> tuple[_SIZING, _SIZING]:
-        s_tput = int(min(self.read_throughput_spec, self.write_throughput_spec) * self.throughput_scale_factor)
-        s_iops = int(min(self.read_random_iops_spec, self.write_random_iops_spec) * self.random_iops_scale_factor)
+        s_tput = int(self.throughput_spec * self.throughput_scale_factor)
+        s_iops = int(self.random_iops_spec * self.random_iops_scale_factor)
         return s_tput, s_iops
 
     def raid_perf(self) -> tuple[_SIZING, _SIZING]:

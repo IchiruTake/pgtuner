@@ -10,7 +10,7 @@ def time_decorator(func: Callable):
     def wrapper(*args, **kwargs):
         start_time = perf_counter()
         result = func(*args, **kwargs)
-        print(f"Time elapsed for {func.__name__}: {(perf_counter() - start_time) * K10:.2f} ms.")
+        print(f"Time elapsed for {func.__name__}: {(perf_counter() - start_time) * K10:.3f} ms.")
         return result
 
     return wrapper

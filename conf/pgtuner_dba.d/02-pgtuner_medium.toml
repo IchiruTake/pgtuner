@@ -1,8 +1,0 @@
-# ======================== MEDIUM-PROFILE ========================
-[pgtuner_dba.profile.medium]
-memory_gib_min = 8
-memory_gib_max = 32
-cpu_core_min = 2
-cpu_core_max = 8
-storage_gib_max = 300
-network_mbps_max = 1000

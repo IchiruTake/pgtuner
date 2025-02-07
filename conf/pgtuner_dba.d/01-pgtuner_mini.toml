@@ -1,8 +1,0 @@
-# ======================== MINI-PROFILE ========================
-[pgtuner_dba.profile.mini]
-memory_gib_min = 2
-memory_gib_max = 16
-cpu_core_min = 1
-cpu_core_max = 4
-storage_gib_max = 50
-network_mbps_max = 500
