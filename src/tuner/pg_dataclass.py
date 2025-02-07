@@ -17,6 +17,9 @@ from src.utils.avg import pow_avg
 from src.utils.pydantic_utils import bytesize_to_hr
 
 __all__ = ['PG_TUNE_REQUEST', 'PG_TUNE_RESPONSE']
+
+from src.utils.timing import time_decorator
+
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 
@@ -104,6 +107,7 @@ class PG_TUNE_RESPONSE(BaseModel):
             content = '\n'.join(f'{k} = {v}' for k, v in content.items())
         return content
 
+    @time_decorator
     def generate_content(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST,
                          exclude_names: list[str] | set[str] = None, backup_settings: bool = True,
                          output_format: Literal['json', 'conf', 'file'] = 'conf') -> str:
@@ -118,6 +122,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         _logger.error(msg)
         raise ValueError(msg)
 
+    @time_decorator
     def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
                  ignore_report: bool = True, skip_logger: bool = False) -> tuple[str, int | float]:
         # Cache result first

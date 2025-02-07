@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import random
+import re
 from contextlib import asynccontextmanager
 import os
 import gzip
 import time
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import FastAPI, Header
@@ -17,19 +19,22 @@ from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import pgtuner
+from src.static.c_timezone import GetTimezone
 from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
     SECOND, DAY
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.utils.env import OsGetEnvBool
 from web.middlewares.compressor import CompressMiddleware
-from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware, AutoCacheControlMiddleware
+from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware, UserRateLimitMiddleware
 from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
 
 # ==================================================================================================
 __all__ = ['app']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
+# 0: Development, 1: Production
+_app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
 
 @asynccontextmanager
 async def app_lifespan(application: ASGIApp | FastAPI):
@@ -69,7 +74,7 @@ async def app_lifespan(application: ASGIApp | FastAPI):
 
 
 # ==================================================================================================
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 app: FastAPI = FastAPI(
     debug=False,
     title=APP_NAME_UPPER,
@@ -85,10 +90,10 @@ part, and many DBA's experts at PostgreSQL community. This project is a combinat
 to be a structured approach for various profiles and settings (easily customizable and extendable). 
 ''',
     version=__version__,
-    openapi_url='/openapi.json',
-    docs_url='/docs',
-    redoc_url='/redoc',
-    swagger_ui_oauth2_redirect_url='/docs/oauth2-redirect',
+    openapi_url='/openapi.json' if _app_dev_mode else None,
+    docs_url='/docs' if _app_dev_mode else None,
+    redoc_url='/redoc' if _app_dev_mode else None,
+    swagger_ui_oauth2_redirect_url='/docs/oauth2-redirect' if _app_dev_mode else None,
     lifespan=app_lifespan,
     terms_of_service=None,
     contact={
@@ -105,8 +110,6 @@ to be a structured approach for various profiles and settings (easily customizab
 
 # ==================================================================================================
 _logger.info('The FastAPI application has been initialized. Adding the middlewares ...')
-# 0: Development, 1: Production
-_app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
 try:
     from starlette.middleware.sessions import SessionMiddleware # itsdangerous
     import string
@@ -118,11 +121,28 @@ except (ImportError, ModuleNotFoundError) as e:
                     f'\nPlease install more dependencies: {e}')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True,
                    allow_methods=['GET', 'POST'], allow_headers=[], max_age=600)
-app.add_middleware(HeaderManageMiddleware)
+
+# Auto Cache-Control and Header Middleware
+_private_cache = 'private, must-revalidate'
+_static_cache = (f'max-age={45 * SECOND if _app_dev_mode else 30 * MINUTE}, {_private_cache}, '
+                 f'stale-while-revalidate={30 * SECOND if _app_dev_mode else 3 * MINUTE}')
+_dynamic_cache = 'no-cache'
+app.add_middleware(HeaderManageMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
 
 # Rate Limiting
 _request_scale_factor: float = float(os.getenv(f'FASTAPI_REQUEST_LIMIT_FACTOR', '1'))
-app.add_middleware(GlobalRateLimitMiddleware, max_requests=int(50 * _request_scale_factor), interval_by_second=1)
+app.add_middleware(GlobalRateLimitMiddleware, max_requests=int(100 * MINUTE * _request_scale_factor), interval_by_second=MINUTE)
+
+def _cost(p: str) -> int:
+    # User-enhanced with regex
+    if p.startswith('/tune'):
+        return 3
+    return 1
+
+_user_request_limit = int(os.getenv(f'FASTAPI_USER_REQUEST_LIMIT', '15'))
+_user_request_window = int(os.getenv(f'FASTAPI_USER_REQUEST_WINDOW', '15'))
+app.add_middleware(UserRateLimitMiddleware, max_requests_per_window=_user_request_limit,
+                   window_length=_user_request_window, cost_function=_cost)
 
 # Compression Hardware
 _gzip = OsGetEnvBool(f'FASTAPI_GZIP', True)
@@ -137,13 +157,6 @@ if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
     app.add_middleware(CompressMiddleware, minimum_size=_base_min_size, compress_level=_base_com_level,
                        gzip_enabled=_gzip, gzip_minimum_size=_gzip_min_size, gzip_compress_level=_gzip_com_level,
                        zstd_enabled=_zstd, zstd_minimum_size=_zstd_min_size, zstd_compress_level=_zstd_com_level)
-
-# Auto-Cache Middleware
-_private_cache = 'private, must-revalidate'
-_static_cache = (f'max-age={45 * SECOND if _app_dev_mode else 30 * MINUTE}, {_private_cache}, '
-                 f'stale-while-revalidate={30 * SECOND if _app_dev_mode else 3 * MINUTE}')
-_dynamic_cache = 'no-cache'
-app.add_middleware(AutoCacheControlMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
 
 _logger.info('The middlewares have been added to the application ...')
 # ==================================================================================================
@@ -188,6 +201,16 @@ if _app_dev_mode:
                 'Cache-Control': _static_cache,
             }
         )
+else:
+    @app.get('/robots.txt', status_code=status.HTTP_200_OK)
+    async def robots():
+        return PlainTextResponse(
+            content=open(f'{_default_path}/robots.txt', 'r').read(),
+            status_code=status.HTTP_200_OK,
+            headers={
+                'Cache-Control': _static_cache
+            }
+        )
 
 @app.get('/')
 async def root():
@@ -199,15 +222,6 @@ async def root():
         }
     )
 
-@app.get('/robots.txt', status_code=status.HTTP_200_OK)
-async def robots():
-    return PlainTextResponse(
-        content=open(f'{_default_path}/robots.txt', 'r').read(),
-        status_code=status.HTTP_200_OK,
-        headers={
-            'Cache-Control': _static_cache
-        }
-    )
 
 @app.get('/js/{javascript_path}')
 async def js(
@@ -238,25 +252,22 @@ async def js(
     return Response(content, status_code=status.HTTP_200_OK, headers=response_header)
 
 
-
+_SERVICE_START_TIME = datetime.now(tz=GetTimezone()[0])
 @app.get('/_health', status_code=status.HTTP_200_OK)
 async def health():
+    _service_uptime: timedelta = datetime.now(tz=GetTimezone()[0]) - _SERVICE_START_TIME
     return ORJSONResponse(
-        content={'status': 'HEALTHY'},
+        content={
+            'status': 'HEALTHY',
+            'start_time': _SERVICE_START_TIME.isoformat(),
+            'uptime': str(_service_uptime),
+            'uptime_seconds': _service_uptime.total_seconds(),
+            'frontend': __version__,
+            'backend': backend_version
+        },
         status_code=status.HTTP_200_OK,
         headers={
-            'Cache-Control': f'max-age={45 * SECOND}, s-maxage={45 * SECOND}, {_private_cache}'
-        }
-    )
-
-
-@app.get('/_version', status_code=status.HTTP_200_OK)
-async def version():
-    return ORJSONResponse(
-        content={'frontend': __version__, 'backend': backend_version},
-        status_code=status.HTTP_200_OK,
-        headers={
-            'Cache-Control': f'max-age={DAY}, s-maxage={DAY}, private, must-revalidate'
+            'Cache-Control': f'max-age={2 * MINUTE}, s-maxage={45 * SECOND}, {_private_cache}'
         }
     )
 
@@ -282,6 +293,8 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     exclude_names = {'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
                      'log_directory',}
     response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
+
+    # Display the content and perform memory testing validation
     content = response.generate_content(
         target=PGTUNER_SCOPE.DATABASE_CONFIG,
         request=backend_request,

@@ -9,7 +9,7 @@ from typing import Literal
 
 # ==================================================================================================
 # Application Information
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __VERSION__ = __version__
 __AUTHOR__ = 'Ichiru Take'
 

@@ -1,8 +1,0 @@
-# ======================= MALL-PROFILE ========================
-[pgtuner_dba.profile.mall]
-memory_gib_min = 48
-memory_gib_max = 288
-cpu_core_min = 12
-cpu_core_max = 48
-storage_gib_max = 5120
-network_mbps_max = 12500

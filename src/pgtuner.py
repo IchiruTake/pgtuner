@@ -143,11 +143,9 @@ def make_disk(disk_string_code_throughput: str = _OS_DB_DISK_STRING_CODE,
               random_iops_scale_factor: PositiveFloat = 0.9, read_throughput_spec: _SIZING | str = None,
               write_throughput_spec: _SIZING | str = None, throughput_scale_factor: PositiveFloat = 0.9,
               per_scale_in_raid: PositiveFloat = 0.75) -> PG_DISK_PERF:
-    return PG_DISK_PERF(read_random_iops_spec=read_random_iops_spec or disk_string_code_rand_iops,
-                        write_random_iops_spec=write_random_iops_spec or disk_string_code_rand_iops,
+    return PG_DISK_PERF(random_iops_spec=read_random_iops_spec or disk_string_code_rand_iops,
                         random_iops_scale_factor=random_iops_scale_factor,
-                        read_throughput_spec=read_throughput_spec or disk_string_code_throughput,
-                        write_throughput_spec=write_throughput_spec or disk_string_code_throughput,
+                        throughput_spec=read_throughput_spec or disk_string_code_throughput,
                         throughput_scale_factor=throughput_scale_factor, disk_usable_size=disk_usable_size,
                         per_scale_in_raid=per_scale_in_raid, num_disks=num_disks)
 

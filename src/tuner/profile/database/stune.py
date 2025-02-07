@@ -264,8 +264,7 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
     _item_tuning(key=commit_delay, after=int(after_commit_delay), scope=PG_SCOPE.QUERY_TUNING, response=response,
                  suffix_text=_suffix_text, before=managed_cache[commit_delay], _log_pool=_log_pool)
     _item_tuning(key='commit_siblings', after=5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
-                 scope=PG_SCOPE.QUERY_TUNING, response=response,
-                 suffix_text=_suffix_text, before=managed_cache['commit_siblings'], _log_pool=_log_pool)
+                 scope=PG_SCOPE.QUERY_TUNING, response=response, suffix_text=_suffix_text, _log_pool=_log_pool)
     return None
 
 
@@ -349,18 +348,34 @@ def _disk_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: 
 @time_decorator
 def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
     _log_pool.append('Start tuning the background writer of the PostgreSQL database server based on the database '
-                     'workload. \nImpacted Attributes: bgwriter_lru_maxpages.')
+                     'workload. \nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.')
     _kwargs = request.options.tuning_kwargs
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     _data_iops = request.options.data_index_spec.raid_perf()[1]
+
+    # Tune the bgwriter_delay and bgwriter_lru_maxpages
+    bgwriter_delay = 'bgwriter_delay'
+    if PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'hdd', interval='weak'):
+        # HDD-based tuning
+        after_bgwriter_delay = 500
+    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'hdd', interval='strong'):
+        after_bgwriter_delay = 200
+    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'san'):
+        after_bgwriter_delay = 150
+    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd'):
+        after_bgwriter_delay = 100
+    else:
+        after_bgwriter_delay = 50
+    _item_tuning(key=bgwriter_delay, after=after_bgwriter_delay, scope=PG_SCOPE.OTHERS, response=response,
+                 before=managed_cache[bgwriter_delay], _log_pool=_log_pool)
+
     # Minimum is 4 MiB of random IOPS for HDD (default of PostgreSQL)
     max_data_in_pages = max(PG_DISK_PERF.throughput_to_iops(4), floor(_data_iops * _kwargs.bgwriter_utilization_ratio))
     max_pages_between_interval = ceil(max_data_in_pages * (managed_cache['bgwriter_delay'] / K10))
     max_pages_between_interval = realign_value(max_pages_between_interval, page_size=20)
     bgwriter_lru_maxpages = 'bgwriter_lru_maxpages'
     _item_tuning(key=bgwriter_lru_maxpages, after=max_pages_between_interval[request.options.align_index],
-                 scope=PG_SCOPE.OTHERS, response=response, before=managed_cache[bgwriter_lru_maxpages],
-                 _log_pool=_log_pool)
+                 scope=PG_SCOPE.OTHERS, response=response, _log_pool=_log_pool)
 
 
 @time_decorator
@@ -480,6 +495,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
         # 10 us added here to prevent some CPU fluctuation could be observed in real-life
         _delay = max(0.05, after_autovacuum_vacuum_cost_delay + 0.02)
     _delay += 0.005     # Adding 5us for the CPU interrupt and context switch
+    _delay *= 1.05      # Adding 5% of the delay to safely reduce the number of maximum page per cycle by 4.76%
     autovacuum_max_page_per_cycle = floor(autovacuum_max_page_per_sec / K10 * _delay)
 
     # Since I tune for auto-vacuum, it is best to stick with MISS:DIRTY ratio is 4:1 ~ 6:1 --> 5:1 (5 pages reads, 1
