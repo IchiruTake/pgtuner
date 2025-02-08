@@ -28,10 +28,7 @@ if DEBUG_MODE and os.path.exists('conf/log_debug.toml'):
 elif WEB_MODE and os.path.exists('conf/log_web.toml'):
     LOG_FILE_PATH = 'conf/log_web.toml'
 
-SERVER_HOSTNAME: str = socket.gethostname()  # We don't use FQDN here
-if WEB_MODE:
-    SERVER_HOSTNAME = '<postgres-host>'
-
+# SERVER_HOSTNAME: str = socket.gethostname()  # We don't use FQDN here
 PG_ARCHIVE_DIR = '/var/lib/postgresql/mnt/archive/wal'
 PG_LOG_DIR = '/var/log/postgresql'
 

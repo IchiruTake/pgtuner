@@ -4,11 +4,11 @@ import ipaddress
 from datetime import datetime
 from math import ceil
 from time import perf_counter
-from typing import Callable, Any
+from typing import Callable
 from collections import defaultdict, deque
 
 from src.static.c_timezone import GetTimezone
-from src.static.vars import MINUTE, YEAR, APP_NAME_UPPER, K10
+from src.static.vars import MINUTE, APP_NAME_UPPER, K10
 from starlette.types import ASGIApp, Send, Receive, Message, Scope as StarletteScope
 from starlette.exceptions import HTTPException
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
@@ -46,121 +46,70 @@ class BaseMiddleware:
 
 # ==============================================================================
 # Rate Limiting
-class GlobalRateLimitMiddleware(BaseMiddleware):
-    def __init__(self, app: ASGIApp | ASGI3Application, max_requests: int, interval_by_second: int = MINUTE,
-                 time_operator: Callable[[], int | float] = perf_counter, accept_scope: str | list[str] = 'http'):
-        """
-        This is a token-bucket algorithm holding the rate limiting for the global requests. The maximum number of
-        requests is determined by the `max_requests` and the `interval_by_second` is the time window to process the
-        requests. The `time_operator` is a callable function to get the current time.
+class RateLimitMiddleware(BaseMiddleware):
+    """
+    This clas is a merged version of GlobalRateLimitMiddleware and UserRateLimitMiddleware, responsible to handle
+    the rate limiting for the global and user requests. The reason for the merged is to reduce the cost of excessive
+    middleware calls.
 
-        Arguments:
-        ---------
+    Arguments:
+    ---------
 
-        max_requests: int
-            The maximum number of requests to be processed in the given time window.
+    max_requests: int && interval: int
+        The maximum number of requests to be processed in the request bucket. The interval is the time window in
+        seconds to process the requests. Applied for the global rate limiting.
 
-        interval_by_second: int
-            The time window in seconds to process the requests.
+    max_requests_per_window: int && window_length: int
+        The maximum number of requests to be processed in the given time window. The window_length is the time window
+        in seconds to process the requests. Applied for the user rate limiting.
 
-        time_operator: Callable[[], int | float]
-            The callable function to get the current time. The default is `perf_counter` from the `time` module.
+    cost_function: Callable[[str], int]
+        The blackbox callable function to calculate the cost of the request (based on the provided path). The default is
+        (lambda x: 1) meant that every HTTP request has a cost of 1. A cost of 0 is not allowed. For example, if
+        the request is heavy, we can increase the cost to 2 meant that it took 2 tokens from the bucket or in the
+        user time window.
 
-        """
-        super(GlobalRateLimitMiddleware, self).__init__(app, accept_scope=accept_scope)
-        self.max_requests: int = max_requests
-        self.interval_by_second: int = interval_by_second
+    time_operator: Callable[[], int | float]
+        The callable function to get the current time. The default is `perf_counter` from the `time` module.
+        You can use `time.time` or `time.monotonic` as well, but its unit must be measured in seconds.
+
+    """
+
+    def __init__(self, app: ASGIApp | ASGI3Application,
+                 max_requests: int | float = int(100 * 60 * 0.9), max_requests_per_window: int = 10,
+                 interval: int | float = 60, window_length: int | float = 15,
+                 cost_function: Callable[[str], int] = lambda x: 1,
+                 time_operator: Callable[[], int | float] = perf_counter, accept_scope: str | list[str] = 'http',
+                 ignore_if_private_loopback: bool = True):
+        super(RateLimitMiddleware, self).__init__(app, accept_scope=accept_scope)
+        # Others
+        self._cost_function = cost_function or (lambda x: 1)    # Ensure the cost function is not None
         self._operator: Callable = time_operator
-        self._num_processed_requests: int = 0
+        self._ignore_if_private_loopback: bool = ignore_if_private_loopback
+
+        # Global Rate Limiting
+        self.max_requests: int | float = max_requests
+        self.interval: int = interval
+        self._refill_rate: float = self.max_requests / self.interval    # Minor optimization
+        self._capacity: int | float = self.max_requests
         self._last_request_time: float = self._operator()
 
-    async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
-                       send: ASGISendCallable | Send) -> None:
-        if not super()._precheck(scope):
-            await self._app(scope, receive, send)
-            return None
-
-        # Ignore the rate-limit for private IPv4 & IPv6 addresses
-        if ipaddress.ip_address(scope['client'][0]).is_private:
-            await self._app(scope, receive, send)
-            return None
-
-        # Check how many requests has been processed
-        current_time = self._operator()
-        diff_time: float = current_time - self._last_request_time
-        current_processed_requests = ceil(self.max_requests * diff_time / self.interval_by_second)
-        self._num_processed_requests = max(0, self._num_processed_requests - current_processed_requests) + 1
-        self._last_request_time = current_time
-
-        # Rate Limiting Decision
-        if self._num_processed_requests > self.max_requests:
-            remaining_requests = self._num_processed_requests - self.max_requests
-            est_time = remaining_requests * self.interval_by_second / self.max_requests
-            message = (f'Rate limit exceeded ({remaining_requests} requests remaining). '
-                       f'Try again in {est_time:.2f} seconds.')
-            _logger.warning(message)
-            raise HTTPException(status_code=HTTP_429_TOO_MANY_REQUESTS, detail=message)
-
-        # OK to process the request
-        await self._app(scope, receive, send)
-
-
-class UserRateLimitMiddleware(BaseMiddleware):
-    def __init__(self, app: ASGIApp | ASGI3Application, max_requests_per_window: int, window_length: int = 15,
-                 time_operator: Callable[[], int | float] = perf_counter, accept_scope: str | list[str] = 'http',
-                 cost_function: Callable[[str], int] = lambda x: 1):
-        """
-        This is a sliding-windows algorithm holding the rate limiting for the user requests. The maximum number of
-        requests is determined by the `max_requests_per_user_per_second` and the `window_length` is the time window
-        to check the requests. The `time_operator` is a callable function to get the current time.
-
-        Arguments:
-        ---------
-
-        max_requests: int
-            The maximum number of requests to be processed in the given time window.
-
-        window_length: int
-            The window length in seconds to process the requests.
-
-        time_operator: Callable[[], int | float]
-            The callable function to get the current time. The default is `perf_counter` from the `time` module.
-
-        """
-        super(UserRateLimitMiddleware, self).__init__(app, accept_scope=accept_scope)
-        self._costs = cost_function or (lambda x: 1)
-        self.max_requests: int = max_requests_per_window
+        # User Rate Limiting
+        self.max_requests_per_window: int = max_requests_per_window
         self.window_length: int = window_length
-        self._operator: Callable = time_operator
-
-        # Multiply by two to handle the burst requests
-        self._request_storage = defaultdict(lambda : deque(maxlen=self.max_requests * 2))
+        self._user_storage = defaultdict(lambda: deque(maxlen=self.max_requests_per_window * 2))
         self._cleanup_lock = False  # This served as a lock
 
-    async def _cleanup(self):
-        if self._cleanup_lock:
-            return None
-        # Lock the cleanup
-        _logger.debug(f'Acquire the object lock to cleanup the requests after {self.window_length * 2} seconds.')
-        self._cleanup_lock = True
-
-        # Twice the window_length to schedule
-        await asyncio.sleep(self.window_length * 2)
-        _logger.debug(f'Request cleanup is triggered.')
-        pending_deletion = []
-        for user_id_key, request_pool in self._request_storage.items():
-            past_datetime = self._operator() - self.window_length
-            while request_pool and request_pool[0] <= past_datetime:
-                request_pool.popleft()
-            if not request_pool:
-                pending_deletion.append(user_id_key)
-
-        for user_id_key in pending_deletion:
-            del self._request_storage[user_id_key]
-
-        self._cleanup_lock = False
-        _logger.debug(f'Request cleanup is completed. Lock is released.')
-        return None
+        # Validation
+        assert self.max_requests_per_window > 0, 'The max requests per window must be greater than 0.'
+        assert self.max_requests > 0, 'The max requests must be greater than 0.'
+        assert self.interval > 0, 'The interval by second must be greater than 0.'
+        assert self.window_length > 0, 'The window length must be greater than 0.'
+        assert self.max_requests_per_window <= self.max_requests, \
+            'The max requests per window must be less than or equal to the max requests.'
+        user_limit = self.max_requests_per_window / self.window_length
+        global_limit = self.max_requests / self.interval
+        assert user_limit < global_limit, 'The user limit must be less than or equal to the global limit.'
 
     async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
                        send: ASGISendCallable | Send) -> None:
@@ -168,25 +117,40 @@ class UserRateLimitMiddleware(BaseMiddleware):
             await self._app(scope, receive, send)
             return None
 
-        # Ignore the rate-limit for private IPv4 & IPv6 addresses
+        # User-rate limiting is called first, then the global rate limiting
         user, port = scope.get('client')
         user_location = ipaddress.IPv4Address(f'{user}')
-        if user_location.is_private or user_location.is_loopback:
+        if self._ignore_if_private_loopback and (user_location.is_private or user_location.is_loopback):
             await self._app(scope, receive, send)
             return None
+        path_cost: int = max(1, ceil(self._cost_function(scope['path'])))
+        assert path_cost <= self.max_requests, 'The path cost must be less than or equal to the max requests.'
+        assert path_cost <= self.max_requests_per_window, \
+            'The path cost must be less than or equal to the max requests per user.'
 
-        # Check how many requests has been processed. Get the window interval from its previous `window_length` seconds
+        # Calculate time interval
         current_time = self._operator()
+
+        # User rate limiting. It is best to keep the pool of user rate is small to minimize the memory usage,
+        # and time different
         past_datetime = current_time - self.window_length
-        _request_pool = self._request_storage[f'{user}_{port}']
+        _request_pool = self._user_storage[f'{user}_{port}']
         while _request_pool and _request_pool[0] <= past_datetime:
             _request_pool.popleft()
 
-        # The cost of the path, max() is to ensure the minimum cost is 1
-        path_cost: int = max(1, ceil(self._costs(scope['path'])))
-        assert path_cost <= self.max_requests, 'The path cost must be less than or equal to the max requests.'
-        if len(_request_pool) > self.max_requests + path_cost:
-            message = f'Rate limit exceeded. Try again in {self.window_length:.2f} seconds.'
+        # Global rate limiting.
+        diff_time: float = current_time - self._last_request_time
+        self._capacity = min(self._capacity + self._refill_rate * diff_time - path_cost,
+                             self.max_requests)
+        self._last_request_time = current_time
+
+        # Validation
+        if len(_request_pool) > self.max_requests_per_window + path_cost:
+            message = f'Your request limit is exceeded. Try again in {self.window_length / 2:.2f} seconds.'
+            _logger.warning(message)
+            raise HTTPException(status_code=HTTP_429_TOO_MANY_REQUESTS, detail=message)
+        if self._capacity <= 0:
+            message = f'The server limit exceeded. Try again in some seconds.'
             _logger.warning(message)
             raise HTTPException(status_code=HTTP_429_TOO_MANY_REQUESTS, detail=message)
 
@@ -195,9 +159,40 @@ class UserRateLimitMiddleware(BaseMiddleware):
             _request_pool.append(current_time)
         else:
             _request_pool.extend([current_time] * path_cost)
-
         asyncio.create_task(self._cleanup())
+
+        # Global rate limiting. In this algorithm, you can use floor() if you want to be more strict for 1 token less
+
+
+
+
         await self._app(scope, receive, send)
+
+    async def _cleanup(self):
+        if self._cleanup_lock:
+            return None
+
+        # Lock the cleanup
+        _logger.debug(f'Acquire the object lock to cleanup the requests after {self.window_length * 2} seconds.')
+        self._cleanup_lock = True
+
+        # Twice the window_length to schedule
+        await asyncio.sleep(self.window_length * 2)
+        _logger.debug(f'Request cleanup is triggered.')
+        pending_deletion = []
+        for user_id_key, request_pool in self._user_storage.items():
+            past_datetime = self._operator() - self.window_length
+            while request_pool and request_pool[0] <= past_datetime:
+                request_pool.popleft()
+            if not request_pool:
+                pending_deletion.append(user_id_key)
+
+        for user_id_key in pending_deletion:
+            del self._user_storage[user_id_key]
+
+        self._cleanup_lock = False
+        _logger.debug(f'Request cleanup is completed. Lock is released.')
+        return None
 
 # ==============================================================================
 # Header Hardening

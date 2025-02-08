@@ -4,11 +4,11 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
-from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, THROUGHPUT, RANDOM_IOPS, BASE_WAL_SEGMENT_SIZE, M10
-from src.tuner.data.disks import PG_DISK_PERF, string_disk_to_performance
+from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, BASE_WAL_SEGMENT_SIZE, M10
+from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
-from src.tuner.data.sizing import PG_SIZING
+from src.tuner.data.sizing import PG_SIZING, PG_DISK_SIZING
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST
@@ -28,24 +28,9 @@ class _PG_WEB_DISK_PERF_BASE(BaseModel):
     disk_usable_size_in_gib: ByteSize = Field(default=20, ge=5)
 
 
-_DEFAULT_DISK_STRING_CODE = 'ssdv2'
-class _PG_WEB_DISK_PERF_STRING(_PG_WEB_DISK_PERF_BASE):
-    random_iops: str = Field(default='ssdv2')
-    throughput: str = Field(default='ssdv2')
-
-    def to_backend(self) -> PG_DISK_PERF:
-        _translate = string_disk_to_performance
-        iops = _translate(self.random_iops, mode=RANDOM_IOPS)
-        tput = _translate(self.throughput, mode=THROUGHPUT)
-        return PG_DISK_PERF(random_iops_spec=iops, throughput_spec=tput,
-                            random_iops_scale_factor=self.random_iops_scale_factor,
-                            throughput_scale_factor=self.throughput_scale_factor, num_disks=self.num_disks,
-                            per_scale_in_raid=self.per_scale_in_raid, disk_usable_size=self.disk_usable_size_in_gib * Gi)
-
-
 class _PG_WEB_DISK_PERF_INT(_PG_WEB_DISK_PERF_BASE):
-    random_iops: PositiveInt = Field(default=string_disk_to_performance(_DEFAULT_DISK_STRING_CODE, mode=RANDOM_IOPS))
-    throughput: PositiveInt = Field(default=string_disk_to_performance(_DEFAULT_DISK_STRING_CODE, mode=THROUGHPUT))
+    random_iops: PositiveInt = Field(default=PG_DISK_SIZING.SSDv1.iops())
+    throughput: PositiveInt = Field(default=PG_DISK_SIZING.SSDv1.throughput())
 
     def to_backend(self) -> PG_DISK_PERF:
         return PG_DISK_PERF(random_iops_spec=self.random_iops, throughput_spec=self.throughput,

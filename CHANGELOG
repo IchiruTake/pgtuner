@@ -1,0 +1,20 @@
+v0.x.x (TBD)
+=========================
+- Rewrite the Python backend application to Javascript (if necessary)
+
+
+
+v0.1.1 (Feb , 2025)
+=========================
+- Cleanup development and legacy code
+- Better performance on correction tuning phase, especially on the memory pool increase tuning task, fasten from 6ms to 1-2 ms
+- Create robots.txt file for web crawler to index the web page
+- Move `_version` endpoint to the `_health` endpoint with a more dedicated health check; service uptime is reported
+- Prepare CHANGELOG file for future release
+- Refactor the rate-limit middleware: Merge the global rate-limit and the user rate-limit into one middleware
+
+
+
+v0.1.0 (Feb 01st, 2025)
+=========================
+- Initial release

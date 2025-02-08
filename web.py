@@ -39,6 +39,7 @@ if __name__ == "__main__":
     # https://scotthelme.co.uk/a-new-security-header-feature-policy/?ref=scotthelme.co.uk
     # https://scotthelme.co.uk/content-security-policy-an-introduction/
     # https://www.keycdn.com/blog/http-security-headers <- Good one
+    # https://www.invicti.com/blog/web-security/http-security-headers/
     _content_security = [
         "default-src 'self'",
         "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline' ",
@@ -87,9 +88,6 @@ if __name__ == "__main__":
         ('X-Powered-By', 'Uvicorn'),
         ('Server', 'Starlette'),
     ]
-    # FUTURE: Disable as in experimental in 2025
-    # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy (Replaces Feature-Policy)
-    # self._hard_headers['Permissions-Policy'] = self._hard_headers['Feature-Policy']
 
     uvicorn.run(web.app, host=_host, port=_port, access_log=_access_log, workers=_workers,
                 http=_http, loop=_loop, limit_concurrency=_limit_concurrency,

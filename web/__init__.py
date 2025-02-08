@@ -26,7 +26,7 @@ from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.utils.env import OsGetEnvBool
 from web.middlewares.compressor import CompressMiddleware
-from web.middlewares.middlewares import GlobalRateLimitMiddleware, HeaderManageMiddleware, UserRateLimitMiddleware
+from web.middlewares.middlewares import HeaderManageMiddleware, RateLimitMiddleware
 from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
 
 # ==================================================================================================
@@ -130,19 +130,17 @@ _dynamic_cache = 'no-cache'
 app.add_middleware(HeaderManageMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
 
 # Rate Limiting
-_request_scale_factor: float = float(os.getenv(f'FASTAPI_REQUEST_LIMIT_FACTOR', '1'))
-app.add_middleware(GlobalRateLimitMiddleware, max_requests=int(100 * MINUTE * _request_scale_factor), interval_by_second=MINUTE)
-
 def _cost(p: str) -> int:
     # User-enhanced with regex
     if p.startswith('/tune'):
         return 3
     return 1
-
+_request_scale_factor: float = float(os.getenv(f'FASTAPI_REQUEST_LIMIT_FACTOR', '0.90'))
 _user_request_limit = int(os.getenv(f'FASTAPI_USER_REQUEST_LIMIT', '15'))
 _user_request_window = int(os.getenv(f'FASTAPI_USER_REQUEST_WINDOW', '15'))
-app.add_middleware(UserRateLimitMiddleware, max_requests_per_window=_user_request_limit,
-                   window_length=_user_request_window, cost_function=_cost)
+app.add_middleware(RateLimitMiddleware, max_requests=int(100 * SECOND * _request_scale_factor), interval=MINUTE,
+                   max_requests_per_window=_user_request_limit, window_length=_user_request_window,
+                   cost_function=_cost)
 
 # Compression Hardware
 _gzip = OsGetEnvBool(f'FASTAPI_GZIP', True)
@@ -218,6 +216,7 @@ async def root():
         url='/static/index.html',
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={
+            'Content-Type': 'text/html; charset=UTF-8',
             'Cache-Control': _static_cache,
         }
     )
