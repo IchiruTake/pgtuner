@@ -1,41 +1,7 @@
 <!doctype html>
 <html lang=en>
-<head>
-<meta charset=UTF-8>
-<meta content="width=device-width,initial-scale=1" name=viewport>
-<link crossorigin=anonymous href=https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css integrity=sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH rel=stylesheet>
-<link rel=preload as=style onload='this.onload=null,this.rel="stylesheet"' href=/css/bootstrap-icons.min.mincss3k.css>
-<noscript> <link rel=stylesheet href=/css/bootstrap-icons.min.mincss3k.css> </noscript>
-<script crossorigin=anonymous rel=preload integrity=sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz src=https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js></script>
-<script defer src=/js/pgtuner.min.js></script>
-<meta name=description content="PGTuner: The :project:`pgtuner` (or PostgreSQL: DBA & Tuner) is a SQL/Python-based project designed to manage and optimize kernel parameters and database settings, focusing on TCP networking (connection management, retries, timeouts, and **buffering**) and memory/VM management (swappiness, dirty ratios, over-commit memory, hugepages, and cache pressure); whilst maintaining high performance, stability, security, and concurrency for various system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, and many DBA's experts at PostgreSQL community. This project is a combination of those experiences and designed to be a structured approach for various profiles and settings (easily customizable and extendable). ">
-<title>PGTuner - Automatic PostgreSQL Tuning Tool</title>
-<link href=/resource/favicon.ico rel=icon>
-</head>
-<header class=py-3 style="background:linear-gradient(to bottom,#f207b8,#f564e9)">
-<div class="container d-flex justify-content-between align-items-center">
-<div class="d-flex align-items-center">
-<img alt="PGTuner Logo" class=me-2 src=/resource/icon.min.png fetchpriority=high width=60 height=60>
-<div>
-<h1 class="h4 mb-0 text-white">PGTuner (Alpha) v0.1.1</h1>
-<small class=text-light>Extensive PostgreSQL optimization</small>
-</div>
-</div>
-<nav class="d-flex align-items-center">
-<ul class="nav me-3">
-<li class=nav-item>
-<a class="nav-link text-white fw-bold" href=/ >Home</a>
-</li>
-<li class=nav-item>
-<a class="nav-link text-white fw-bold" href=https://github.com/IchiruTake/pgtuner_dba target=_blank>
-<i class="bi bi-github mx-1"></i>
-Contribute
-</a>
-</li>
-</ul>
-</nav>
-</div>
-</header>
+{% include './head.html' %}
+{% include './header.html' %}
 <body>
 <div class="container my-4">
 <h2 class=mb-4>PGTuner Input Form</h2>
@@ -263,8 +229,8 @@ Note that for a performant PostgreSQL server, you should host your database on a
 </i>
 </div>
 <div class="d-flex align-items-center">
-<input class="form-range me-3" name=data_index_spec.random_iops id=data_index_spec.random_iops_range max=1400000 min=50 step=50 value=20000 type=range onchange='syncSliderToNumber("data_index_spec.random_iops")'>
-<input class="form-control w-25" id=data_index_spec.random_iops max=1400000 min=50 step=50 value=20000 type=number onchange='syncNumberToSlider("data_index_spec.random_iops")'>
+<input class="form-range me-3" name=data_index_spec.random_iops id=data_index_spec.random_iops_range max=1400000 min=50 step=50 value=30000 type=range onchange='syncSliderToNumber("data_index_spec.random_iops")'>
+<input class="form-control w-25" id=data_index_spec.random_iops max=1400000 min=50 step=50 value=30000 type=number onchange='syncNumberToSlider("data_index_spec.random_iops")'>
 </div>
 </div>
 <div class="col-6 mb-3">
@@ -343,8 +309,8 @@ Note that for a performant PostgreSQL server, you should host your database on a
 </i>
 </div>
 <div class="d-flex align-items-center">
-<input class="form-range me-3" name=wal_spec.random_iops id=wal_spec.random_iops_range max=1400000 min=50 step=50 value=20000 type=range onchange='syncSliderToNumber("wal_spec.random_iops")'>
-<input class="form-control w-25" id=wal_spec.random_iops max=1400000 min=50 step=50 value=20000 type=number onchange='syncNumberToSlider("wal_spec.random_iops")'>
+<input class="form-range me-3" name=wal_spec.random_iops id=wal_spec.random_iops_range max=1400000 min=50 step=50 value=30000 type=range onchange='syncSliderToNumber("wal_spec.random_iops")'>
+<input class="form-control w-25" id=wal_spec.random_iops max=1400000 min=50 step=50 value=30000 type=number onchange='syncNumberToSlider("wal_spec.random_iops")'>
 </div>
 </div>
 <div class="col-6 mb-3">
@@ -892,6 +858,18 @@ Max WAL Size Remaining Upper Limit (GiB) </label>
 </div>
 <h5 class=mb-3>Others</h5>
 <div class=row>
+<div class="col-4 mb-3">
+<div class="d-flex justify-content-between align-items-center">
+<label class=form-label for=keywords.bgwriter_utilization_ratio>
+Background Writer Utilization </label>
+<i class="bi bi-info-circle text-primary" data-bs-toggle=popover data-bs-trigger="hover focus" role=button tabindex=0 data-bs-placement=auto data-bs-content="The utilization ratio of the random IOPS of data volume used for the background writer process. The supported range is (0, 0.3], default is 0.1 or 10%. This would determine the efficient estimated WRITE IOPs, but minimum 4 MiB/s of 8K random IOPS. " title="Background Writer Utilization">
+</i>
+</div>
+<div class="d-flex align-items-center">
+<input class="form-range me-3" name=keywords.bgwriter_utilization_ratio id=keywords.bgwriter_utilization_ratio_range max=0.4 min=0.01 step=0.005 value=0.15 type=range onchange='syncSliderToNumber("keywords.bgwriter_utilization_ratio")'>
+<input class="form-control w-auto" id=keywords.bgwriter_utilization_ratio max=0.4 min=0.01 step=0.005 value=0.15 type=number onchange='syncNumberToSlider("keywords.bgwriter_utilization_ratio")'>
+</div>
+</div>
 <div class="col-4 mb-3">
 <div class="d-flex justify-content-between align-items-center">
 <label class=form-label for=keywords.autovacuum_utilization_ratio>

@@ -43,7 +43,7 @@ from typing import NoReturn
 
 from asgiref.typing import ASGIReceiveCallable, ASGISendCallable, Scope as ASGI3Scope
 from starlette.datastructures import Headers, MutableHeaders
-from starlette.middleware.gzip import GZipMiddleware as _GZip
+# from starlette.middleware.gzip import GZipMiddleware as _GZip
 from starlette.types import ASGIApp, Send, Receive, Message, Scope as StarletteScope
 from zstandard import ZstdCompressor, ZstdCompressionWriter, FLUSH_FRAME, FLUSH_BLOCK
 
@@ -122,8 +122,6 @@ def _select_accept_encoding(accept_encoding: dict[str, float], sampling_list: tu
 
     if len(accept_encoding) == 0:
         return ''
-    elif len(accept_encoding) == 1:
-        return accept_encoding.popitem()[0]
 
     # Priority selection
     if method in (ALG_SELECT.PRIORITY_FIRST, ALG_SELECT.PRIORITY_SAMPLING, ALG_SELECT.PRIORITY_METHOD):
@@ -274,7 +272,6 @@ class CompressMiddleware(BaseMiddleware):
         # Accept-Encoding could be single or in multiple-format
         accept_encoding_dict = _parse_accept_encoding(accept_encoding_string, ignore_wildcard=True)
         alg = _select_accept_encoding(accept_encoding_dict, sampling_list=self._compressor_keys, method=self._method)
-        #print('Selected Algorithm: ', alg)
         if alg == 'zstd':
             _compressor = _ZstdResponder(self._app, minimum_size=self._compressor['zstd'].get_size(),
                                          compress_level=self._compressor['zstd'].get_compress_level())

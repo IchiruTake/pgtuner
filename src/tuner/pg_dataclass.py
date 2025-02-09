@@ -122,7 +122,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         _logger.error(msg)
         raise ValueError(msg)
 
-    @time_decorator
+    # @time_decorator
     def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
                  ignore_report: bool = True, skip_logger: bool = False) -> tuple[str, int | float]:
         # Cache result first

@@ -159,13 +159,10 @@ class RateLimitMiddleware(BaseMiddleware):
             _request_pool.append(current_time)
         else:
             _request_pool.extend([current_time] * path_cost)
-        asyncio.create_task(self._cleanup())
 
-        # Global rate limiting. In this algorithm, you can use floor() if you want to be more strict for 1 token less
-
-
-
-
+        if not self._cleanup_lock:
+            # Minor fast-path to reduce stress on the asyncio event_loop(). Remove don't impact the code
+            asyncio.create_task(self._cleanup())
         await self._app(scope, receive, send)
 
     async def _cleanup(self):
@@ -199,7 +196,8 @@ class RateLimitMiddleware(BaseMiddleware):
 class HeaderManageMiddleware(BaseMiddleware):
     def __init__(self, app: ASGIApp | ASGI3Application, accept_scope: str | list[str] = 'http',
                  static_cache_control: str = 'max-age=600, private, must-revalidate, stale-while-revalidate=60',
-                 dynamic_cache_control: str = 'no-cache'):
+                 dynamic_cache_control: str = 'no-cache',
+                 time_operator: Callable[[], int | float] = perf_counter):
         super(HeaderManageMiddleware, self).__init__(app, accept_scope=accept_scope)
         # ==============================================================================
         # Auto Cache-Control
@@ -254,6 +252,7 @@ class HeaderManageMiddleware(BaseMiddleware):
         self._dynamic_cache_control: str = dynamic_cache_control
 
         self._tz = GetTimezone()[0]
+        self._time_operator: Callable = time_operator
 
 
     async def __call__(self, scope: StarletteScope | ASGI3Scope, receive: ASGIReceiveCallable | Receive,
@@ -262,28 +261,17 @@ class HeaderManageMiddleware(BaseMiddleware):
             await self._app(scope, receive, send)
             return None
 
-        # Reset the timezone.
-        _request_time: datetime | None = None
-        _request_time_in_str: str | None = None
-        _response_timestamp: datetime | None = None
-
-        # ASGI with Receive (Request) + Headers
-        async def _receive_with_headers() -> Message:
-            message = await receive()
-            if message['type'] == 'http.request':
-                # Timestamp for the request
-                nonlocal _request_time_in_str, _request_time
-                _request_time = datetime.now(tz=self._tz)
-                _request_time_in_str = _request_time.isoformat()
-
-                # headers = MutableHeaders(scope=message)
-                # headers.append('X-Request-Datetime', _request_time_in_str.isoformat())
-            return message
+        # Trigger the time
+        _request_time: float = self._time_operator()
 
         # ASGI with Send (Response) + Headers
         async def _send_with_headers(message: Message | ASGISendEvent) -> None:
             if message['type'] == 'http.response.start':
                 headers = MutableHeaders(scope=message)
+
+                nonlocal _request_time
+                headers.append('X-Response-FullTime', f'{(perf_counter() - _request_time) * K10:.2f}ms')
+
                 # Cache-Control headers
                 if 'Cache-Control' not in headers:  # Override only if not set
                     content_type = headers.get('Content-Type', '').split(';')[0].strip()
@@ -291,17 +279,7 @@ class HeaderManageMiddleware(BaseMiddleware):
                         headers.append('Cache-Control', self._static_cache_control)
                     # elif self._dynamic and content_type in self._dynamic:
                     #     headers.append('Cache-Control', self._dynamic_cache_control)
-
-                # Timestamp for the response
-                nonlocal _request_time_in_str, _response_timestamp
-                if _request_time_in_str is not None:
-                    _response_timestamp = datetime.now(tz=self._tz)
-                    headers.append('X-Response-Datetime',_response_timestamp.isoformat())
-                    headers.append('X-Request-Datetime', _request_time_in_str)
-
-                    _duration = (_response_timestamp - _request_time).microseconds / K10
-                    headers.append('X-Response-DurationInMs', f'{_duration:.2f}')
-
+                pass
             await send(message)
 
-        await self._app(scope, _receive_with_headers, _send_with_headers)
+        await self._app(scope, receive, _send_with_headers)

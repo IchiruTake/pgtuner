@@ -355,27 +355,9 @@ def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
 
     # Tune the bgwriter_delay and bgwriter_lru_maxpages
     bgwriter_delay = 'bgwriter_delay'
-    if PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'hdd', interval='weak'):
-        # HDD-based tuning
-        after_bgwriter_delay = 500
-    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'hdd', interval='strong'):
-        after_bgwriter_delay = 200
-    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'san'):
-        after_bgwriter_delay = 150
-    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd'):
-        after_bgwriter_delay = 100
-    else:
-        after_bgwriter_delay = 50
+    after_bgwriter_delay = max(100, managed_cache[bgwriter_delay] - 25 * _data_iops // (2 * K10))
     _item_tuning(key=bgwriter_delay, after=after_bgwriter_delay, scope=PG_SCOPE.OTHERS, response=response,
                  before=managed_cache[bgwriter_delay], _log_pool=_log_pool)
-
-    # Minimum is 4 MiB of random IOPS for HDD (default of PostgreSQL)
-    max_data_in_pages = max(PG_DISK_PERF.throughput_to_iops(4), floor(_data_iops * _kwargs.bgwriter_utilization_ratio))
-    max_pages_between_interval = ceil(max_data_in_pages * (managed_cache['bgwriter_delay'] / K10))
-    max_pages_between_interval = realign_value(max_pages_between_interval, page_size=20)
-    bgwriter_lru_maxpages = 'bgwriter_lru_maxpages'
-    _item_tuning(key=bgwriter_lru_maxpages, after=max_pages_between_interval[request.options.align_index],
-                 scope=PG_SCOPE.OTHERS, response=response, _log_pool=_log_pool)
 
 
 @time_decorator
@@ -495,7 +477,8 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
         # 10 us added here to prevent some CPU fluctuation could be observed in real-life
         _delay = max(0.05, after_autovacuum_vacuum_cost_delay + 0.02)
     _delay += 0.005     # Adding 5us for the CPU interrupt and context switch
-    _delay *= 1.05      # Adding 5% of the delay to safely reduce the number of maximum page per cycle by 4.76%
+    _delay *= 1.025     # Adding 2.5% of the delay to safely reduce the number of maximum page per cycle by 2.43%
+    # _delay *= 1.05      # Adding 5% of the delay to safely reduce the number of maximum page per cycle by 4.76%
     autovacuum_max_page_per_cycle = floor(autovacuum_max_page_per_sec / K10 * _delay)
 
     # Since I tune for auto-vacuum, it is best to stick with MISS:DIRTY ratio is 4:1 ~ 6:1 --> 5:1 (5 pages reads, 1
@@ -1005,7 +988,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
     b = B + F * C * E - B * D * F
     c = A + F * E * D - Limit
     x = ceil((-b + sqrt(b ** 2 - 4 * a * c)) / (2 * a))
-    print(a, b, c)
+    # print(a, b, c)
     _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment * x,
                           max_work_buffer_ratio_increment * x, tuning_items=keys)
     working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)

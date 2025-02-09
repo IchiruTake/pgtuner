@@ -47,7 +47,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
         Field(default=0.99, ge=0.93, le=1.0,
               description='The percentage of effective_cache_size over the total PostgreSQL available memory excluding '
                           'the shared_buffers and others. The supported range is [0.93, 1.0], default is 0.99. '
-                          'It is recommended to set this value to at least 0.98 or higher.')
+                          'It is recommended to set this value to at least 0.975 or higher.')
     )
     shared_buffers_ratio: PositiveFloat = (
         Field(default=0.25, ge=0.15, lt=0.60,
@@ -194,15 +194,6 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'multiple of 256 MiB. For example if the ratio is 0.9 and upper size is 256 GiB, then the '
                           'disk size must be larger 256 Gi / (1 - 0.9) ~ 2.5 TiB to have max_wal_size is 256 GiB less '
                           'than the disk size.')
-    )
-
-    # Background Writer Tuning
-    bgwriter_utilization_ratio: PositiveFloat = (
-        Field(default=0.15, gt=0, le=0.4,
-              description='The utilization ratio of the random IOPS of data volume used for the background writer '
-                          'process. The supported range is (0, 0.4], default is 0.15 or 15%. This would determine the '
-                          'efficient estimated WRITE IOPs, but minimum 4 MiB/s of 8K-IOPS. Higher value would make '
-                          'the background writer overflow the data disk, which could be in use for other purposes. ')
     )
 
     # Vacuum Tuning

@@ -648,25 +648,20 @@ _DB_BGWRITER_PROFILE = {
     # We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     # to tune it
     'bgwriter_delay': {
-        'instructions': {
-            'mini_default': 500,  # Make it big as we don't need actually a lot of write here
-            'medium_default': 400,
-            'mall_default': 150,
-            'bigt_default': 100,
-        },
-        'default': 250,
+        'default': 300,
         'hardware_scope': 'overall',
         'comment': "Specifies the delay between activity rounds for the background writer. In each round the writer "
                    "issues writes for some number of dirty buffers (controllable by the following parameters). It "
                    "then sleeps for the length of :var:`bgwriter_delay`, and repeats. When there are no dirty buffers "
                    "in the buffer pool, though, it goes into a longer sleep regardless of :var:`bgwriter_delay`. "
-                   "Default value is 250 milliseconds (250ms) on large server and 0.1 - 0.5 second on small server",
+                   "Default value is 300 milliseconds (300ms)",
         'partial_func': lambda value: f"{value}ms",
     },
     'bgwriter_lru_maxpages': {
         'instructions': {
-            'mall_default': 400,
-            'bigt_default': 500,
+            'large_default': 500,
+            'mall_default': 700,
+            'bigt_default': 1000,
         },
         'default': 300,
         'comment': "In each round, no more than this many buffers will be written by the background writer. Setting "

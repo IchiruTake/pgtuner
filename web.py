@@ -1,6 +1,7 @@
 from typing import Literal
 
 import uvicorn
+import uvicorn.config
 import web
 import os
 
@@ -88,7 +89,8 @@ if __name__ == "__main__":
         ('X-Powered-By', 'Uvicorn'),
         ('Server', 'Starlette'),
     ]
-
+    # uvicorn.config.LOGGING_CONFIG['formatters']['default']['fmt'] = \
+    #     '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
     uvicorn.run(web.app, host=_host, port=_port, access_log=_access_log, workers=_workers,
                 http=_http, loop=_loop, limit_concurrency=_limit_concurrency,
                 proxy_headers=_proxy_headers, server_header=_server_header, date_header=_date_header,

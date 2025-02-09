@@ -7,13 +7,15 @@ import os
 import gzip
 import time
 from datetime import datetime, timedelta
+from time import perf_counter
 from typing import Annotated
 
 from fastapi import FastAPI, Header
 from fastapi import status
+from fastapi.templating import Jinja2Templates
 from fastapi.responses import ORJSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, HTMLResponse
 from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src import pgtuner
 from src.static.c_timezone import GetTimezone
 from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
-    SECOND, DAY
+    SECOND, DAY, K10
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.utils.env import OsGetEnvBool
@@ -119,15 +121,6 @@ try:
 except (ImportError, ModuleNotFoundError) as e:
     _logger.warning('The session middleware has not been added to the application due to the missing dependencies. '
                     f'\nPlease install more dependencies: {e}')
-app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True,
-                   allow_methods=['GET', 'POST'], allow_headers=[], max_age=600)
-
-# Auto Cache-Control and Header Middleware
-_private_cache = 'private, must-revalidate'
-_static_cache = (f'max-age={45 * SECOND if _app_dev_mode else 30 * MINUTE}, {_private_cache}, '
-                 f'stale-while-revalidate={30 * SECOND if _app_dev_mode else 3 * MINUTE}')
-_dynamic_cache = 'no-cache'
-app.add_middleware(HeaderManageMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
 
 # Rate Limiting
 def _cost(p: str) -> int:
@@ -138,9 +131,10 @@ def _cost(p: str) -> int:
 _request_scale_factor: float = float(os.getenv(f'FASTAPI_REQUEST_LIMIT_FACTOR', '0.90'))
 _user_request_limit = int(os.getenv(f'FASTAPI_USER_REQUEST_LIMIT', '15'))
 _user_request_window = int(os.getenv(f'FASTAPI_USER_REQUEST_WINDOW', '15'))
-app.add_middleware(RateLimitMiddleware, max_requests=int(100 * SECOND * _request_scale_factor), interval=MINUTE,
+app.add_middleware(RateLimitMiddleware, max_requests=int(100 * MINUTE * _request_scale_factor), interval=MINUTE,
                    max_requests_per_window=_user_request_limit, window_length=_user_request_window,
                    cost_function=_cost)
+_logger.debug('The rate limiting middleware has been added to the application ...')
 
 # Compression Hardware
 _gzip = OsGetEnvBool(f'FASTAPI_GZIP', True)
@@ -155,12 +149,21 @@ if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
     app.add_middleware(CompressMiddleware, minimum_size=_base_min_size, compress_level=_base_com_level,
                        gzip_enabled=_gzip, gzip_minimum_size=_gzip_min_size, gzip_compress_level=_gzip_com_level,
                        zstd_enabled=_zstd, zstd_minimum_size=_zstd_min_size, zstd_compress_level=_zstd_com_level)
+    _logger.debug('The compression middleware has been added to the application ...')
+
+
+# Auto Cache-Control and Header Middleware
+_private_cache = 'private, must-revalidate'
+_static_cache = (f'max-age={45 * SECOND if _app_dev_mode else 30 * MINUTE}, {_private_cache}, '
+                 f'stale-while-revalidate={30 * SECOND if _app_dev_mode else 3 * MINUTE}')
+_dynamic_cache = 'no-cache'
+app.add_middleware(HeaderManageMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
+_logger.debug('The header middleware has been added to the application ...')
 
 _logger.info('The middlewares have been added to the application ...')
 # ==================================================================================================
 _logger.info('Mounting the static files to the application ...')
-
-_logger.info(f'Application Developer Mode: {_app_dev_mode}')
+_logger.info(f'Developer Mode: {_app_dev_mode}')
 _env_tag = 'dev' if _app_dev_mode else 'prd'
 _default_path = f'./web/ui/{_env_tag}/static'
 _static_mapper = {
@@ -169,6 +172,8 @@ _static_mapper = {
     '/css': f'{_default_path}/css',
     # '/js': './web/ui/js',
 }
+_templates = Jinja2Templates(directory=f'{_default_path}/jinja2')
+
 try:
     for path, directory in _static_mapper.items():
         app.mount(path, StaticFiles(directory=directory), name=path.split('/')[-1])
@@ -220,6 +225,11 @@ async def root():
             'Cache-Control': _static_cache,
         }
     )
+
+@app.get('/test', response_class=HTMLResponse)
+async def test():
+    return _templates.TemplateResponse(name='test.html', request={})
+
 
 
 @app.get('/js/{javascript_path}')
@@ -275,6 +285,7 @@ async def health():
 @app.post('/tune', status_code=status.HTTP_200_OK, response_class=ORJSONResponse)
 async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     # Main website
+    t0 = perf_counter()
     try:
         backend_request = request.to_backend()
     except ValidationError as err:
@@ -289,11 +300,19 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
         )
 
     # pprint(backend_request.options)
-    exclude_names = {'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
-                     'log_directory',}
     response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
 
     # Display the content and perform memory testing validation
+    if request.ignore_non_performance_setting:
+        exclude_names = {
+            'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command', 'log_directory',
+            'statement_timeout', 'lock_timeout', 'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout',
+            'archive_timeout', 'log_line_prefix',
+        }
+    else:
+        exclude_names = {
+            'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command', 'log_directory',
+        }
     content = response.generate_content(
         target=PGTUNER_SCOPE.DATABASE_CONFIG,
         request=backend_request,
@@ -303,9 +322,15 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     )
     mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,
                                    ignore_report=False, skip_logger=True)[0]
-    response_header = {
-        'Content-Type': 'application/json',
-        'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
-    }
-    return ORJSONResponse(content={'mem_report': mem_report, 'config': content},
-                          status_code=status.HTTP_200_OK, headers=response_header)
+
+    return ORJSONResponse(
+        content={'mem_report': mem_report, 'config': content},
+        status_code=status.HTTP_200_OK,
+        headers={
+            'Content-Type': 'application/json',
+            'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
+            'X-Response-BackendTime': f'{(perf_counter() - t0) * K10:.2f}ms'
+        }
+    )
+
+

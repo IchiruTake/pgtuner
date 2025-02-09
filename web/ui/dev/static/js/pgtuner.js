@@ -87,7 +87,7 @@ function ram_calculator() {
     // We already have a stronger backend validation with Pydantic so we don't need to check it here
     return final_ram;
 }
-ram_calculator();
+// ram_calculator();
 document.querySelectorAll('.form-check-input').forEach(checkbox => {
     syncLabelFromCheckbox(checkbox.id, 'Yes', 'No');
 });

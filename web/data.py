@@ -77,9 +77,6 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     max_runtime_ms_to_log_slow_query: PositiveInt = Field(default=2 * K10, ge=20, le=100 * K10)
     max_runtime_ratio_to_explain_slow_query: PositiveFloat = Field(default=1.5, ge=0.1, le=10.0)
 
-    # Background Writer Tuning
-    bgwriter_utilization_ratio: PositiveFloat = Field(default=0.15, gt=0, le=0.4)
-
     # Vacuum Tuning
     autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
 
@@ -110,7 +107,6 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             min_wal_ratio_scale=self.min_wal_ratio_scale,
             max_wal_size_ratio=self.max_wal_size_ratio,
             max_wal_size_remain_upper_size=self.max_wal_size_remain_upper_size_in_gib * Gi,
-            bgwriter_utilization_ratio=self.bgwriter_utilization_ratio,
             autovacuum_utilization_ratio=self.autovacuum_utilization_ratio,
             num_write_transaction_per_hour_on_workload=self.num_write_transaction_per_hour_on_workload
         )
@@ -227,7 +223,9 @@ class PG_WEB_TUNE_REQUEST(BaseModel):
     alter_style: bool = False
     backup_settings: bool = False
     output_format: Literal['json', 'conf', 'file'] = 'conf'
+
     analyze_with_full_connection_use: bool = False
+    ignore_non_performance_setting: bool = True
 
     def to_backend(self) -> PG_TUNE_REQUEST:
         custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'

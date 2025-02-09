@@ -155,8 +155,9 @@ async def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web
                 html_filepath = os.path.join(root, file)
                 # minified_html_filepath = cleanup_html_local(html_filepath)
                 minified_html_filepath = await cleanup_html_async(html_filepath, client)
-
                 print(f'Found HTML file: {html_filepath} --> {minified_html_filepath} :: Resolve legacy HTML by {old_html_treatment}')
+                if minified_html_filepath is None:
+                    continue
                 _resolve_old_asset(origin=html_filepath, target=minified_html_filepath, treatment=old_html_treatment)
             if file.endswith('.js'):
                 if file.endswith('.min.js'):
@@ -166,6 +167,8 @@ async def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web
                 js_filepath = os.path.join(root, file)
                 minified_js_filepath = await cleanup_js_async(js_filepath, client)
                 print(f'Found JS file: {js_filepath} --> {minified_js_filepath} :: Resolve legacy JS by {old_js_treatment}')
+                if minified_js_filepath is None:
+                    continue
                 _resolve_old_asset(origin=js_filepath, target=minified_js_filepath, treatment=old_js_treatment)
     await client.aclose()
     return None
