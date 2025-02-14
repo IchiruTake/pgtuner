@@ -38,6 +38,29 @@ _DB_VACUUM_PROFILE = {
                    'the size is silently capped to that value. The default value is 2MB. Our result is based on the '
                    'memory profile which can be ranged from 1/16 to 1/64 of shared buffers',
         'partial_func': lambda value: f"{value // Mi}MB",
+    },
+    'vacuum_failsafe_age': {
+        'default': 1_600_000_000,
+        'comment': "Age at which VACUUM should trigger failsafe to avoid a wraparound outage. Specifies the maximum "
+                   "age (in transactions) that a table's pg_class.relfrozenxid field can attain before VACUUM takes "
+                   "extraordinary measures to avoid system-wide transaction ID wraparound failure. This is VACUUM's "
+                   "strategy of last resort. The failsafe typically triggers when an autovacuum to prevent transaction "
+                   "ID wraparound has already been running for some time, though it's possible for the failsafe to "
+                   "trigger during any VACUUM. When the failsafe is triggered, any cost-based delay that is in effect "
+                   "will no longer be applied, further non-essential maintenance tasks (such as index vacuuming) are "
+                   "bypassed, and any Buffer Access Strategy in use will be disabled resulting in VACUUM being free to "
+                   "make use of all of shared buffers.",
+    },
+    'vacuum_multixact_failsafe_age': {
+        'default': 1_600_000_000,
+        'comment': "Multixact age at which VACUUM should trigger failsafe to avoid a wraparound outage. Specifies the "
+                   "maximum age (in multixacts) that a table's pg_class.relminmxid field can attain before VACUUM takes "
+                   "extraordinary measures to avoid system-wide multixact ID wraparound failure. This is VACUUM's "
+                   "strategy of last resort. The failsafe typically triggers when an autovacuum to prevent transaction "
+                   "ID wraparound has already been running for some time, though it's possible for the failsafe to "
+                   "trigger during any VACUUM. When the failsafe is triggered, any cost-based delay that is in effect "
+                   "will no longer be applied, and further non-essential maintenance tasks (such as index "
+                   "vacuuming) are bypassed.",
     }
 }
 
@@ -81,7 +104,7 @@ _DB_QUERY_PROFILE = {
 DB16_CONFIG_MAPPING = {
     'log': (PG_SCOPE.LOGGING, _DB_LOG_PROFILE, {'hardware_scope': 'disk'}),
     'maintenance': (PG_SCOPE.MAINTENANCE, _DB_VACUUM_PROFILE, {'hardware_scope': 'disk'}),
-    'wal': (PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB_WAL_PROFILE, {'hardware_scope': 'disk'}),
+    'wal': (PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB_WAL_PROFILE, {'hardware_scope': 'overall'}),
     'timeout': (PG_SCOPE.OTHERS, _DB_TIMEOUT_PROFILE, {'hardware_scope': 'overall'}),
     'query': (PG_SCOPE.QUERY_TUNING, _DB_QUERY_PROFILE, {'hardware_scope': 'overall'}),
 }

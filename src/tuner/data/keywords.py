@@ -44,13 +44,13 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     )
 
     effective_cache_size_available_ratio: PositiveFloat = (
-        Field(default=0.99, ge=0.93, le=1.0,
+        Field(default=0.985, ge=0.95, le=1.0,
               description='The percentage of effective_cache_size over the total PostgreSQL available memory excluding '
-                          'the shared_buffers and others. The supported range is [0.93, 1.0], default is 0.99. '
+                          'the shared_buffers and others. The supported range is [0.95, 1.0], default is 0.985 (98.5%). '
                           'It is recommended to set this value to at least 0.975 or higher.')
     )
     shared_buffers_ratio: PositiveFloat = (
-        Field(default=0.25, ge=0.15, lt=0.60,
+        Field(default=0.25, ge=0.15, le=0.60,
               description='The ratio of shared_buffers ratio to the total non-database memory. The supported range '
                           'is [0.15, 0.60), default is 0.25. If you have or prioritize the *simple* query that perform '
                           'more READ (SELECT) than WRITE (INSERT/UPDATE/DELETE) between two WRITE interval in the '
@@ -209,11 +209,12 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     )
     # Transaction Rate
     num_write_transaction_per_hour_on_workload: PositiveInt = (
-        Field(default=int(5 * M10), ge=K10, le=50 * M10,
-              description='The peak number of workload write transaction per hour. The supported range is [1K, 50M], '
-                          'default is 5M (translated into 1.4K transactions per second). Note that this number requires '
-                          'you to have good estimation on how much your server can be handled during its busy workload. '
-                          'This parameter is used to determine the which page is frozen. ')
+        Field(default=int(1 * M10), ge=K10, le=20 * M10,
+              description='The peak number of workload write transaction per hour. The supported range is [1K, 20M], '
+                          'default is 1M (translated into 270 write transactions per second). Note that this '
+                          'number requires you to have good estimation on how much your server can be handled during '
+                          'its busy workload. If your database doing work beyond or smaller than this value, you can '
+                          'set this value as close as your value')
     )
 
 

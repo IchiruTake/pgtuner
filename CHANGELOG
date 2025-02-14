@@ -1,10 +1,28 @@
 v0.x.x (TBD)
 =========================
-- Rewrite the Python backend application to Javascript (if necessary)
+- TODO: Add automatic tests to detect error
+- TODO: More refined documentation with icon symbol of importance
+- TODO: Rewrite application as Javascript to support global user (if necessary)
 
 
+v0.1.2 (Feb xx, 2025)
+Commit:
+=========================
+Backend:
+- Cleanup development and legacy code. Adjust the default value on some request parameters
+- VACUUM: Add vacuum_failsafe_age and vacuum_multixact_failsafe_age parameter into our tuning guideline. Push two '*_freeze_table_age' parameters into the correction tuning phase
+- MEMORY: Better performance on memory estimation phase with parallel estimation mode is applied in the correction phase
+- BGWRITER: Adjust the background writer parameters to match its use-case
+- VACUUM: Re-adjust the vacuum threshold and scale factor
 
-v0.1.1 (Feb , 2025)
+Frontend:
+- Add CHANGELOG UI to record the changes more clearly
+- Tune up some headers and meta tags for better SEO
+- Testing the HTML jinja2 template for the web page
+
+
+v0.1.1 (Feb 09th, 2025)
+Commit: 4bf9f2c52798c48efeff1f3d2f20c6c85e51f62d
 =========================
 - Cleanup development and legacy code
 - Better performance on correction tuning phase, especially on the memory pool increase tuning task, fasten from 6ms to 1-2 ms
@@ -12,7 +30,6 @@ v0.1.1 (Feb , 2025)
 - Move `_version` endpoint to the `_health` endpoint with a more dedicated health check; service uptime is reported
 - Prepare CHANGELOG file for future release
 - Refactor the rate-limit middleware: Merge the global rate-limit and the user rate-limit into one middleware
-
 
 
 v0.1.0 (Feb 01st, 2025)

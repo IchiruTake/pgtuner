@@ -482,42 +482,40 @@ _DB_VACUUM_PROFILE = {
     },
     'autovacuum_vacuum_scale_factor': {
         'instructions': {
-            'mini_default': 0.0250,
-            'mall_default': 0.0050,
-            'bigt_default': 0.0025,
+            'mini_default': 0.010,
+            'mall_default': 0.002,
+            'bigt_default': 0.001,
         },
         'hardware_scope': 'overall',
-        'default': 0.0125,
+        'default': 0.005,
         'comment': 'Specifies a fraction of the table size to add to autovacuum_vacuum_threshold when deciding whether '
-                   'to trigger a VACUUM. Default is 0.0125 (or 1.25%, or 1/80); and can be reduced to 0.25% on an '
-                   'extreme large system',
+                   'to trigger a VACUUM. Default is 0.005 (or 0.5%); and can be reduced to 0.1% on an extreme '
+                   'large system',
     },
     'autovacuum_vacuum_insert_threshold; autovacuum_analyze_threshold': {
         'instructions': {
             'mini_default': 200,
-            'mall_default': 2 * K10,
-            'bigt_default': 5 * K10,
+            'bigt_default': 3 * K10,
         },
         'hardware_scope': 'overall',
         'default': K10,
         'comment': "Specifies the minimum number of inserted tuples needed to trigger a VACUUM in any one table. "
                    "or the minimum number of inserted, updated or deleted tuples needed to trigger an ANALYZE "
-                   "in any one table. Default is 1000 tuples and 2K-5K tuples on a larger system. This is twice "
+                   "in any one table. Default is 1000 tuples and 3K tuples on a larger system. This is twice "
                    "compared to the normal VACUUM/ANALYZE since UPDATE/DELETE cause data bloating and index "
                    "fragmentation more.",
     },
     'autovacuum_vacuum_insert_scale_factor; autovacuum_analyze_scale_factor': {
         'instructions': {
-            'mini_default': 0.050,
-            'mall_default': 0.010,
-            'bigt_default': 0.005,
+            'mini_default': 0.020,
+            'mall_default': 0.002,
+            'bigt_default': 0.001,
         },
         'hardware_scope': 'overall',
-        'default': 0.025,
+        'default': 0.0075,
         'comment': "Specifies a fraction of the table size to add to autovacuum_vacuum_insert_threshold when deciding "
-                   "whether to trigger a VACUUM or ANALYZE. Default is 0.025 (or 2.5%, or 1/40); and can be reduced "
-                   "to 0.5% on an extreme large system. This is twice compared to the normal VACUUM/ANALYZE as it cause "
-                   "less data bloating and index fragmentation.",
+                   "whether to trigger a VACUUM or ANALYZE. Default is 0.0075 (or 0.75%); and can be reduced to 0.1% "
+                   "on an extreme large system.",
     },
     # Cost Delay, Limit, and Naptime (Naptime would not be changed)
     'autovacuum_vacuum_cost_delay': {
@@ -601,7 +599,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.80), page_size=M10)[options.align_index],
+            realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.85),
+                          page_size=250 * K10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relfrozenxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits every "
@@ -625,8 +624,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_multixact_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.80),
-                          page_size=M10)[options.align_index],
+            realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85),
+                          page_size=250 * K10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relminmxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits "
@@ -659,9 +658,9 @@ _DB_BGWRITER_PROFILE = {
     },
     'bgwriter_lru_maxpages': {
         'instructions': {
-            'large_default': 500,
-            'mall_default': 700,
-            'bigt_default': 1000,
+            'large_default': 350,
+            'mall_default': 425,
+            'bigt_default': 500,
         },
         'default': 300,
         'comment': "In each round, no more than this many buffers will be written by the background writer. Setting "
@@ -1715,7 +1714,7 @@ for key in list(_DB_LIB_PROFILE.keys()):
 DB0_CONFIG_PROFILE = {
     'connection': (PG_SCOPE.CONNECTION, _DB_CONN_PROFILE, {'hardware_scope': 'cpu'}),
     'memory': (PG_SCOPE.MEMORY, _DB_RESOURCE_PROFILE, {'hardware_scope': 'mem'}),
-    'maintenance': (PG_SCOPE.MAINTENANCE, _DB_VACUUM_PROFILE, {'hardware_scope': 'disk'}),
+    'maintenance': (PG_SCOPE.MAINTENANCE, _DB_VACUUM_PROFILE, {'hardware_scope': 'overall'}),
     'background_writer': (PG_SCOPE.OTHERS, _DB_BGWRITER_PROFILE, {'hardware_scope': 'disk'}),
     'asynchronous-disk': (PG_SCOPE.OTHERS, _DB_ASYNC_DISK_PROFILE, {'hardware_scope': 'disk'}),
     'asynchronous-cpu': (PG_SCOPE.OTHERS, _DB_ASYNC_CPU_PROFILE, {'hardware_scope': 'cpu'}),

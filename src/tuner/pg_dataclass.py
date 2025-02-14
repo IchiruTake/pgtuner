@@ -124,7 +124,7 @@ class PG_TUNE_RESPONSE(BaseModel):
 
     # @time_decorator
     def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
-                 ignore_report: bool = True, skip_logger: bool = False) -> tuple[str, int | float]:
+                 ignore_report: bool = True) -> tuple[str, int | float]:
         # Cache result first
         _kwargs = options.tuning_kwargs
         usable_ram_noswap = options.usable_ram_noswap
@@ -169,20 +169,22 @@ class PG_TUNE_RESPONSE(BaseModel):
             return '', max_total_memory_used
 
         # Work Mem but in Parallel
-        num_parallel_workers = min(managed_cache['max_parallel_workers'], managed_cache['max_worker_processes'])
-        num_sessions, remain_workers = divmod(num_parallel_workers, managed_cache['max_parallel_workers_per_gather'])
-        num_sessions_in_parallel = num_sessions + (1 if remain_workers > 0 else 0)
+        _parallel_report = self.calc_worker_in_parallel(options, num_active_user_conns=num_user_conns)
+        num_parallel_workers = _parallel_report['num_parallel_workers']
+        num_sessions = _parallel_report['num_sessions']
+        num_sessions_in_parallel = _parallel_report['num_sessions_in_parallel']
+        num_sessions_not_in_parallel = _parallel_report['num_sessions_not_in_parallel']
+
         parallel_work_mem_total: int = real_world_work_mem * (num_parallel_workers + num_sessions_in_parallel)
         parallel_work_mem_in_session = real_world_work_mem * (1 + managed_cache['max_parallel_workers_per_gather'])
 
         # Ensure the number of active user connections always larger than the num_sessions
         # The maximum 0 here is meant that all connections can have full parallelism
-        num_sessions_not_in_parallel = max(0, num_user_conns - num_sessions_in_parallel)
         single_work_mem_total = real_world_work_mem * num_sessions_not_in_parallel
 
         max_total_memory_used_with_parallel = shared_buffers + wal_buffers + os_conn_overhead
         max_total_memory_used_with_parallel += (parallel_work_mem_total + single_work_mem_total)
-        max_total_memory_used_with_parallel += temp_buffers * (num_sessions_in_parallel + num_sessions_not_in_parallel)
+        max_total_memory_used_with_parallel += temp_buffers * num_user_conns
         max_total_memory_used_with_parallel_ratio = max_total_memory_used_with_parallel / usable_ram_noswap
         max_total_memory_used_with_parallel_hr = bytesize_to_hr(max_total_memory_used_with_parallel)
         _epsilon_scale = 4 if use_full_connection else 2
@@ -335,25 +337,43 @@ Report Summary (others):
             -> 25M rows :: Vacuum={normal_vacuum['25m']} :: Insert/Analyze={normal_analyze['25m']}
             -> 400M rows :: Vacuum={normal_vacuum['400m']} :: Insert/Analyze={normal_analyze['400m']}
             -> 1B rows :: Vacuum={normal_vacuum['1b']} :: Insert/Analyze={normal_analyze['1b']}
-    - Normal Vacuum Strength:
+    - Normal Vacuum:
         + Page Cost Relative Factor :: Hit={managed_cache['vacuum_cost_page_hit']} :: Miss={managed_cache['vacuum_cost_page_miss']} :: Dirty/Disk={managed_cache['vacuum_cost_page_dirty']}
         + Autovacuum cost: {managed_cache['autovacuum_vacuum_cost_limit']} --> Vacuum cost: {managed_cache['vacuum_cost_limit']}
         + Autovacuum delay: {managed_cache['autovacuum_vacuum_cost_delay']} (ms) --> Vacuum delay: {managed_cache['vacuum_cost_delay']} (ms)
+        + IOPS Spent: {data_iops * _kwargs.autovacuum_utilization_ratio:.1f} pages or {PG_DISK_PERF.iops_to_throughput(data_iops * _kwargs.autovacuum_utilization_ratio):.2f} MiB/s
         + Vacuum Report on Worst Case Scenario:
+            We safeguard against WRITE since most READ in production usually came from RAM/cache before auto-vacuuming, 
+            but not safeguard against pure, zero disk read.
             -> Hit (page in shared_buffers): Maximum {vacuum_report['max_num_hit_page']} pages or RAM throughput {vacuum_report['max_hit_data']:.2f} MiB/s 
                 RAM Safety: {vacuum_report['max_hit_data'] < 10 * K10} (< 10 GiB/s for low DDR3)
             -> Miss (page in disk cache): Maximum {vacuum_report['max_num_miss_page']} pages or Disk throughput {vacuum_report['max_miss_data']:.2f} MiB/s
-                RAM Safety: {vacuum_report['max_miss_data'] < 5 * K10} (< 5 GiB/s for low DDR3)
-                Disk Safety: {vacuum_report['max_miss_data'] < data_iops} (< Data Disk IOPS)
+                # NVME SSD with PCIe 3.0+ or USB 3.1
+                # See encoding here: https://en.wikipedia.org/wiki/64b/66b_encoding; NVME SSD with PCIe 3.0+ or USB 3.1
+                NVME10 Safety: {vacuum_report['max_miss_data'] < 10/8 * 64/66 * K10} (< 10 Gib/s, 64b/66b encoding)
+                SATA3 Safety: {vacuum_report['max_miss_data'] < 6/8 * 6/8 * K10} (< 6 Gib/s, 6b/8b encoding)
+                Disk Safety: {vacuum_report['max_num_miss_page'] < data_iops} (< Data Disk IOPS)
             -> Dirty (page in data disk volume): Maximum {vacuum_report['max_num_dirty_page']} pages or Disk throughput {vacuum_report['max_dirty_data']:.2f} MiB/s
-                Disk Safety: {vacuum_report['max_dirty_data'] < data_iops} (< Data Disk IOPS)
+                Disk Safety: {vacuum_report['max_num_dirty_page'] < data_iops} (< Data Disk IOPS)
         + Other Scenarios with H:M:D ratio as 5:5:1 (frequent), or 1:1:1 (rarely)
             5:5:1 or {vacuum_report['5:5:1_page'] * 6} disk pages -> IOPS capacity of {vacuum_report['5:5:1_data']:.2f} MiB/s (write={vacuum_report['5:5:1_data'] * 1 / 6:.2f} MiB/s)
+            -> Safe: {vacuum_report['5:5:1_page'] * 6 < data_iops} (< Data Disk IOPS)
             1:1:1 or {vacuum_report['1:1:1_page'] * 3} disk pages -> IOPS capacity of {vacuum_report['1:1:1_data']:.2f} MiB/s (write={vacuum_report['1:1:1_data'] * 1 / 2:.2f} MiB/s)
-    - Transaction ID Wraparound and Anti-Wraparound Vacuum:
+            -> Safe: {vacuum_report['1:1:1_page'] * 3 < data_iops} (< Data Disk IOPS)
+    - Transaction (Tran) ID Wraparound and Anti-Wraparound Vacuum:
         + Workload Write Transaction per Hour: {_kwargs.num_write_transaction_per_hour_on_workload}
         + TXID Vacuum :: Minimum={min_hr_txid:.2f} hrs :: Manual={norm_hr_txid:.2f} hrs :: Auto-forced={max_hr_txid:.2f} hrs
         + XMIN,XMAX Vacuum :: Minimum={min_hr_row_lock:.2f} hrs :: Manual={norm_hr_row_lock:.2f} hrs :: Auto-forced={max_hr_row_lock:.2f} hrs     
+        + DON'T USE our 'wraparound' vacuum settings (best to stick with OnGres recommendation or even PostgreSQL default) unless all our important guideline are followed:
+            -> [IMPORTANT] Identify application queries, use-case and optimize transaction patterns by concern separation of READ and WRITE trans/conns/sessions: 
+                # https://www.postgresql.org/docs/current/sql-set-transaction.html
+                SET TRANSACTION READ ONLY; # at the beginning of (sub-)transactions to minimize xid consumption on READ queries
+            -> Minimize the number of operations, sub-transaction within a single transaction to prevent row/page/tran locking, which could increase un-necessary use of xmin/xmax; and hanging transactions
+            -> Apply caching or materialized views or CTEs for better performance with minimal transactions.
+            -> Proper monitoring setup and quick response, especially the increment of xid/xmin/xmax
+            -> Estimate properly your client's scope and disk strength (on data/index volume) to be able to handle aggressive vacuuming with zero to minimal impact on the application performance.
+            -> Estimate correctly the number of WRITE transactions per HOUR or even per DAY (and divide by 24).
+            -> Use pg_cron or similar tool to perform regular vacuuming and maintenance based on your business requirements.
         
 * Background Writers:
     - Delay: {managed_cache['bgwriter_delay']} (ms) for maximum {managed_cache['bgwriter_lru_maxpages']} dirty pages
@@ -450,21 +470,12 @@ best performance and reliability of the database system.
 
 # ===============================================================
 '''
-
-        if not skip_logger:
-            _logger.info(_report)
         return _report, (max_total_memory_used if not _kwargs.mem_pool_parallel_estimate else
                          max_total_memory_used_with_parallel)
 
-    def calc_worker_in_parallel(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False) -> dict[str, int]:
+    def calc_worker_in_parallel(self, options: PG_TUNE_USR_OPTIONS, num_active_user_conns: int) -> dict[str, int]:
         managed_cache = self.get_managed_cache(PGTUNER_SCOPE.DATABASE_CONFIG)
         _kwargs = options.tuning_kwargs
-
-        # Number of Connections
-        max_user_conns = (managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] -
-                          managed_cache['reserved_connections'])
-        active_user_conns = ceil(max_user_conns * _kwargs.effective_connection_ratio)
-        num_user_conns = (max_user_conns if use_full_connection else active_user_conns)
 
         # Calculate the number of parallel workers
         num_parallel_workers = min(managed_cache['max_parallel_workers'], managed_cache['max_worker_processes'])
@@ -475,14 +486,13 @@ best performance and reliability of the database system.
 
         # Ensure the number of active user connections always larger than the num_sessions
         # The maximum 0 here is meant that all connections can have full parallelism
-        num_sessions_not_in_parallel = max(0, num_user_conns - num_sessions_in_parallel)
+        num_sessions_not_in_parallel = max(0, num_active_user_conns - num_sessions_in_parallel)
 
         return {
-            'num_user_conns': num_user_conns,
             'num_parallel_workers': num_parallel_workers,
             'num_sessions': num_sessions,
             'num_sessions_in_parallel': num_sessions_in_parallel,
             'num_sessions_not_in_parallel': num_sessions_not_in_parallel,
-            'parallel_scale': (num_parallel_workers + num_sessions_in_parallel) / num_user_conns
+            'work_mem_parallel_scale': (num_parallel_workers + num_sessions_in_parallel + num_sessions_not_in_parallel) / num_active_user_conns
         }
 

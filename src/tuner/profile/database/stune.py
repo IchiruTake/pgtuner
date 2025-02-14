@@ -355,7 +355,7 @@ def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
 
     # Tune the bgwriter_delay and bgwriter_lru_maxpages
     bgwriter_delay = 'bgwriter_delay'
-    after_bgwriter_delay = max(100, managed_cache[bgwriter_delay] - 25 * _data_iops // (2 * K10))
+    after_bgwriter_delay = max(100, managed_cache[bgwriter_delay] - 20 * _data_iops // (2 * K10))
     _item_tuning(key=bgwriter_delay, after=after_bgwriter_delay, scope=PG_SCOPE.OTHERS, response=response,
                  before=managed_cache[bgwriter_delay], _log_pool=_log_pool)
 
@@ -425,35 +425,51 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     """
     _log_pool.append('Start tuning the autovacuum of the PostgreSQL database server based on the database workload. '
                      '\nImpacted Attributes: *_vacuum_cost_delay, vacuum_cost_page_dirty, *_vacuum_cost_limit, '
-                     'vacuum_freeze_min_age, vacuum_multixact_freeze_min_age ')
+                     '*_freeze_min_age, *_failsafe_age, *_table_age ')
     _kwargs = request.options.tuning_kwargs
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     data_iops = request.options.data_index_spec.raid_perf()[1]
 
-    # Now we tune the *_vacuum_cost_delay first and vacuum_cost_page_dirty (Generic)
-    # Our of changing the delay is to make the disk more healthier, don't let it burst the IO too much
+    # Since we are leveraging the cost-based tuning, and the *_cost_limit we have derived from the data disk IOPs,
+    # thus the high value of dirty pages seems use-less and make other value difficult as based on the below thread,
+    # those pages are extracted from shared_buffers (HIT) and RAM/effective_cache_size (MISS). Whilst technically,
+    # the idea is to tell that dirtying the pages (DIRTY -> WRITE) is 10x dangerous. The main reason is that PostgreSQL
+    # don't know about your disk hardware or capacity, so it is better to have a high cost for the dirty page.
+    # But now, we acknowledge that our cost is managed under control by the data disk IOPS, we could revise the cost
+    # of dirty page so as it can be running more frequently.
+    #
+    # On this algorithm, increase either MISS cost or DIRTY cost would allow more pages as HIT but from our perspective,
+    # it is mostly useless, even the RAM is not the best as bare metal, usually at around 10 GiB/s (same as low-end
+    # DDR3 or DDR2, 20x times stronger than SeqIO of SSD) (DB server are mostly virtualized or containerized),
+    # but our real-world usually don't have NVME SSD for data volume due to the network bandwidth on SSD, and in the
+    # database, performance can be easily improved by adding more RAM on most cases (hopefully more cache hit due to
+    # RAM lacking) rather focusing on increasing the disk strength solely which is costly and not always have high
+    # cost per performance improvement.
+    # Thereby, we want to increase the MISS cost (as compared to HIT cost) to scale our budget, and close the gap
+    # between the MISS and DIRTY cost. This is the best way to improve the autovacuum performance.
+    # Meanwhile, a high cost delay would allow lower budget, and let the IO controller have time to "breathe" and flush
+    # data in a timely interval, without overflowing the disk queue.
+
     autovacuum_vacuum_cost_delay = 'autovacuum_vacuum_cost_delay'
     vacuum_cost_page_dirty = 'vacuum_cost_page_dirty'
-    if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'hdd'):
+    after_vacuum_cost_page_miss = 3
+    if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'hdd', interval='weak'):
         after_autovacuum_vacuum_cost_delay = 15
-        after_vacuum_cost_page_dirty = 20
-    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san'):
-        after_autovacuum_vacuum_cost_delay = 12
-        after_vacuum_cost_page_dirty = 18
-    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'ssd'):
-        after_autovacuum_vacuum_cost_delay = 10
         after_vacuum_cost_page_dirty = 15
-    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'nvmebox'):
-        after_autovacuum_vacuum_cost_delay = 8
+    elif (PG_DISK_SIZING.match_one_disk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.HDDv3) or
+          PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san')):
+        after_autovacuum_vacuum_cost_delay = 10
         after_vacuum_cost_page_dirty = 12
-    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'nvmepcie'):
+    elif (PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'ssd') or
+          PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'nvme')):
         after_autovacuum_vacuum_cost_delay = 5
-        after_vacuum_cost_page_dirty = 12
+        after_vacuum_cost_page_dirty = 10
     else:
         # Default fallback
-        after_autovacuum_vacuum_cost_delay = 10
-        after_vacuum_cost_page_dirty = 15
-
+        after_autovacuum_vacuum_cost_delay = 5
+        after_vacuum_cost_page_dirty = 10
+    _item_tuning(key='vacuum_cost_page_miss', after=after_vacuum_cost_page_miss, scope=PG_SCOPE.MAINTENANCE,
+                 response=response, before=managed_cache['vacuum_cost_page_miss'], _log_pool=_log_pool)
     _item_tuning(key=autovacuum_vacuum_cost_delay, after=after_autovacuum_vacuum_cost_delay, scope=PG_SCOPE.MAINTENANCE,
                  response=response, before=managed_cache[autovacuum_vacuum_cost_delay], _log_pool=_log_pool)
     _item_tuning(key=vacuum_cost_page_dirty, after=after_vacuum_cost_page_dirty, scope=PG_SCOPE.MAINTENANCE,
@@ -481,47 +497,90 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     # _delay *= 1.05      # Adding 5% of the delay to safely reduce the number of maximum page per cycle by 4.76%
     autovacuum_max_page_per_cycle = floor(autovacuum_max_page_per_sec / K10 * _delay)
 
-    # Since I tune for auto-vacuum, it is best to stick with MISS:DIRTY ratio is 4:1 ~ 6:1 --> 5:1 (5 pages reads, 1
-    # page writes). This is the best ratio for the autovacuum. If the normal vacuum is run manually, usually during
-    # idle or administrative tasks, the MISS:DIRTY ratio becomes 1.3:1 ~ 1:1.3 --> 1:1
+    # Since I tune for auto-vacuum, it is best to stick with MISS:DIRTY ratio is 5:5:1 (5 pages reads, 1 page writes,
+    # assume with even distribution). This is the best ratio for the autovacuum. If the normal vacuum is run manually,
+    # usually during idle or administrative tasks, the MISS:DIRTY ratio becomes 1.3:1 ~ 1:1.3 --> 1:1
     # For manual vacuum, the MISS:DIRTY ratio becomes 1.3:1 ~ 1:1.3 --> 1:1
+    # Worst Case: The database is autovacuum without cache or cold start.
+
     # Worst Case: every page requires WRITE on DISK rather than fetch on disk or OS page cache
+    cost_model = 2
+    miss, dirty = 12 - cost_model, cost_model
+    vacuum_cost_model = (managed_cache['vacuum_cost_page_miss'] * miss + managed_cache['vacuum_cost_page_dirty'] * dirty) / (miss + dirty)
 
-    after_vacuum_cost_page_miss = managed_cache['vacuum_cost_page_miss']
-    autovacuum_cost_min_iops = (after_vacuum_cost_page_miss * 5 + after_vacuum_cost_page_dirty) / 6
-    vacuum_cost_avg_iops = (after_vacuum_cost_page_miss + after_vacuum_cost_page_dirty) / 2
-    vacuum_cost_worst_iops = after_vacuum_cost_page_dirty
-
-    # after_autovacuum_vacuum_cost_limit = floor(autovacuum_max_page_per_cycle * autovacuum_cost_min_iops)
-    # _item_tuning(key='autovacuum_vacuum_cost_limit', after=after_autovacuum_vacuum_cost_limit,
-    #              scope=PG_SCOPE.MAINTENANCE, response=response, before=managed_cache['autovacuum_vacuum_cost_limit'])
-
-    # For manual VACUUM, usually only a minor of tables get bloated, and we assume you don't do that stupid to DDoS
+    # For manual VACUUM, usually only a minor of tables gets bloated, and we assume you don't do that stupid to DDoS
     # your database to overflow your disk, but we met
-    after_vacuum_cost_limit = floor(autovacuum_max_page_per_cycle * vacuum_cost_avg_iops)
+    after_vacuum_cost_limit = floor(autovacuum_max_page_per_cycle * vacuum_cost_model)
+    after_vacuum_cost_limit = realign_value(
+        after_vacuum_cost_limit,
+        after_vacuum_cost_page_dirty + after_vacuum_cost_page_miss
+    )[request.options.align_index]
     _item_tuning(key='vacuum_cost_limit', after=after_vacuum_cost_limit, scope=PG_SCOPE.MAINTENANCE,
                  response=response, before=managed_cache['vacuum_cost_limit'], _log_pool=_log_pool)
     # print(f'Page per Second: {autovacuum_max_page_per_sec} or {autovacuum_max_page_per_sec / data_iops * 100:.2f} (%)'
     #       f'\n-> Page per Cycle: {autovacuum_max_page_per_cycle} with delay: {_delay:.2f} ms. '
     #       f'\nCost Limit Estimation: '
-    #       f'\nLow IOPS: {autovacuum_max_page_per_cycle * autovacuum_cost_min_iops} '
+    #       f'\nLow IOPS: {autovacuum_max_page_per_cycle * vacuum_cost_iops_best_v1} '
     #       f'\nAverage IOPS: {autovacuum_max_page_per_cycle * vacuum_cost_avg_iops} '
     #       f'\nHigh IOPS: {autovacuum_max_page_per_cycle * vacuum_cost_worst_iops}')
 
+    # =============================================================================
+    _transaction_rate = _kwargs.num_write_transaction_per_hour_on_workload
+    _transaction_coef = request.options.workload_profile.num()
+
+    # We extracted the TXID use-case from the GitLab PostgreSQL database, which has the TXID of 55M per day or 2.3M
+    # per hour, at some point, it has 1.4K/s on weekday (5M/h) and 600/s (2M/h) on weekend.
+    # Since GitLab is a substantial large use-case, we can exploit this information to tune the autovacuum. Whilst
+    # its average is 1.4K/s on weekday, but with 2.3M/h, its average WRITE time is 10.9h per day, which is 45.4% of
+    # of the day, seems valid compared to 8 hours of working time in human life.
+    # The failsafe age is limited to 1.9B (200M less than allowed maximum) to prevent the overflow of the TXID, and
+    # minimum of 1.45B (150M less than PostgreSQL 14+ default)
+    # Tune the vacuum_failsafe_age for relfrozenid, and vacuum_multixact_failsafe_age
+    # Ref: https://gitlab.com/groups/gitlab-com/gl-infra/-/epics/413
+    # Ref: https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/12630
+
+    failsafe_age = realign_value(max(
+        # Bounce on 36 hours of active transaction, scale factor = 1.5x for buffering
+        # Ex: 1M transaction translated into 54M transaction in mini size and 270M transaction at large size
+        # Max allowed up to 2.1B but we safely started at 2.0B
+        1_900_000_000 - int(_transaction_rate * (36 + 12 * _transaction_coef)),
+        1_450_000_000,
+    ), 250 * K10)[request.options.align_index]
+    if 'vacuum_failsafe_age' in managed_cache:
+        _item_tuning(key='vacuum_failsafe_age', after=failsafe_age, scope=PG_SCOPE.MAINTENANCE,
+                     response=response, _log_pool=_log_pool)
+    if 'vacuum_multixact_failsafe_age' in managed_cache:
+        _item_tuning(key='vacuum_multixact_failsafe_age', after=failsafe_age, scope=PG_SCOPE.MAINTENANCE,
+                     response=response, _log_pool=_log_pool)
+
+    # Tune the autovacuum_multixact_freeze_max_age and autovacuum_freeze_max_age
+    multixact_max_age = max(850_000_000, 0.85 * failsafe_age - int(_transaction_rate * (24 + 12 * _transaction_coef)),
+                            24 * _transaction_rate)
+    multixact_max_age = realign_value(multixact_max_age, 250 * K10)[request.options.align_index]
+    freeze_max_age = max(500_000_000, 0.85 * failsafe_age - int(_transaction_rate * (48 + 12 * _transaction_coef)),
+                         24 * _transaction_rate)
+    freeze_max_age = realign_value(freeze_max_age, 250 * K10)[request.options.align_index]
+    _item_tuning(key='autovacuum_multixact_freeze_max_age', after=multixact_max_age,
+                 scope=PG_SCOPE.MAINTENANCE, response=response, _log_pool=_log_pool)
+    _item_tuning(key='autovacuum_freeze_max_age', after=freeze_max_age,
+                 scope=PG_SCOPE.MAINTENANCE, response=response, _log_pool=_log_pool)
+    _trigger_tuning({
+        PG_SCOPE.MAINTENANCE: ('vacuum_freeze_table_age', 'vacuum_multixact_freeze_table_age',)
+    }, request, response, _log_pool)
+
     # Tune the vacuum_freeze_min_age
     vacuum_freeze_min_age = 'vacuum_freeze_min_age'
-    after_vacuum_freeze_min_age = cap_value(_kwargs.num_write_transaction_per_hour_on_workload * 6, 500 * K10,
-                                            managed_cache['autovacuum_freeze_max_age'] * 0.5)
-    after_vacuum_freeze_min_age = realign_value(after_vacuum_freeze_min_age, M10)
+    after_vacuum_freeze_min_age = cap_value(_transaction_rate * 6, 500 * K10, managed_cache['autovacuum_freeze_max_age'] * 0.5)
+    after_vacuum_freeze_min_age = realign_value(after_vacuum_freeze_min_age, 250 * K10)
     _item_tuning(key=vacuum_freeze_min_age, after=after_vacuum_freeze_min_age[request.options.align_index],
                  scope=PG_SCOPE.MAINTENANCE, response=response, before=managed_cache[vacuum_freeze_min_age],
                  _log_pool=_log_pool)
 
     # Tune the vacuum_multixact_freeze_min_age
     vacuum_multixact_freeze_min_age = 'vacuum_multixact_freeze_min_age'
-    after_vacuum_multixact_freeze_min_age = cap_value(_kwargs.num_write_transaction_per_hour_on_workload * 3, 500 * K10,
+    after_vacuum_multixact_freeze_min_age = cap_value(_transaction_rate * 3, 500 * K10,
                                                       managed_cache['autovacuum_multixact_freeze_max_age'] * 0.5)
-    after_vacuum_multixact_freeze_min_age = realign_value(after_vacuum_multixact_freeze_min_age, M10)
+    after_vacuum_multixact_freeze_min_age = realign_value(after_vacuum_multixact_freeze_min_age, 250 * K10)
     _item_tuning(key=vacuum_multixact_freeze_min_age, after=after_vacuum_multixact_freeze_min_age[request.options.align_index],
                  scope=PG_SCOPE.MAINTENANCE, response=response, before=managed_cache[vacuum_multixact_freeze_min_age],
                  _log_pool=_log_pool)
@@ -952,9 +1011,6 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
     shared_buffers_ratio_increment = boost_ratio * 2.0 * _kwargs.mem_pool_tuning_ratio
     max_work_buffer_ratio_increment = boost_ratio * 2.0 * (1 - _kwargs.mem_pool_tuning_ratio)
 
-    # Here is our expected algorithms, but its reversing algorithm is extremely complex.
-    # TODO: And it is not ready for parallel estimation to be correct
-
     # Use ceil to gain higher bound
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     num_conn = managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] - managed_cache['reserved_connections']
@@ -964,29 +1020,37 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
         PG_PROFILE_OPTMODE.OPTIMUS_PRIME: (1.0 + _kwargs.effective_connection_ratio) / (2 * _kwargs.effective_connection_ratio),
         PG_PROFILE_OPTMODE.PRIMORDIAL: 1.0,
     }
-    TBk = pow_avg(1, managed_cache['hash_mem_multiplier'], level=_kwargs.hash_mem_usage_level)
-    # if _kwargs.mem_pool_parallel_estimate:
-    #     # NOT TODO: If parallel estimation is enabled, the correct algorithm to define it is hard to determine
-    #     # due to its non-continuous function
-    #     parallel_scale = response.calc_worker_in_parallel(request.options)['parallel_scale']
-    #     TBk = _kwargs.temp_buffers_ratio + (1 - _kwargs.temp_buffers_ratio) * TBk
-
-    TBk = _kwargs.temp_buffers_ratio + (1 - _kwargs.temp_buffers_ratio) * TBk
-    Limit = stop_point * ram - mem_conn
-
+    hash_mem = pow_avg(1, managed_cache['hash_mem_multiplier'], level=_kwargs.hash_mem_usage_level)
+    work_mem_single = (1 - _kwargs.temp_buffers_ratio) * hash_mem
+    if _kwargs.mem_pool_parallel_estimate:
+        parallel_scale_nonfull = response.calc_worker_in_parallel(
+            request.options,
+            ceil(_kwargs.effective_connection_ratio * num_conn)
+        )['work_mem_parallel_scale']
+        parallel_scale_full = response.calc_worker_in_parallel(request.options, num_conn)['work_mem_parallel_scale']
+        if request.options.opt_mem_pool == PG_PROFILE_OPTMODE.SPIDEY:
+            TBk = _kwargs.temp_buffers_ratio + work_mem_single * parallel_scale_full
+        elif request.options.opt_mem_pool == PG_PROFILE_OPTMODE.OPTIMUS_PRIME:
+            TBk = _kwargs.temp_buffers_ratio + work_mem_single * (parallel_scale_full + parallel_scale_nonfull) / 2
+        else:
+            TBk = _kwargs.temp_buffers_ratio + work_mem_single * parallel_scale_nonfull
+    else:
+        TBk = _kwargs.temp_buffers_ratio + work_mem_single
+    TBk *= active_connection_ratio[request.options.opt_mem_pool]
 
     # Interpret as below:
-    A = _kwargs.shared_buffers_ratio * ram
-    B = shared_buffers_ratio_increment * ram
-    C = max_work_buffer_ratio_increment
-    D = _kwargs.max_work_buffer_ratio
-    E = ram - mem_conn - A
-    F = TBk * active_connection_ratio[request.options.opt_mem_pool]
+    A = _kwargs.shared_buffers_ratio * ram      # The original shared_buffers value
+    B = shared_buffers_ratio_increment * ram    # The increment of shared_buffers
+    C = max_work_buffer_ratio_increment         # The increment of max_work_buffer_ratio
+    D = _kwargs.max_work_buffer_ratio           # The original max_work_buffer_ratio
+    E = ram - mem_conn - A      # The current memory usage (without memory connection and original shared_buffers)
+    F = TBk                     # The average working memory usage per connection
+    LIMIT = stop_point * ram - mem_conn         # The limit of memory usage without static memory usage
 
     # Transform as quadratic function we have:
     a = C * F * (0 - B)
     b = B + F * C * E - B * D * F
-    c = A + F * E * D - Limit
+    c = A + F * E * D - LIMIT
     x = ceil((-b + sqrt(b ** 2 - 4 * a * c)) / (2 * a))
     # print(a, b, c)
     _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment * x,
@@ -1018,6 +1082,8 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
 
     _log_pool.append('---------')
     _log_pool.append(f'DEBUG: Optimal point is found after {bump_step} bump steps and {decay_step} decay steps')
+    if bump_step + decay_step >= 3:
+        _log_pool.append('DEBUG: The memory pool tuning algorithm is incorrect. Revise algorithm to be more accurate')
     _log_pool.append(f'The shared_buffers_ratio is now {_kwargs.shared_buffers_ratio:.5f}.')
     _log_pool.append(f'The max_work_buffer_ratio is now {_kwargs.max_work_buffer_ratio:.5f}.')
     _show_tuning_result('Result (after): ')

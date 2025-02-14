@@ -47,7 +47,7 @@ def _allowed_values(v, values: list[str] | tuple[str, ...]):
 _backup_items = list(backup_description().keys())
 _PG_WORKLOAD_KEYS = PG_WORKLOAD.__members__.values()
 _PG_OPT_KEYS = PG_PROFILE_OPTMODE.__members__.values()
-_PG_OS_KEYS = ['linux', 'windows', 'macos', 'docker', 'k8s', 'containerd', 'wsl', 'PaaS', 'DBaaS']
+_PG_OS_KEYS = ['linux', 'windows', 'macos', 'containerd', 'PaaS']
 
 _allowed_opt_mode = partial(_allowed_values, values=_PG_OPT_KEYS)
 _allowed_workload = partial(_allowed_values, values=_PG_WORKLOAD_KEYS)
@@ -407,11 +407,11 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             # In containerd, docker, k8s, WSL, ... we usually made 100% memory usage unless some distros and things
             # are used, but they are not reserved memory.
             _extra: int = 0
-            if self.operating_system in ('linux', 'macos'):
+            if self.operating_system in ('linux', ):
                 _extra = 128 * Mi
             elif self.operating_system in ('windows',):
                 _extra = 256 * Mi
-            elif self.operating_system in ('containerd', 'docker', 'k8s', 'wsl'):
+            elif self.operating_system in ('containerd', ):
                 _extra = 32 * Mi
 
             if _extra > 0:  # We do the rounding here.
