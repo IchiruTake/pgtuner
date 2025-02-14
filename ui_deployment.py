@@ -207,7 +207,7 @@ if __name__ == '__main__':
 
     # Proceed the PRD first then DEV later
     dev_to_prd_future = migrate(dev_path='./web/ui/dev/static', prod_path='./web/ui/prd/static',
-                                old_html_treatment='override', old_js_treatment='remove')
+                                old_html_treatment='remove', old_js_treatment='remove')
     dev_to_dev_future = migrate(dev_path='./web/ui/dev/static', prod_path='./web/ui/dev/static',
                                 old_html_treatment='skip', old_js_treatment='skip')
     asyncio.run(dev_to_prd_future)
