@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang=en>
+{% include './head.html' %}
+{% include './header.html' %}
+<body>
+<section class="container my-5">
+<h2 class="text-center my-3">Changelog</h2>
+<div class="accordion accordion-flush" id=changelogAccordion>
+<div class=accordion-item>
+<h2 class=accordion-header id=hdr000200>
+<button class="accordion-button collapsed" type=button data-bs-toggle=collapse data-bs-target=#collapse000200 aria-expanded=true aria-controls=collapse000200>
+v0.x.x (x) - Date: Unknown
+</button>
+</h2>
+<div id=collapse000200 class="accordion-collapse collapse" aria-labelledby=hdr000200 data-bs-parent=#changelogAccordion>
+<div class=accordion-body>
+<ul>
+<li>Cleanup development and legacy code</li>
+<li>TODO: Add automatic tests to detect error </li>
+<li>TODO: More refined documentation with icon symbol of importance</li>
+<li>TODO: Rewrite application as Javascript to support global user (if necessary) </li>
+</ul>
+</div>
+</div>
+</div>
+<div class=accordion-item>
+<h2 class=accordion-header id=hdr000102>
+<button class=accordion-button type=button data-bs-toggle=collapse data-bs-target=#collapse000102 aria-expanded=true aria-controls=collapse000102>
+v0.1.2 (Alpha) - Date: Feb 14th, 2022
+</button>
+</h2>
+<div id=collapse000102 class="accordion-collapse collapse show" aria-labelledby=hdr000102 data-bs-parent=#changelogAccordion>
+<div class=accordion-body>
+<ul>
+<li>Cleanup development and legacy code.</li>
+<li>VACUUM: Add vacuum_failsafe_age and vacuum_multixact_failsafe_age parameter into our tuning guideline. Push two '*_freeze_table_age' parameters into the correction tuning phase. These arguments require good estimation</li>
+<li>MEMORY: Better performance on memory estimation phase with parallel estimation mode is applied in the correction phase</li>
+<li>BGWRITER: Adjust the background writer parameters to match its use-case</li>
+<li>VACUUM: Re-adjust the vacuum threshold and scale factor</li>
+<li>Tune up some headers and meta tags for better SEO</li>
+<li>Apply the HTML Jinja2 template for the web page</li>
+<li>Extend the rate limit window for more requests</li>
+</ul>
+</div>
+</div>
+</div>
+<div class=accordion-item>
+<h2 class=accordion-header id=hdr000101>
+<button class="accordion-button collapsed" type=button data-bs-toggle=collapse data-bs-target=#collapse000101 aria-expanded=true aria-controls=collapse000101>
+v0.1.1 (Alpha) - Date: Feb 09th, 2025
+</button>
+</h2>
+<div id=collapse000101 class="accordion-collapse collapse" aria-labelledby=hdr000101 data-bs-parent=#changelogAccordion>
+<div class=accordion-body>
+<ul>
+<li>Cleanup development and legacy code</li>
+<li>Better performance on correction tuning phase, especially on the memory pool increase tuning task, fasten from 6ms to 1-2 ms</li>
+<li>Create robots.txt file for web crawler to index the web page</li>
+<li>Move `_version` endpoint to the `_health` endpoint with a more dedicated health check; service uptime is reported</li>
+<li>Refactor the rate-limit middleware: Merge the global rate-limit and the user (IP/Port) rate-limit into one middleware</li>
+</ul>
+</div>
+</div>
+</div>
+<div class=accordion-item>
+<h2 class=accordion-header id=hdr000100>
+<button class="accordion-button collapsed" type=button data-bs-toggle=collapse data-bs-target=#collapse000100 aria-expanded=true aria-controls=collapse000100>
+v0.1.0 (Alpha) - Date: Feb 01st, 2025
+</button>
+</h2>
+<div id=collapse000100 class="accordion-collapse collapse" aria-labelledby=hdr000100 data-bs-parent=#changelogAccordion>
+<div class=accordion-body>
+<ul>
+<li>Initial release of PGTuner</li>
+<li>Supported for PostgreSQL 13 -> 17</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</section>
+</body>
+</html>

@@ -5,7 +5,12 @@ import httpx
 import asyncio
 
 def cleanup_css(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
-    from mincss.processor import Processor
+    try:
+        from mincss.processor import Processor
+    except (ImportError, ModuleNotFoundError):
+        print('Please install mincss package')
+        return None
+
     p = Processor(debug=True, preserve_remote_urls=True, optimize_lookup=True)
     p.process(website_url)
     print('Inlines CSS discovered:', len(p.inlines))
@@ -29,7 +34,12 @@ def cleanup_css(website_url: str, store_path: str = './web/ui/static', backup: b
 
 
 def cleanup_html_local(html_file: str):
-    import minify_html
+    try:
+        import minify_html
+    except (ImportError, ModuleNotFoundError):
+        print('Please install minify_html package')
+        return None
+
     with open(html_file, 'r') as f:
         html_doc = f.read()
         minified_html = minify_html.minify(code=html_doc, minify_css=True, minify_js=True)
@@ -54,6 +64,13 @@ def cleanup_js(js_file: str, client: httpx.Client):
             minified_js = response.text
             with open(minified_js_filepath, 'w') as f_min:
                 f_min.write(minified_js)
+
+            # Check the minified JS file size
+            print(f'Compression: {os.path.getsize(minified_js_filepath) / os.path.getsize(js_file) * 100:.2f}%')
+            # if os.path.getsize(minified_js_filepath) > os.path.getsize(js_file):
+            #     print(f'Failed to minify the JS file: {js_file} due to the size of minified file is larger than the original file')
+            #     return None
+
             return minified_js_filepath
         else:
             print(f'Failed to minify the JS file: {js_file}')
@@ -72,6 +89,9 @@ def cleanup_html(html_file: str, client: httpx.Client):
             minified_html = response.text
             with open(minified_html_filepath, 'w') as f_min:
                 f_min.write(minified_html)
+
+            print(f'Compression: {os.path.getsize(minified_html_filepath) / os.path.getsize(html_file) * 100:.2f}%')
+
             return minified_html_filepath
         else:
             print(f'Failed to minify the HTML file: {html_file}')

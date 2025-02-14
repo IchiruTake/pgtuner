@@ -51,8 +51,8 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     memory_connection_to_dedicated_os_ratio: float = Field(default=0.3, ge=0.0, le=1.0)
 
     # Memory Parameters
-    effective_cache_size_available_ratio: PositiveFloat = Field(default=0.99, ge=0.93, le=1.0)
-    shared_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.15, lt=0.60)
+    effective_cache_size_available_ratio: PositiveFloat = Field(default=0.985, ge=0.95, le=1.0)
+    shared_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.15, le=0.60)
     shared_buffers_fill_ratio: PositiveFloat = Field(default=0.995, ge=0.95, le=1.0)
     max_work_buffer_ratio: PositiveFloat = Field(default=0.075, gt=0, le=0.50)
     effective_connection_ratio: PositiveFloat = Field(default=0.75, ge=0.25, le=1.0)
@@ -81,7 +81,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
 
     # Transaction Rate
-    num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(1 * M10), ge=K10, le=50 * M10)
+    num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(1 * M10), ge=K10, le=20 * M10)
 
     def to_backend(self) -> PG_TUNE_USR_KWARGS:
         return PG_TUNE_USR_KWARGS(

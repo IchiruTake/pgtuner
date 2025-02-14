@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang=en>
+{% include './head.min.html' %}
+{% include './header.min.html' %}
+<body>
+<section class="container my-5">
+<h2 class="text-center my-3">Error {{ status_code }}</h2>
+<div class="alert alert-danger" role=alert>
+<h4 class=alert-heading> {{ heading }}</h4>
+{% if incident_level %}
+<p class=mt-3> Incident Level {{ incident_level }}</p>
+{% endif %}
+<p class=my-3> {{ generic_message }} </p>
+<p class=my-3>If you believe this is an error, please contact the administrator.</p>
+{% if detail_message %}
+<hr>
+<h5 class=alert-heading>Error in Details</h5>
+<p class=mt-3> {{ detail_message }}</p>
+{% endif %}
+</div>
+</section>
+</body>
+</html>

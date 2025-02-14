@@ -8,17 +8,20 @@ import gzip
 import time
 from datetime import datetime, timedelta
 from time import perf_counter
-from typing import Annotated
+from typing import Annotated, Mapping
 
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Request
 from fastapi import status
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import ORJSONResponse, RedirectResponse, Response
+from fastapi.exceptions import RequestValidationError, HTTPException as FastapiHttpException
+
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 from pydantic import ValidationError
 from starlette.responses import PlainTextResponse, HTMLResponse
 from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 
 from src import pgtuner
 from src.static.c_timezone import GetTimezone
@@ -161,7 +164,7 @@ app.add_middleware(HeaderManageMiddleware, static_cache_control=_static_cache, d
 _logger.debug('The header middleware has been added to the application ...')
 
 _logger.info('The middlewares have been added to the application ...')
-# ==================================================================================================
+# ----------------------------------------------------------------------------------------------
 _logger.info('Mounting the static files to the application ...')
 _logger.info(f'Developer Mode: {_app_dev_mode}')
 _env_tag = 'dev' if _app_dev_mode else 'prd'
@@ -172,7 +175,6 @@ _static_mapper = {
     '/css': f'{_default_path}/css',
     # '/js': './web/ui/js',
 }
-_templates = Jinja2Templates(directory=f'{_default_path}/jinja2')
 
 try:
     for path, directory in _static_mapper.items():
@@ -182,54 +184,89 @@ except (FileNotFoundError, RuntimeError) as e:
     raise e
 _logger.info('The static files have been added to the application ...')
 
+
 # ----------------------------------------------------------------------------------------------
 # UI Directory
-if _app_dev_mode:
-    @app.get('/min')
-    async def root_min():
-        return RedirectResponse(
-            url='/static/index.min.html',
-            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={
-                'Cache-Control': _static_cache,
-            }
-        )
+_templates = Jinja2Templates(directory=f'{_default_path}/jinja2')
 
-    @app.get('/dev')
-    async def root_dev():
-        return RedirectResponse(
-            url='/static/index.html',
-            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            headers={
-                'Cache-Control': _static_cache,
-            }
-        )
-else:
-    @app.get('/robots.txt', status_code=status.HTTP_200_OK)
-    async def robots():
-        return PlainTextResponse(
-            content=open(f'{_default_path}/robots.txt', 'r').read(),
-            status_code=status.HTTP_200_OK,
-            headers={
-                'Cache-Control': _static_cache
-            }
-        )
+# UI Exception Error
+class UIException(StarletteHTTPException):
 
-@app.get('/')
-async def root():
-    return RedirectResponse(
-        url='/static/index.html',
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    _status_mapper = {
+        400: ('Bad Request', 'The server could not understand the request due to invalid syntax.'),
+        401: ('Unauthorized', 'The request has not been applied because it lacks valid authentication credentials for the target resource.'),
+        403: ('Forbidden', 'The server understood the request, but is refusing to fulfill it.'),
+        404: ('Page Not Found', 'The page you are looking for might have been removed, had its name changed, '
+                                'or is temporarily unavailable.'),
+        405: ('Method Not Allowed', 'The method is not allowed for the requested URL.'),
+        500: ('Internal Server Error', "The server has encountered a situation it doesn't know how to handle."),
+        501: ('Not Implemented', 'The server does not support the functionality required to fulfill the request.'),
+        502: ('Bad Gateway', 'The server, while acting as a gateway or proxy, received an invalid response from the upstream server it accessed in attempting to fulfill the request.'),
+        503: ('Service Unavailable', 'The server is currently unable to handle the request due to a temporary overloading or maintenance of the server.'),
+        504: ('Gateway Timeout', 'The server, while acting as a gateway or proxy, did not receive a timely response from the upstream server specified by the URI.'),
+        505: ('HTTP Version Not Supported', 'The server does not support, or refuses to support, the major version of HTTP that was used in the request.'),
+    }
+
+    def __init__(self, status_code: int, detail: str | None = None, headers: Mapping[str, str] | None = None,
+                 heading: str = None, generic_message: str = None, incident_level: str = None):
+        super(UIException, self).__init__(status_code=status_code, detail=detail, headers=headers)
+        default_heading = self._status_mapper[status_code][0] if status_code in self._status_mapper else None
+        default_generic = self._status_mapper[status_code][1] if status_code in self._status_mapper else None
+        self.heading = heading or default_heading
+        self.generic_message = generic_message or default_generic
+        self.incident_level = incident_level
+
+
+@app.exception_handler(UIException)
+async def ui_exception_handler(request: Request, exc: UIException):
+    ctx = {
+        'status_code': exc.status_code,
+        'heading': exc.heading,
+        'generic_message': exc.generic_message,
+        'detail_message': exc.detail,
+    }
+    if _app_dev_mode:
+        ctx['incident_level'] = exc.incident_level
+
+    return _templates.TemplateResponse(
+        name=f'error/index.min.html',
+        request=request,
+        status_code=exc.status_code,
+        headers={
+            'Content-Type': 'text/html; charset=UTF-8',
+            'Cache-Control': f'max-age={30 * SECOND}, {_private_cache}',
+        },
+        context=ctx
+    )
+
+@app.get('/error')
+async def error(request: Request):
+    raise UIException(status_code=404, detail='This is a test error page', heading='Test Error Page',)
+
+
+@app.get('/', status_code=status.HTTP_200_OK)
+async def root(request: Request):
+    return _templates.TemplateResponse(
+        name='/tuner.min.html',
+        request=request,
+        status_code=status.HTTP_200_OK,
         headers={
             'Content-Type': 'text/html; charset=UTF-8',
             'Cache-Control': _static_cache,
         }
     )
 
-@app.get('/test', response_class=HTMLResponse)
-async def test():
-    return _templates.TemplateResponse(name='test.html', request={})
-
+@app.get('/changelog', status_code=status.HTTP_200_OK)
+async def changelog(request: Request):
+    return _templates.TemplateResponse(
+        name='/changelog.min.html',
+        request=request,
+        status_code=status.HTTP_200_OK,
+        headers={
+            'Content-Type': 'text/html; charset=UTF-8',
+            'Cache-Control': _static_cache,
+        }
+    )
 
 
 @app.get('/js/{javascript_path}')
@@ -261,6 +298,18 @@ async def js(
     return Response(content, status_code=status.HTTP_200_OK, headers=response_header)
 
 
+@app.get('/robots.txt', status_code=status.HTTP_200_OK)
+async def robots():
+    return PlainTextResponse(
+        content=open(f'{_default_path}/robots.txt', 'r').read(),
+        status_code=status.HTTP_200_OK,
+        headers={
+            'Cache-Control': _static_cache
+        }
+    )
+
+# ----------------------------------------------------------------------------------------------
+# Health Check API
 _SERVICE_START_TIME = datetime.now(tz=GetTimezone()[0])
 @app.get('/_health', status_code=status.HTTP_200_OK)
 async def health():
@@ -321,7 +370,7 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
         backup_settings=False, # request.backup_settings,
     )
     mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,
-                                   ignore_report=False, skip_logger=True)[0]
+                                   ignore_report=False)[0]
 
     return ORJSONResponse(
         content={'mem_report': mem_report, 'config': content},

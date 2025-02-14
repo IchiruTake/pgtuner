@@ -1,70 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta content="width=device-width, initial-scale=1.0" name="viewport">
-
-    <!-- Bootstrap CSS -->
-    <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-          rel="stylesheet">
-
-    <!-- Bootstrap Icons CSS (Preload to reduce bandwidth) -->
-    <link rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'" type="text/css"
-          href="/css/bootstrap-icons.min.mincss3k.css" >
-    <noscript> <link rel="stylesheet" type="text/css" href="/css/bootstrap-icons.min.mincss3k.css"> </noscript>
-
-
-    <!--    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">-->
-    <!--    <link rel="stylesheet" href="/css/bootstrap.min.mincss.css">-->
-
-    <!-- Bootstrap JS and Self-Hosted JavaScript -->
-    <script crossorigin="anonymous" rel="preload"
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!--    <script crossorigin="anonymous"-->
-    <!--            integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"-->
-    <!--            src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>-->
-    <script defer type="application/javascript" src="/js/pgtuner.min.js"></script>
-
-    <!-- SEO Meta Tags -->
-    <meta name="description" content="PGTuner: The :project:`pgtuner` (or PostgreSQL: DBA & Tuner) is a SQL/Python-based project designed to manage and optimize kernel parameters and database settings, focusing on TCP networking (connection management, retries, timeouts, and **buffering**) and memory/VM management (swappiness, dirty ratios, over-commit memory, hugepages, and cache pressure); whilst maintaining high performance, stability, security, and concurrency for various system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, and many DBA's experts at PostgreSQL community. This project is a combination of those experiences and designed to be a structured approach for various profiles and settings (easily customizable and extendable). ">
-    <title>PGTuner - Automatic PostgreSQL Tuning Tool</title>
-    <link href="/resource/favicon.ico" rel="icon">
-</head>
+{% include './head.min.html' %}
 
 <!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
-<header class="py-3" style="background: linear-gradient(to bottom, #f207b8, #f564e9);">
-    <div class="container d-flex justify-content-between align-items-center">
-        <!-- Logo and Tool Name -->
-        <div class="d-flex align-items-center">
-            <img alt="PGTuner Logo" class="me-2" src="/resource/icon.min.png" fetchpriority="high"
-                 width="60" height="60">
-            <div>
-                <h1 class="h4 mb-0 text-white">PGTuner (Alpha) v0.1.1</h1>
-                <small class="text-light">Extensive PostgreSQL optimization</small>
-            </div>
-        </div>
+{% include './header.min.html' %}
 
-        <!-- Navigation Links and Toggle -->
-        <nav class="d-flex align-items-center">
-            <ul class="nav me-3">
-                <li class="nav-item">
-                    <a class="nav-link text-white fw-bold" href="/">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link text-white fw-bold" href="https://github.com/IchiruTake/pgtuner_dba"
-                       target="_blank">
-                        <i class="bi bi-github mx-1"></i>
-                        Contribute
-                    </a>
-                </li>
-            </ul>
-            <!-- Light/Dark Mode Toggle -->
-            <!-- <button class="btn btn-light" id="theme-toggle">Light Mode</button> -->
-        </nav>
-    </div>
-</header>
 <body>
 <div class="container my-4">
     <h2 class="mb-4">PGTuner Input Form</h2>
@@ -148,8 +88,8 @@
                            placeholder="Enter the number of logical CPUs"
                            onchange="syncSliderToNumber('logical_cpu')">
                     <input class="form-control w-25" id="logical_cpu"
-                            max="128" min="1" step="1" value="4" type="number"
-                            onchange="syncNumberToSlider('logical_cpu')">
+                           max="128" min="1" step="1" value="4" type="number"
+                           onchange="syncNumberToSlider('logical_cpu')">
                 </div>
             </div>
             <div class="col-4 mb-3">
@@ -218,8 +158,8 @@
                            max="4096" min="-1" step="1" value="-1" type="range"
                            onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); ram_calculator()">
                     <input class="form-control w-50" id="base_monitoring_memory_usage_in_mib"
-                            max="4096" min="-1" step="1" value="-1" type="number"
-                            onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()">
+                           max="4096" min="-1" step="1" value="-1" type="number"
+                           onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()">
                 </div>
             </div>
             <!-- Display Total RAM in (MiB), not a form submit -->
@@ -234,7 +174,7 @@
                 </div>
                 <div class="d-flex align-items-center">
                     <input class="form-control w-100" id="total_usable_ram" disabled readonly value="???"
-                    onload="ram_calculator()">
+                           onload="ram_calculator()">
                 </div>
             </div>
 
@@ -423,8 +363,8 @@
                            max="14000" min="50" step="50" value="500" type="range"
                            onchange="syncSliderToNumber('data_index_spec.throughput')">
                     <input class="form-control w-25" id="data_index_spec.throughput"
-                            max="14000" min="50" step="50" value="500" type="number"
-                            onchange="syncNumberToSlider('data_index_spec.throughput')">
+                           max="14000" min="50" step="50" value="500" type="number"
+                           onchange="syncNumberToSlider('data_index_spec.throughput')">
                 </div>
             </div>
             <div class="col-6 mb-3">
@@ -713,8 +653,8 @@
                            max="32" min="0" step="1" value="0" type="range"
                            onchange="syncSliderToNumber('max_num_stream_replicas_on_primary')">
                     <input class="form-control w-auto" id="max_num_stream_replicas_on_primary"
-                            max="32" min="0" step="1" value="0" type="number"
-                            onchange="syncNumberToSlider('max_num_stream_replicas_on_primary')">
+                           max="32" min="0" step="1" value="0" type="number"
+                           onchange="syncNumberToSlider('max_num_stream_replicas_on_primary')">
                 </div>
             </div>
             <div class="col-4 mb-3">
@@ -733,8 +673,8 @@
                            max="32" min="0" step="1" value="0" type="range"
                            onchange="syncSliderToNumber('max_num_logical_replicas_on_primary')">
                     <input class="form-control w-auto" id="max_num_logical_replicas_on_primary"
-                            max="32" min="0" step="1" value="0" type="number"
-                            onchange="syncNumberToSlider('max_num_logical_replicas_on_primary')">
+                           max="32" min="0" step="1" value="0" type="number"
+                           onchange="syncNumberToSlider('max_num_logical_replicas_on_primary')">
                 </div>
             </div>
             <div class="col-4 mb-3">
@@ -754,14 +694,14 @@
                            max="10000" min="1" step="1" value="650" type="range"
                            onchange="syncSliderToNumber('max_time_transaction_loss_allow_in_millisecond')">
                     <input class="form-control w-auto" id="max_time_transaction_loss_allow_in_millisecond"
-                            max="10000" min="1" step="1" value="650" type="number"
-                            onchange="syncNumberToSlider('max_time_transaction_loss_allow_in_millisecond')">
+                           max="10000" min="1" step="1" value="650" type="number"
+                           onchange="syncNumberToSlider('max_time_transaction_loss_allow_in_millisecond')">
                 </div>
             </div>
             <div class="col-4 mb-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <label class="form-label" for="repurpose_wal_buffers">
-                       Transfer WAL buffers to Working Memory
+                        Transfer WAL buffers to Working Memory
                     </label>
                     <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                        data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
@@ -777,7 +717,7 @@
             <div class="col-4 mb-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <label class="form-label" for="offshore_replication">
-                       Offshore Replication (regional or international)
+                        Offshore Replication (regional or international)
                     </label>
                     <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                        data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
@@ -1034,10 +974,10 @@
                         <div class="d-flex align-items-center">
                             <input class="form-range me-3" name="keywords.effective_cache_size_available_ratio"
                                    id="keywords.effective_cache_size_available_ratio_range"
-                                   max="1.0" min="0.93" step="0.0025" value="0.99" type="range"
+                                   max="1.0" min="0.95" step="0.0025" value="0.985" type="range"
                                    onchange="syncSliderToNumber('keywords.effective_cache_size_available_ratio')">
                             <input class="form-control w-auto" id="keywords.effective_cache_size_available_ratio"
-                                   max="1.0" min="0.93" step="0.0025" value="0.99" type="number"
+                                   max="1.0" min="0.95" step="0.0025" value="0.985" type="number"
                                    onchange="syncNumberToSlider('keywords.effective_cache_size_available_ratio')">
                         </div>
                     </div>
@@ -1056,10 +996,10 @@
                         <div class="d-flex align-items-center">
                             <input class="form-range me-3" name="keywords.shared_buffers_ratio"
                                    id="keywords.shared_buffers_ratio_range"
-                                   max="0.599" min="0.15" step="0.01" value="0.25" type="range"
+                                   max="0.60" min="0.15" step="0.01" value="0.25" type="range"
                                    onchange="syncSliderToNumber('keywords.shared_buffers_ratio')">
                             <input class="form-control w-auto" id="keywords.shared_buffers_ratio"
-                                   max="0.599" min="0.15" step="0.01" value="0.25" type="number"
+                                   max="0.60" min="0.15" step="0.01" value="0.25" type="number"
                                    onchange="syncNumberToSlider('keywords.shared_buffers_ratio')">
                         </div>
                     </div>
@@ -1434,17 +1374,17 @@
                                 Workload WRITE Transaction Rate Per Hour</label>
                             <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                                data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                               data-bs-content="The peak number of workload *write* transaction per hour (regardless commit or rollback). The supported range is [1K, 50M], default is 5M (translated in around 1.4K transactions per second). Note that this number requires you to have good estimation on how much your server can be handled and will be handled during its busy workload, to mark frozen page for anti-wraparound (aggressive) vacuum. "
+                               data-bs-content="The peak number of workload *write* transaction per hour (regardless commit or rollback). The supported range is [1K, 20M], default is 1M (translated in around 270 write transactions per second). Note that this number requires you to have good estimation on how much your server can be handled and will be handled during its busy workload, to mark frozen page for anti-wraparound (aggressive) vacuum. "
                                title="Workload Transaction Rate (per hour on 1 server)">
                             </i>
                         </div>
                         <div class="d-flex align-items-center">
                             <input class="form-range me-3" name="keywords.num_write_transaction_per_hour_on_workload"
                                    id="keywords.num_write_transaction_per_hour_on_workload_range"
-                                   max="50000000" min="10000" step="10000" value="1000000" type="range"
+                                   max="20000000" min="10000" step="10000" value="1000000" type="range"
                                    onchange="syncSliderToNumber('keywords.num_write_transaction_per_hour_on_workload')">
                             <input class="form-control w-auto" id="keywords.num_write_transaction_per_hour_on_workload"
-                                   max="50000000" min="10000" step="10000" value="1000000" type="number"
+                                   max="20000000" min="10000" step="10000" value="1000000" type="number"
                                    onchange="syncNumberToSlider('keywords.num_write_transaction_per_hour_on_workload')">
                         </div>
                     </div>
@@ -1476,6 +1416,7 @@
         </div>
     </div>
 </div>
+
 </body>
 <script>
     // Wait until the bootstrap.bundle.min.js is loaded

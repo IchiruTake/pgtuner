@@ -40,11 +40,40 @@ _DB_QUERY_PROFILE = {
     },
 }
 
+_DB_VACUUM_PROFILE = {
+    'vacuum_failsafe_age': {
+        'default': 1_600_000_000,
+        'comment': "Age at which VACUUM should trigger failsafe to avoid a wraparound outage. Specifies the maximum "
+                   "age (in transactions) that a table's pg_class.relfrozenxid field can attain before VACUUM takes "
+                   "extraordinary measures to avoid system-wide transaction ID wraparound failure. This is VACUUM's "
+                   "strategy of last resort. The failsafe typically triggers when an autovacuum to prevent transaction "
+                   "ID wraparound has already been running for some time, though it's possible for the failsafe to "
+                   "trigger during any VACUUM. When the failsafe is triggered, any cost-based delay that is in effect "
+                   "will no longer be applied, further non-essential maintenance tasks (such as index vacuuming) are "
+                   "bypassed, and any Buffer Access Strategy in use will be disabled resulting in VACUUM being free to "
+                   "make use of all of shared buffers.",
+    },
+    'vacuum_multixact_failsafe_age': {
+        'default': 1_600_000_000,
+        'comment': "Multixact age at which VACUUM should trigger failsafe to avoid a wraparound outage. Specifies the "
+                   "maximum age (in multixacts) that a table's pg_class.relminmxid field can attain before VACUUM takes "
+                   "extraordinary measures to avoid system-wide multixact ID wraparound failure. This is VACUUM's "
+                   "strategy of last resort. The failsafe typically triggers when an autovacuum to prevent transaction "
+                   "ID wraparound has already been running for some time, though it's possible for the failsafe to "
+                   "trigger during any VACUUM. When the failsafe is triggered, any cost-based delay that is in effect "
+                   "will no longer be applied, and further non-essential maintenance tasks (such as index "
+                   "vacuuming) are bypassed.",
+    }
+}
+
+
+
 # =============================================================================
 # Trigger the merge
 DB14_CONFIG_MAPPING = {
     'timeout': (PG_SCOPE.OTHERS, _DB_TIMEOUT_PROFILE, {'hardware_scope': 'overall'}),
     'query': (PG_SCOPE.QUERY_TUNING, _DB_QUERY_PROFILE, {'hardware_scope': 'overall'}),
+    'maintenance': (PG_SCOPE.MAINTENANCE, _DB_VACUUM_PROFILE, {'hardware_scope': 'overall'}),
 }
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING)
 type_validation(DB14_CONFIG_MAPPING)

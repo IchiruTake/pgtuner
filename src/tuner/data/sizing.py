@@ -93,8 +93,8 @@ class PG_DISK_SIZING(Enum):
     # SATA SSDs (Local)
     SSDv1 = ('ssdv1', 450, 20 * K10)
     SSDv2 = ('ssdv2', 500, 30 * K10)
-    SSDv3 = ('ssdv3', 525, 40 * K10)
-    SSDv4 = ('ssdv4', 550, 50 * K10)
+    SSDv3 = ('ssdv3', 533, 40 * K10)
+    SSDv4 = ('ssdv4', 566, 50 * K10)
     SSDv5 = ('ssdv5', 600, 60 * K10)
 
     # Remote NVMe SSD (Usually the NVMe Box)
@@ -235,7 +235,7 @@ class PG_DISK_SIZING(Enum):
             return True
 
         lower_bound, upper_bound = PG_DISK_SIZING._get_bound(performance_type, disk_01, disk_02)
-        return lower_bound <= performance <= upper_bound
+        return lower_bound <= performance < upper_bound
 
     @staticmethod
     def match_disk_series(performance: int, performance_type: str, disk_type: str,

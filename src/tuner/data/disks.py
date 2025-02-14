@@ -141,13 +141,13 @@ class PG_DISK_PERF(BaseModel):
         return int(s_tput * self.raid_scale_factor()), int(s_iops * self.raid_scale_factor())
 
     @staticmethod
-    def iops_to_throughput(iops: int) -> int:
+    def iops_to_throughput(iops: int) -> int | float:
         # IOPS -> Measured by number of 8 KiB blocks
         # Throughput -> Measured in MiB or MiB/s
-        return iops * DB_PAGE_SIZE // Mi
+        return iops * DB_PAGE_SIZE / Mi
 
     @staticmethod
-    def throughput_to_iops(throughput: int) -> int:
+    def throughput_to_iops(throughput: int | float) -> int | float:
         # IOPS -> Measured by number of 8 KiB blocks
         # Throughput -> Measured in MiB or MiB/s
-        return throughput * Mi // DB_PAGE_SIZE
+        return throughput * (Mi // DB_PAGE_SIZE)

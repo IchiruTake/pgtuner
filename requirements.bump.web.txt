@@ -6,3 +6,5 @@ httptools
 itsdangerous
 asgiref
 zstandard
+Jinja2
+httpx

@@ -1,11 +1,11 @@
 import os
 import glob
-from src.static.vars import BACKUP_ENTRY_READER_DIR, SUGGESTION_ENTRY_READER_DIR, BASE_ENTRY_READER_DIR
+from src.static.vars import SUGGESTION_ENTRY_READER_DIR
 
 
 def cleanup():
     # Check the directory, remove all files except the latest one
-    for dir_path in (BACKUP_ENTRY_READER_DIR, SUGGESTION_ENTRY_READER_DIR, "log"):
+    for dir_path in (SUGGESTION_ENTRY_READER_DIR, "log"):
         print(f"Cleaning up {dir_path}")
         files = glob.glob(f"{dir_path}/*")
         if len(files) > 1:
