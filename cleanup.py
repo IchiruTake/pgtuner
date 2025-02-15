@@ -12,6 +12,9 @@ def cleanup():
             files.sort(key=os.path.getmtime)
             for file in files[:-1]:
                 os.remove(file)
+        elif len(files) == 1:
+            print(f"Only one file in {dir_path}, force full cleanup")
+            os.remove(files[0])
 
 if __name__ == "__main__":
     cleanup()

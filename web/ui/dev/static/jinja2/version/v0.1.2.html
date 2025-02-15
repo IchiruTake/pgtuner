@@ -1,0 +1,24 @@
+<!-- Changelog Item (v0.1.2) -->
+<div class="accordion-item">
+    <h2 class="accordion-header" id="hdr000102">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse000102"
+                aria-expanded="true" aria-controls="collapse000102">
+            v0.1.2 (Alpha) - Date: Feb 14th, 2022
+        </button>
+    </h2>
+    <div id="collapse000102" class="accordion-collapse collapse show" aria-labelledby="hdr000102"
+         data-bs-parent="#changelogAccordion">
+        <div class="accordion-body">
+            <ul>
+                <li>Cleanup development and legacy code.</li>
+                <li>VACUUM: Add vacuum_failsafe_age and vacuum_multixact_failsafe_age parameter into our tuning guideline. Push two '*_freeze_table_age' parameters into the correction tuning phase. These arguments require good estimation</li>
+                <li>MEMORY: Better performance on memory estimation phase with parallel estimation mode is applied in the correction phase</li>
+                <li>BGWRITER: Adjust the background writer parameters to match its use-case</li>
+                <li>VACUUM: Re-adjust the vacuum threshold and scale factor</li>
+                <li>Tune up some headers and meta tags for better SEO</li>
+                <li>Apply the HTML Jinja2 template for the web page</li>
+                <li>Extend the rate limit window for more requests</li>
+            </ul>
+        </div>
+    </div>
+</div>

@@ -73,7 +73,7 @@ class PG_SIZING(Enum):
 
 class PG_DISK_SIZING(Enum):
     """
-    This class contains the PostgreSQL disk checkpoint sizing profile.
+    This class contains the PostgreSQL disk sizing profile (taken from bare-metal server, not virtualized server).
     First value is the disk code
     Second value is the throughput in sequential read/write in MiB/s
     Third value is the number of IOPS in random read/write

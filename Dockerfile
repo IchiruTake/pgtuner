@@ -1,12 +1,25 @@
 FROM python:3.12-alpine
-COPY . .
+# Load the environment variables in /conf/web.prd.env by executing bash shell command
+COPY /conf /conf
+RUN bash -c 'source ./conf/web.prd.env'
+
+# Copy and Install the depenedencies first
+COPY requirements.bump.web.txt .
+RUN pip install --upgrade pip && pip install -r requirements.bump.web.txt
+
+# Copy the rest of the files
+COPY /.pgtuner_dba /.pgtuner_dba
+COPY /log /log
+COPY /conf /conf
+COPY /src /src
+COPY /web /web
+COPY /web.py /web.py
+COPY ./ui_deployment.py /ui_deployment.py
+
+# Expose or override the port using $PORT environment variable
 ENV PORT=8001
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONOPTIMIZE=2
-ENV PGTUNER_DBA_WEB=1
-ENV PORT=8001
-EXPOSE 8001
-# Install dependencies
-RUN pip install -r requirements.bump.cli.txt
-RUN pip install -r requirements.bump.web.txt
+EXPOSE $PORT
+
+# Execute the UI deployment script
+RUN python ui_deployment.py
 CMD ["python", "web.py"]

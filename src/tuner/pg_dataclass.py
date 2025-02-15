@@ -127,11 +127,11 @@ class PG_TUNE_RESPONSE(BaseModel):
                  ignore_report: bool = True) -> tuple[str, int | float]:
         # Cache result first
         _kwargs = options.tuning_kwargs
-        usable_ram_noswap = options.usable_ram_noswap
+        usable_ram_noswap = options.usable_ram
         usable_ram_noswap_hr = bytesize_to_hr(usable_ram_noswap)
-        ram_noswap = options.ram_noswap
-        ram_noswap_hr = bytesize_to_hr(ram_noswap)
-        usable_ram_noswap_ratio = usable_ram_noswap / ram_noswap
+        total_ram = options.total_ram
+        total_ram_hr = bytesize_to_hr(total_ram)
+        usable_ram_noswap_ratio = usable_ram_noswap / total_ram
         managed_cache = self.get_managed_cache(PGTUNER_SCOPE.DATABASE_CONFIG)
 
         # Number of Connections
@@ -263,10 +263,10 @@ class PG_TUNE_RESPONSE(BaseModel):
         _report = f'''
 # ===============================================================
 # Memory Estimation Test by {APP_NAME_UPPER}
-From server-side, the PostgreSQL memory usable arena is at most {usable_ram_noswap_hr} or {usable_ram_noswap_ratio * 100:.2f} (%) of the total RAM ({bytesize_to_hr(ram_noswap)}).
+From server-side, the PostgreSQL memory usable arena is at most {usable_ram_noswap_hr} or {usable_ram_noswap_ratio * 100:.2f} (%) of the total RAM ({total_ram_hr}).
 All other variables must be bounded and computed within the available memory. 
 CPU: {options.vcpu} logical cores
-RAM: {ram_noswap_hr} or ratio: ({(ram_noswap / options.vcpu / Gi):.1f}).
+RAM: {total_ram_hr} or ratio: ({(total_ram / options.vcpu / Gi):.1f}).
 
 Arguments: use_full_connection={use_full_connection}
 Report Summary (memory, over usable RAM):

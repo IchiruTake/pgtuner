@@ -1,0 +1,115 @@
+<div class="my-4">
+    <h4 class="mb-3">Tuning Mode</h4>
+    <div class="row">
+        <!-- Database Tuning -->
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="enable_database_general_tuning">
+                    Enable Database General Tuning
+                </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Enable database general tuning."
+                   title="Enable Database General Tuning">
+                </i>
+            </div>
+            <div class="d-flex align-items-center form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="enable_database_general_tuning" checked >
+                <label class="form-check-label px-3" for="enable_database_general_tuning">Yes</label>
+            </div>
+        </div>
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="enable_database_correction_tuning">
+                    Enable Database Correction Tuning
+                </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Enable database correction tuning."
+                   title="Enable Database Correction Tuning">
+                </i>
+            </div>
+            <div class="d-flex align-items-center form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="enable_database_correction_tuning" checked >
+                <label class="form-check-label px-3" for="enable_database_correction_tuning">Yes</label>
+            </div>
+        </div>
+        <!-- Sysctl Tuning -->
+
+        <!-- Some Query Tuning -->
+
+    </div>
+    <div class="row">
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="alter_style"> Alter Style </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Enable it to switch the format into ALTER SYSTEM SET"
+                   title="Alter Style">
+                </i>
+            </div>
+            <div class="d-flex align-items-center form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="alter_style" >
+                <label class="form-check-label px-3" for="alter_style">No</label>
+            </div>
+        </div>
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="backup_settings"> Backup Settings </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Enable it to add the request's information."
+                   title="Backup Settings">
+                </i>
+            </div>
+            <div class="d-flex align-items-center form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="backup_settings" disabled>
+                <label class="form-check-label px-3" for="backup_settings">No</label>
+            </div>
+        </div>
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="analyze_with_full_connection_use"> Analyze Memory Usage when Full Connection </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Enable it when you need the memory display when all connections are in maximum usage."
+                   title="Analyze Memory Usage when Full Connection">
+                </i>
+            </div>
+            <div class="d-flex align-items-center form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="analyze_with_full_connection_use">
+                <label class="form-check-label px-3" for="analyze_with_full_connection_use">No</label>
+            </div>
+        </div>
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="ignore_non_performance_setting"> Ignore Non-Performance Setting </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Enable it when you need the memory display when all connections are in maximum usage."
+                   title="Analyze Memory Usage when Full Connection">
+                </i>
+            </div>
+            <div class="d-flex align-items-center form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="ignore_non_performance_setting" checked>
+                <label class="form-check-label px-3" for="analyze_with_full_connection_use">Yes</label>
+            </div>
+        </div>
+        <div class="col-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="output_format"> Output Format </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Select your desired output format."
+                   title="Backup Settings">
+                </i>
+            </div>
+            <select class="form-select" id="output_format" name="output_format">
+                <option value="conf">Conf: INI Format</option>
+                <option value="json">JSON: JSON Format</option>
+                <option selected value="file">File: Fully-Managed INI Format</option>
+            </select>
+        </div>
+    </div>
+</div>

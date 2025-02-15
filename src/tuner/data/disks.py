@@ -50,7 +50,7 @@ _string_disk_to_throughput = partial(string_disk_to_performance, mode=THROUGHPUT
 class PG_DISK_PERF(BaseModel):
     random_iops_spec: _SIZING | str = (
         Field(default_factory=PydanticFact('Enter the read performance of the single disk in random IOPs metric: ',
-                                           default_value=PG_DISK_SIZING.SSDv1.iops(), user_fn=_string_disk_to_iops),
+                                           default_value=PG_DISK_SIZING.SANv1.iops(), user_fn=_string_disk_to_iops),
               description='The random IOPS metric of a single disk measured as either the 4 KiB page size (OS default) '
                           'or using 8 KiB as PostgreSQL block size. It is best that user should provided measured '
                           'result from the benchmark (fio, CrystalDiskMark). If you are working on NVME SSD drive, '
@@ -72,7 +72,7 @@ class PG_DISK_PERF(BaseModel):
     )
     throughput_spec: _SIZING | str = (
         Field(default_factory=PydanticFact('Enter the read performance of the single disk in MiB/s: ',
-                                           default_value=PG_DISK_SIZING.SSDv1.throughput(),
+                                           default_value=PG_DISK_SIZING.SANv1.throughput(),
                                            user_fn=_string_disk_to_throughput),
               description='The read specification of the disk performance. Its value can be random IOPS or read/write '
                           'throughput in MiB/s. Note that this setup does not pair well with heterogeneous disk type. '

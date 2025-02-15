@@ -355,7 +355,7 @@ def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
 
     # Tune the bgwriter_delay and bgwriter_lru_maxpages
     bgwriter_delay = 'bgwriter_delay'
-    after_bgwriter_delay = max(100, managed_cache[bgwriter_delay] - 20 * _data_iops // (2 * K10))
+    after_bgwriter_delay = max(100, managed_cache[bgwriter_delay] - 5 * _data_iops // int(1 * K10))
     _item_tuning(key=bgwriter_delay, after=after_bgwriter_delay, scope=PG_SCOPE.OTHERS, response=response,
                  before=managed_cache[bgwriter_delay], _log_pool=_log_pool)
 
@@ -458,16 +458,16 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
         after_vacuum_cost_page_dirty = 15
     elif (PG_DISK_SIZING.match_one_disk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.HDDv3) or
           PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san')):
-        after_autovacuum_vacuum_cost_delay = 10
-        after_vacuum_cost_page_dirty = 12
+        after_autovacuum_vacuum_cost_delay = 12
+        after_vacuum_cost_page_dirty = 15
     elif (PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'ssd') or
           PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'nvme')):
         after_autovacuum_vacuum_cost_delay = 5
         after_vacuum_cost_page_dirty = 10
     else:
         # Default fallback
-        after_autovacuum_vacuum_cost_delay = 5
-        after_vacuum_cost_page_dirty = 10
+        after_autovacuum_vacuum_cost_delay = 12
+        after_vacuum_cost_page_dirty = 15
     _item_tuning(key='vacuum_cost_page_miss', after=after_vacuum_cost_page_miss, scope=PG_SCOPE.MAINTENANCE,
                  response=response, before=managed_cache['vacuum_cost_page_miss'], _log_pool=_log_pool)
     _item_tuning(key=autovacuum_vacuum_cost_delay, after=after_autovacuum_vacuum_cost_delay, scope=PG_SCOPE.MAINTENANCE,
@@ -504,8 +504,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     # Worst Case: The database is autovacuum without cache or cold start.
 
     # Worst Case: every page requires WRITE on DISK rather than fetch on disk or OS page cache
-    cost_model = 2
-    miss, dirty = 12 - cost_model, cost_model
+    miss, dirty = 12 - _kwargs.vacuum_safety_level, _kwargs.vacuum_safety_level
     vacuum_cost_model = (managed_cache['vacuum_cost_page_miss'] * miss + managed_cache['vacuum_cost_page_dirty'] * dirty) / (miss + dirty)
 
     # For manual VACUUM, usually only a minor of tables gets bloated, and we assume you don't do that stupid to DDoS
@@ -850,7 +849,7 @@ def _wal_integrity_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
             current_wal_buffers -= decay_rate
         if (wal_buffers_diff := managed_cache[wal_buffers_str] - current_wal_buffers) > 0:
             if request.options.repurpose_wal_buffers:
-                request.options.tuning_kwargs.max_work_buffer_ratio += wal_buffers_diff / request.options.usable_ram_noswap
+                request.options.tuning_kwargs.max_work_buffer_ratio += wal_buffers_diff / request.options.usable_ram
                 _trigger_tuning({
                     PG_SCOPE.MEMORY: ('temp_buffers', 'work_mem'),
                     PG_SCOPE.QUERY_TUNING: ('effective_cache_size',),
@@ -979,7 +978,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
     _log_pool.append('Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: '
                      'shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size')
     _kwargs = request.options.tuning_kwargs
-    ram  = request.options.usable_ram_noswap
+    ram  = request.options.usable_ram
     srv_mem_str = bytesize_to_hr(ram)
 
     stop_point: float = _kwargs.max_normal_memory_usage

@@ -173,12 +173,11 @@ def make_tune_request(
         workload_type: PG_WORKLOAD = PG_WORKLOAD.HTAP,
         opt_mem_pool: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.OPTIMUS_PRIME,
         operating_system: str = 'linux',
-        add_system_reserved_memory_into_ram: bool = False,
         base_kernel_memory_usage: _SIZING = -1,
         base_monitoring_memory_usage: _SIZING = -1,
         tuning_keywords: PG_TUNE_USR_KWARGS = make_tuning_keywords(),
         logical_cpu: int = 4,
-        ram_sample: _SIZING = 16 * Gi,
+        total_ram: _SIZING = 16 * Gi,
 
         ## PostgreSQL Data Integrity
         opt_transaction_lost: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.NONE,
@@ -214,9 +213,8 @@ def make_tune_request(
         wal_spec=wal_disk or disk_template, db_log_spec=db_log_disk or disk_template,
         ## PostgreSQL Tuning Configuration
         workload_type=workload_type, operating_system=operating_system,
-        add_system_reserved_memory_into_ram=add_system_reserved_memory_into_ram,
         base_kernel_memory_usage=base_kernel_memory_usage, base_monitoring_memory_usage=base_monitoring_memory_usage,
-        tuning_kwargs=tuning_keywords, vcpu=logical_cpu, ram_sample=ram_sample,
+        tuning_kwargs=tuning_keywords, vcpu=logical_cpu, total_ram=total_ram,
         opt_mem_pool=opt_mem_pool,
 
         ## PostgreSQL Data Integrity
