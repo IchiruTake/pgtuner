@@ -4,6 +4,7 @@
 
 The :project:`pgtuner` (or PostgreSQL: Tuner as DBA) is a SQL/Python-based project designed to manage and optimize kernel parameters and database settings, focusing on TCP networking on kernel (connection management, retries, timeouts, and **buffering**), and database utilization (memory, disk, integrity); bringing the highest performance with stability, data integrity, and concurrency from various system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, many DBA experts at PostgreSQL community (Azure, OnGres, PostgresPro, PostgreSQL core developers, real-world use cases, ...) and my own experience. 
 
+You can experience our on-demand tool under the URL https://pgtuner.onrender.com, or clone our repository and run it on your local machine (follow the instruction below). 
 
 ## How tuning works?
 
@@ -30,7 +31,7 @@ If you decide to work on its backend only, install the `requirements.bump.cli.tx
 
 ## Upcoming Features
 
-Probably in the future, I want to write a full Javascript tuning to host as the static webpages, to provide an easy-to-go tuning guideline for the users around the world. But some difficulties:
+Probably in the future, we want to write a full Javascript tuning to host as the static webpages, to provide an easy-to-go tuning guideline for the users around the world. But some difficulties:
 - Lambda function with caching during general tuning and correction tuning
 - Input validation (not the biggest obstacle) and error handling
 - Insertion-ordered dictionary (from Python 3.7+)
