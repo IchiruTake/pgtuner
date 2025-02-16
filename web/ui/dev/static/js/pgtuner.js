@@ -58,17 +58,7 @@ function _get_monitoring_memory() {
 function _get_total_ram() {
     // Ensure these part synchronized with Python code
     const operating_system = document.getElementById("operating_system").value;
-    const add_reserved_ram_block = document.getElementById("add_system_reserved_memory_into_ram");
-    let total_ram = document.getElementById("ram_sample_in_gib").value * 1024;
-    if (add_reserved_ram_block.checked) {
-        if (operating_system === "linux") {
-            total_ram += 128;
-        } else if (operating_system === "windows") {
-            total_ram += 256;
-        } else if (operating_system === "containerd") {
-            total_ram += 32;
-        }
-    }
+    let total_ram = document.getElementById("total_ram_in_gib").value * 1024;
     return total_ram;
 }
 

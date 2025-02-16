@@ -238,23 +238,13 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
               description='The number of vCPU (logical CPU) that the PostgreSQL server is running on. Default is 4 '
                           'vCPUs. Minimum number of vCPUs is 1. ')
     ]
-    ram_sample: Annotated[
+    total_ram: Annotated[
         ByteSize,
         Field(default=16 * Gi, ge=2 * Gi, multiple_of=256 * Mi,
               description='The amount of RAM capacity that the PostgreSQL server is running on. Default is 16 GiB.'
                           'Minimum amount of RAM is 2 GiB. PostgreSQL would performs better when your server has '
                           'more RAM available. Note that the amount of RAM on the server must be larger than the '
                           'in-place kernel and monitoring memory usage. The value must be a multiple of 256 MiB.'
-              )
-    ]
-    add_system_reserved_memory_into_ram: Annotated[
-        bool,
-        Field(default=False, frozen=False,
-              description='Set to True if your server input the RAM memory by measurement (free -m on Linux, Task '
-                          'Manager on Windows, etc). However, we do not recommend to set this as it could assume your '
-                          'PostgreSQL can use the reserved memory which are already dedicated for the kernel, booting '
-                          'process, and other system processes. The amount of hidden system reserved memory is varied '
-                          'depending on the operating system (and probably if you made custom change on top of it). '
               )
     ]
     base_kernel_memory_usage: Annotated[
@@ -359,9 +349,9 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                             f'Forcing the version to the common version (which is the shared configuration across'
                             f'all supported versions).')
             self.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[-1]
-        if self.usable_ram_noswap < 2 * Gi:
-            _sign = '+' if self.usable_ram_noswap >= 0 else '-'
-            _msg: str = (f'The usable RAM {_sign}{bytesize_to_hr(self.usable_ram_noswap)} is less than the PostgreSQL '
+        if self.usable_ram < 2 * Gi:
+            _sign = '+' if self.usable_ram >= 0 else '-'
+            _msg: str = (f'The usable RAM {_sign}{bytesize_to_hr(self.usable_ram)} is less than the PostgreSQL '
                          'minimum 2 GiB. It is recommended to increase the total RAM of your server, or switch to a '
                          'more lightweight monitoring system, kernel usage, or even the operating system. The tuning '
                          'could be inaccurate.')
@@ -396,32 +386,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     # ========================================================================
     # Some VM Snapshot Function
     @cached_property
-    def ram_noswap(self) -> ByteSize | int:
-        mem_total: ByteSize = self.ram_sample
-        if self.add_system_reserved_memory_into_ram:
-            # Unless the user is managing the OS and they supply the input of RAM by using free -m in Linux
-            # or Task Manager on Windows. The system reserved memory in usual should not be added into the total
-            # memory estimation as it is made for kernel and PostgreSQL cannot use it properly. Unfortunately,
-            # not every OS can retrieve the system reserved memory so we just made the estimation here.
-            # In Linux-managed OS, the number is 64 - 128 MiB. In Windows, the usual number is 235 - 256 MiB.
-            # In containerd, docker, k8s, WSL, ... we usually made 100% memory usage unless some distros and things
-            # are used, but they are not reserved memory.
-            _extra: int = 0
-            if self.operating_system in ('linux', ):
-                _extra = 128 * Mi
-            elif self.operating_system in ('windows',):
-                _extra = 256 * Mi
-            elif self.operating_system in ('containerd', ):
-                _extra = 32 * Mi
-
-            if _extra > 0:  # We do the rounding here.
-                mem_total = ByteSize(mem_total + _extra)
-
-        return mem_total
-
-    @cached_property
-    def usable_ram_noswap(self) -> ByteSize | int:
-        mem_available: ByteSize = self.ram_noswap
+    def usable_ram(self) -> ByteSize | int:
+        mem_available: ByteSize = self.total_ram
         mem_available -= self.base_kernel_memory_usage
         mem_available -= self.base_monitoring_memory_usage
         return mem_available

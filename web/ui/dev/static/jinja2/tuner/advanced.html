@@ -1,0 +1,563 @@
+<div class="my-4">
+    <h4 class="mb-3">Advanced Tuning Parameters</h4>
+    <p>
+        It is best to review these advanced settings to customize it based on your needs.
+        TODO: Add more information about the advanced settings.
+    </p>
+
+    <button aria-controls="advancedSettings" aria-expanded="false" class="btn btn-secondary"
+            data-bs-target="#advancedSettings"
+            data-bs-toggle="collapse" type="button">
+        Show Advanced Settings
+    </button>
+    <div class="collapse" id="advancedSettings">
+        <div class="card card-body my-3">
+            <h5 class="mb-3">Connection Control</h5>
+            <div class="row">
+                <!-- user_max_connections -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.user_max_connections">
+                            Maximum Number of Users Connections
+                        </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The maximum number of client connections allowed (override by user). The supported range is [0, 1000], default is 0 (ignored). Unless necessary required to have large number of connections, it is best to use default and if the number of user connections exceed 100-150 then it is better to use connection pooling to minimize connection latency overhead and memory usage."
+                           title="Maximum Number of Users Connections">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.user_max_connections"
+                               id="keywords.user_max_connections_range"
+                               max="1000" min="0" step="1" value="0" type="range"
+                               onchange="syncSliderToNumber('keywords.user_max_connections')">
+                        <input class="form-control w-auto" id="keywords.user_max_connections"
+                               max="1000" min="0" step="1" value="0" type="number"
+                               onchange="syncNumberToSlider('keywords.user_max_connections')">
+                    </div>
+                </div>
+                <!-- superuser_reserved_connections_scale_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.superuser_reserved_connections_scale_ratio">
+                            Superuser Reserved Connections Scale Ratio
+                        </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The de-scale factor for the reserved superuser connections over the normal reserved connection. Higher value means the de-scale is stronger."
+                           title="Superuser Reserved Connections Scale Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.superuser_reserved_connections_scale_ratio"
+                               id="keywords.superuser_reserved_connections_scale_ratio_range"
+                               max="3" min="1" step="0.1" value="1.5" type="range"
+                               onchange="syncSliderToNumber('keywords.superuser_reserved_connections_scale_ratio')">
+                        <input class="form-control w-auto" id="keywords.superuser_reserved_connections_scale_ratio"
+                               max="3" min="1" step="0.1" value="1.5" type="number"
+                               onchange="syncNumberToSlider('keywords.superuser_reserved_connections_scale_ratio')">
+                    </div>
+                </div>
+                <!-- single_memory_connection_overhead -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.single_memory_connection_overhead_in_kib">
+                            Total Memory Used per Connection (KiB)
+                        </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The memory overhead for a single connection at idle state. The supported range is [2 MiB, 12 MiB], default is 5 MiB in total. This value is used to estimate the memory usage for each connection. We do not recommend to set this value too high as it could make the estimation to be incorrect (recommend to be in between 4 - 8 MiB)."
+                           title="Total Memory Used per Connection (KiB)">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.single_memory_connection_overhead_in_kib"
+                               id="keywords.single_memory_connection_overhead_in_kib_range"
+                               max="12288" min="2048" step="256" value="5120" type="range"
+                               onchange="syncSliderToNumber('keywords.single_memory_connection_overhead_in_kib')">
+                        <input class="form-control w-auto" id="keywords.single_memory_connection_overhead_in_kib"
+                               max="12288" min="2048" step="256" value="5120" type="number"
+                               onchange="syncNumberToSlider('keywords.single_memory_connection_overhead_in_kib')">
+                    </div>
+                </div>
+                <!-- memory_connection_to_dedicated_os_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.memory_connection_to_dedicated_os_ratio">
+                            Connection: Memory on OS Ratio
+                        </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of the memory connection reserved to the dedicated OS memory (default is 0.3 or 30%). This value is used to estimate the memory usage for each connection is placed under the OS memory page rather than the shared_buffers of the PostgreSQL memory."
+                           title="Connection: Memory on OS Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.memory_connection_to_dedicated_os_ratio"
+                               id="keywords.memory_connection_to_dedicated_os_ratio_range"
+                               max="1" min="0" step="0.05" value="0.3" type="range"
+                               onchange="syncSliderToNumber('keywords.memory_connection_to_dedicated_os_ratio')">
+                        <input class="form-control w-auto" id="keywords.memory_connection_to_dedicated_os_ratio"
+                               max="1" min="0" step="0.05" value="0.3" type="number"
+                               onchange="syncNumberToSlider('keywords.memory_connection_to_dedicated_os_ratio')">
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mb-3">Memory Control (Basic)</h5>
+            <div class="row">
+                <!-- effective_cache_size_available_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.effective_cache_size_available_ratio">
+                            Effective Cache Size Available Ratio
+                        </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The percentage of effective_cache_size over the total PostgreSQL available memory excluding the shared_buffers and others, default is 0.99. It is recommended to set this value to at least 0.98 or higher."
+                           title="Effective Cache Size Available Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.effective_cache_size_available_ratio"
+                               id="keywords.effective_cache_size_available_ratio_range"
+                               max="1.0" min="0.95" step="0.0025" value="0.985" type="range"
+                               onchange="syncSliderToNumber('keywords.effective_cache_size_available_ratio')">
+                        <input class="form-control w-auto" id="keywords.effective_cache_size_available_ratio"
+                               max="1.0" min="0.95" step="0.0025" value="0.985" type="number"
+                               onchange="syncNumberToSlider('keywords.effective_cache_size_available_ratio')">
+                    </div>
+                </div>
+                <!-- shared_buffers_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.shared_buffers_ratio">
+                            Shared Buffers Ratio
+                        </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of shared_buffers ratio to the PostgreSQL total memory. The supported range is [0.15, 0.60), default is 0.25. However, we recommend that this value should be below 0.40 to prevent double caching unless you are making a read-only database or a not-good synthetic benchmark."
+                           title="Shared Buffers Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.shared_buffers_ratio"
+                               id="keywords.shared_buffers_ratio_range"
+                               max="0.60" min="0.15" step="0.01" value="0.25" type="range"
+                               onchange="syncSliderToNumber('keywords.shared_buffers_ratio')">
+                        <input class="form-control w-auto" id="keywords.shared_buffers_ratio"
+                               max="0.60" min="0.15" step="0.01" value="0.25" type="number"
+                               onchange="syncNumberToSlider('keywords.shared_buffers_ratio')">
+                    </div>
+                </div>
+                <!-- max_work_buffer_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_work_buffer_ratio"> Max Work Buffer Pool Ratio </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of the maximum PostgreSQL available memory (excluding shared_buffers and others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). The supported range is (0, 0.50], default is 0.075. The algorithm is temp_buffers + work_mem = (pgmem_available * max_work_buffer_ratio) / active_user_connections."
+                           title="Max Work Buffer Pool Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_work_buffer_ratio"
+                               id="keywords.max_work_buffer_ratio_range"
+                               max="0.50" min="0.01" step="0.005" value="0.075" type="range"
+                               onchange="syncSliderToNumber('keywords.max_work_buffer_ratio')">
+                        <input class="form-control w-auto" id="keywords.max_work_buffer_ratio"
+                               max="0.50" min="0.01" step="0.005" value="0.075" type="number"
+                               onchange="syncNumberToSlider('keywords.max_work_buffer_ratio')">
+                    </div>
+                </div>
+                <!-- effective_connection_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.effective_connection_ratio">
+                            Effective Connection Ratio </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The percentage of the maximum non-reserved connection used to tune temp_buffers and work_mem. The supported range is [0.25, 1], default is 0.75. Set to 1 meant that we assume all the normal connections use the same temp_buffers and work_mem. Reduce this ratio would increase the temp_buffers and work_mem allowed for each connection by assuming not all active connections are running complex queries that requires high work_mem or temp_buffers."
+                           title="Effective Connection Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.effective_connection_ratio"
+                               id="keywords.effective_connection_ratio_range"
+                               max="1" min="0.25" step="0.05" value="0.75" type="range"
+                               onchange="syncSliderToNumber('keywords.effective_connection_ratio')">
+                        <input class="form-control w-auto" id="keywords.effective_connection_ratio"
+                               max="1" min="0.25" step="0.05" value="0.75" type="number"
+                               onchange="syncNumberToSlider('effective_connection_ratio')">
+                    </div>
+                </div>
+                <!-- temp_buffers_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.temp_buffers_ratio"> Temp Buffers Ratio </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of temp_buffers to the work_buffer pool above. The supported range is [0.25, 0.95], default is 2/3. Increase this value make the temp_buffers larger than the work_mem. If you have query that use much temporary object (temporary table, CTE, ...) then you can increase this value slowly. If you have query involving more WRITE and/or the WRITE query plan is complex involving HASH, JOIN, MERGE, ... then it is better to decrease this value."
+                           title="Temp Buffers Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.temp_buffers_ratio"
+                               id="keywords.temp_buffers_ratio_range"
+                               max="0.95" min="0.05" step="0.01" value="0.33" type="range"
+                               onchange="syncSliderToNumber('keywords.temp_buffers_ratio')">
+                        <input class="form-control w-auto" id="keywords.temp_buffers_ratio"
+                               max="0.95" min="0.05" step="0.01" value="0.33" type="number"
+                               onchange="syncNumberToSlider('keywords.temp_buffers_ratio')">
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mb-3">Memory Control (Advanced)</h5>
+            <div class="row">
+                <!-- max_normal_memory_usage -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_normal_memory_usage"> Max Normal Memory Usage </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The maximum memory usage under normal PostgreSQL operation over the usable memory. This holds as the upper bound to increase the pool allocation before reaching the limit. The supported range is [0.35, 0.85], default is 0.45. Increase this ratio meant you are expecting your server would have more headroom for the tuning and thus for database workload. It is not recommended to set this value too high, as there are multiple constraints that prevent further tuning to keep your server function properly without unknown incident such as parallelism, maintenance, and other background tasks."
+                           title="Max Normal Memory Usage">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_normal_memory_usage"
+                               id="keywords.max_normal_memory_usage_range"
+                               max="0.85" min="0.35" step="0.01" value="0.45" type="range"
+                               onchange="syncSliderToNumber('keywords.max_normal_memory_usage')">
+                        <input class="form-control w-auto" id="keywords.max_normal_memory_usage"
+                               max="0.85" min="0.35" step="0.01" value="0.45" type="number"
+                               onchange="syncNumberToSlider('keywords.max_normal_memory_usage')">
+                    </div>
+                </div>
+                <!-- mem_pool_epsilon_to_rollback -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.mem_pool_epsilon_to_rollback">
+                            Memory Pool Epsilon to Rollback </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="A small epsilon value if the memory tuning does not exceeded max_normal_memory_usage + epsilon to perform a rollback. We recommend this value to be small. The supported range is [0, 0.02], and default to 1e-2 (1.0%). If the result exceeded, we trigger the rollback to get the previous iteration."
+                           title="Memory Pool Epsilon to Rollback">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.mem_pool_epsilon_to_rollback"
+                               id="keywords.mem_pool_epsilon_to_rollback_range"
+                               max="0.02" min="0.0" step="0.001" value="0.01" type="range"
+                               onchange="syncSliderToNumber('keywords.mem_pool_epsilon_to_rollback')">
+                        <input class="form-control w-auto" id="keywords.mem_pool_epsilon_to_rollback"
+                               max="0.02" min="0.0" step="0.001" value="0.01" type="number"
+                               onchange="syncNumberToSlider('keywords.mem_pool_epsilon_to_rollback')">
+                    </div>
+                </div>
+                <!-- mem_pool_tuning_increment -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.mem_pool_tuning_increment">
+                            Memory Pool Tuning Increment </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The single increment for the memory pool tuning in correction tuning of shared_buffer_ratio and max_work_buffer_ratio. A lower value means the tuning is more precise but slower. Higher value meant there may have a small room for rollback."
+                           title="Memory Pool Tuning Increment">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.mem_pool_tuning_increment"
+                               id="keywords.mem_pool_tuning_increment_range"
+                               max="0.01" min="0.0005" step="0.0001" value="0.0036" type="range"
+                               onchange="syncSliderToNumber('keywords.mem_pool_tuning_increment')">
+                        <input class="form-control w-auto" id="keywords.mem_pool_tuning_increment"
+                               max="0.01" min="0.0005" step="0.0001" value="0.0036" type="number"
+                               onchange="syncNumberToSlider('keywords.mem_pool_tuning_increment')">
+                    </div>
+                </div>
+                <!-- mem_pool_tuning_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.mem_pool_tuning_ratio">
+                            Memory Pool Tuning Ratio </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of the memory tuning in correction tuning of shared_buffer_ratio and max_work_buffer_ratio. Supported value is [0, 1] and default is 0.5. Higher value meant the tuning would prefer the shared_buffers_ratio over the max_work_buffer_ratio, and vice versa."
+                           title="Memory Pool Tuning Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.mem_pool_tuning_ratio"
+                               id="keywords.mem_pool_tuning_ratio_range"
+                               max="1.0" min="0.0" step="0.01" value="0.5" type="range"
+                               onchange="syncSliderToNumber('keywords.mem_pool_tuning_ratio')">
+                        <input class="form-control w-auto" id="keywords.mem_pool_tuning_ratio"
+                               max="1.0" min="0.0" step="0.01" value="0.5" type="number"
+                               onchange="syncNumberToSlider('keywords.mem_pool_tuning_ratio')">
+                    </div>
+                </div>
+                <!-- hash_mem_usage_level -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.hash_mem_usage_level">
+                            Hash Mem Usage Level </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The level to estimate your real-world work_mem. A higher value meant that most of your query plan is hash-based operations. If you don't know what to set then just leave it to default."
+                           title="Hash Mem Usage Level">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.hash_mem_usage_level"
+                               id="keywords.hash_mem_usage_level_range"
+                               max="75" min="-75" step="1" value="-4" type="range"
+                               onchange="syncSliderToNumber('keywords.hash_mem_usage_level')">
+                        <input class="form-control w-auto" id="keywords.hash_mem_usage_level"
+                               max="75" min="-75" step="1" value="-4" type="number"
+                               onchange="syncNumberToSlider('keywords.hash_mem_usage_level')">
+                    </div>
+                </div>
+                <!-- mem_pool_parallel_estimate -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.mem_pool_parallel_estimate">
+                            Memory Pool Parallel Estimate </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The flag to use the parallel memory estimation during memory pool tuning."
+                           title="Memory Pool Parallel Estimate">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="keywords.mem_pool_parallel_estimate">
+                        <label class="form-check-label px-3" for="keywords.mem_pool_parallel_estimate">No</label>
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mb-3">Logging</h5>
+            <div class="row">
+                <!-- max_query_length_in_bytes -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_query_length_in_bytes">
+                            Max Query Length (Bytes) </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The maximum allowed query length in bytes for logging."
+                           title="Max Query Length (Bytes)">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_query_length_in_bytes"
+                               id="keywords.max_query_length_in_bytes_range"
+                               max="67108864" min="64" step="64" value="2048" type="range"
+                               onchange="syncSliderToNumber('keywords.max_query_length_in_bytes')">
+                        <input class="form-control w-auto" id="keywords.max_query_length_in_bytes"
+                               max="67108864" min="64" step="64" value="2048" type="number"
+                               onchange="syncNumberToSlider('keywords.max_query_length_in_bytes')">
+                    </div>
+                </div>
+                <!-- max_runtime_ms_to_log_slow_query -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_runtime_ms_to_log_slow_query">
+                            Max Runtime to Log Slow Query (ms) </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The maximum runtime in milliseconds to consider a query slow and log it."
+                           title="Max Runtime to Log Slow Query (ms)">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_runtime_ms_to_log_slow_query"
+                               id="keywords.max_runtime_ms_to_log_slow_query_range"
+                               max="100000" min="20" step="10" value="2000" type="range"
+                               onchange="syncSliderToNumber('keywords.max_runtime_ms_to_log_slow_query')">
+                        <input class="form-control w-auto" id="keywords.max_runtime_ms_to_log_slow_query"
+                               max="100000" min="20" step="10" value="2000" type="number"
+                               onchange="syncNumberToSlider('keywords.max_runtime_ms_to_log_slow_query')">
+                    </div>
+                </div>
+                <!-- max_runtime_ratio_to_explain_slow_query -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_runtime_ratio_to_explain_slow_query">
+                            Max Runtime Ratio to Explain Slow Query </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of runtime for automatically explaining slow queries."
+                           title="Max Runtime Ratio to Explain Slow Query">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_runtime_ratio_to_explain_slow_query"
+                               id="keywords.max_runtime_ratio_to_explain_slow_query_range"
+                               max="10.0" min="0.1" step="0.1" value="1.5" type="range"
+                               onchange="syncSliderToNumber('keywords.max_runtime_ratio_to_explain_slow_query')">
+                        <input class="form-control w-auto" id="keywords.max_runtime_ratio_to_explain_slow_query"
+                               max="10.0" min="0.1" step="0.1" value="1.5" type="number"
+                               onchange="syncNumberToSlider('keywords.max_runtime_ratio_to_explain_slow_query')">
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mb-3">Write-Ahead Log (WAL)</h5>
+            <div class="row">
+                <!-- wal_segment_size -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.wal_segment_size"> WAL Segment Size (per 16 MiB) </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The WAL segment size in PostgreSQL (in MiB). The supported range is [16, 2048] in MiB. Whilst the tuning of this value is not recommended as mentioned in due to some hard-coded in 3rd-party tools, and benefits of WAL recovering, archiving, and transferring; longer WAL initialization during burst workload. Unless you run initdb with custom wal_segment_size (64 MiB or larger); I still leave it here for you to adjust. For the best practice, whilst 16 MiB of single WAL file is good for most cases; a scenario where you needed higher WAL size is when dealing with OLTP workload with large amount of data write that would rotate the WAL too frequently. Also, the benchmarking from PostgreSQL team does show improvement but at when the number of connections are large (> 64) with larger than 64 vCPU. Beyond that, the improvement are marginal and you could have same benefit when tuning other variables. Just to remember to adjust the max_wal_size, archive_timeout, and checkpoint_timeout to better suit your workload."
+                           title="WAL Segment Size (per 16 MiB)">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.wal_segment_size"
+                               id="keywords.wal_segment_size_range"
+                               max="128" min="1" step="1" value="1" type="range"
+                               onchange="syncSliderToNumber('keywords.wal_segment_size')">
+                        <input class="form-control w-auto" id="keywords.wal_segment_size"
+                               max="128" min="1" step="1" value="1" type="number"
+                               onchange="syncNumberToSlider('keywords.wal_segment_size')">
+                        <label class="form-label mx-3" for="keywords.wal_segment_size"> x16 MiB </label>
+                    </div>
+                </div>
+                <!-- min_wal_ratio_scale -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.min_wal_ratio_scale"> Min WAL Ratio Scale </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The WAL ratio scaler for tune the min_wal_size configuration. The min_wal_size is computed by take this argument and multiply with remaining storage. Setting this value beyond 1.0 meant that the min_wal_size (threshold) would be larger than the max_wal_size. The maximum value of min_wal_size is depending on the smallest ratio of max_wal_size (defined in the source). The supported range is [0.05, 3.0], default is 0.5."
+                           title="Min WAL Ratio Scale">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.min_wal_ratio_scale"
+                               id="keywords.min_wal_ratio_scale_range"
+                               max="3" min="0.01" step="0.01" value="0.5" type="range"
+                               onchange="syncSliderToNumber('keywords.min_wal_ratio_scale')">
+                        <input class="form-control w-auto" id="keywords.min_wal_ratio_scale"
+                               max="3" min="0.05" step="0.05" value="0.5" type="number"
+                               onchange="syncNumberToSlider('keywords.min_wal_ratio_scale')">
+                    </div>
+                </div>
+                <!-- max_wal_size_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_wal_size_ratio"> Max WAL Size Ratio </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The ratio of the max_wal_size against the total WAL volume. The supported range is between 0.0 and 1.0 (exclusive on two end), default is 0.90."
+                           title="Max WAL Size Ratio">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_wal_size_ratio"
+                               id="keywords.max_wal_size_ratio_range"
+                               max="0.99" min="0.01" step="0.01" value="0.90" type="range"
+                               onchange="syncSliderToNumber('keywords.max_wal_size_ratio')">
+                        <input class="form-control w-auto" id="keywords.max_wal_size_ratio"
+                               max="0.99" min="0.01" step="0.01" value="0.90" type="number"
+                               onchange="syncNumberToSlider('keywords.max_wal_size_ratio')">
+                    </div>
+                </div>
+                <!-- max_wal_size_remain_upper_size -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.max_wal_size_remain_upper_size_in_gib">
+                            Max WAL Size Remaining Upper Limit (GiB) </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The upper bound of free space from max_wal_size value to the WAL volume capacity. It is set to ensure that you can maximize the WAL partition better and prevent frequent changes on ratio. If the remaining space exceeded this capacity, the max_wal_size is adjusted to the total storage minus this value. Whilst this value could be different across workloads, it is OK to set this value a little bit high when you work on SSD where its performance corresponding to the remaining space (especially on the NVME QLC SSD, TLC and MLC usually have less impact). The minimum value is 1 GiB and the default is 256 GiB, and must be a multiple of 256 MiB. For example if the ratio is 0.9 and upper size is 256 GiB, then the disk size must be larger 256 Gi / (1 - 0.9) ~ 2.5 TiB to have max_wal_size is 256 GiB less than the disk size."
+                           title="Max WAL Size Remaining Upper Limit (GiB)">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.max_wal_size_remain_upper_size_in_gib"
+                               id="keywords.max_wal_size_remain_upper_size_in_gib_range"
+                               max="2048" min="1" step="1" value="256" type="range"
+                               onchange="syncSliderToNumber('keywords.max_wal_size_remain_upper_size_in_gib')">
+                        <input class="form-control w-auto" id="keywords.max_wal_size_remain_upper_size_in_gib"
+                               max="2048" min="1" step="1" value="256" type="number"
+                               onchange="syncNumberToSlider('keywords.max_wal_size_remain_upper_size_in_gib')">
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mb-3">Others</h5>
+            <div class="row">
+                <!-- autovacuum_utilization_ratio -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.autovacuum_utilization_ratio">
+                            Autovacuum Utilization </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The utilization ratio of the random IOPS of data volume used for the autovacuum process. Note that this is based on the efficient estimated READ/WRITE IOPs and may not be reflected in your real-world scenario. Our intention is to reduce the un-necessary time of running autovacuum, but be able to serve a small portion of user who want to fetch the data from database. Unless you are using the NVME as data disk (and currently have lots of IOPS), it is not recommended to set this beyond 0.90. The supported range is (0.50, 0.95], default is 0.80."
+                           title="Autovacuum Utilization">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.autovacuum_utilization_ratio"
+                               id="keywords.autovacuum_utilization_ratio_range"
+                               max="0.95" min="0.50" step="0.01" value="0.80" type="range"
+                               onchange="syncSliderToNumber('keywords.autovacuum_utilization_ratio')">
+                        <input class="form-control w-auto" id="keywords.autovacuum_utilization_ratio"
+                               max="0.95" min="0.50" step="0.01" value="0.80" type="number"
+                               onchange="syncNumberToSlider('keywords.autovacuum_utilization_ratio')">
+                    </div>
+                </div>
+                <!-- vacuum_safety_level -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.vacuum_safety_level">
+                            Autovacuum Utilization </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The safety level of the vacuum process. Higher level would increase the risk during vacuum process (by pushing its limit). Non-zero value would not protect from pure READ page during the vacuum process, but ensuring never throttle on WRITE page(s) during vacuum. Non-zero value only protect the vacuum process under even distribution of READ/WRITE page from disks. It is recommended to set this value low or even zero when you do not know how your vacuum run and manage by your workload. The supported range is [0, 12], default is 2. This parameter is feasible only due to the use of optimized autovacuum configuration and visibility map, and is recommended a zero value if your PostgreSQL is less than 13."
+                           title="Autovacuum Utilization">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.vacuum_safety_level"
+                               id="keywords.vacuum_safety_level_range"
+                               max="12" min="0" step="1" value="2" type="range"
+                               onchange="syncSliderToNumber('keywords.vacuum_safety_level')">
+                        <input class="form-control w-auto" id="keywords.vacuum_safety_level"
+                               max="12" min="0" step="1" value="2" type="number"
+                               onchange="syncNumberToSlider('keywords.vacuum_safety_level')">
+                    </div>
+                </div>
+
+                <!-- num_transaction_per_hour_on_workload -->
+                <div class="col-4 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label class="form-label" for="keywords.num_write_transaction_per_hour_on_workload">
+                            Workload WRITE Transaction Rate Per Hour On Server </label>
+                        <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                           data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                           data-bs-content="The peak number of workload *write* transaction per hour (regardless commit or rollback). The supported range is [1K, 20M], default is 1M (translated in around 270 write transactions per second). Note that this number requires you to have good estimation on how much your server can be handled and will be handled during its busy workload, to mark frozen page for anti-wraparound (aggressive) vacuum. "
+                           title="Workload Transaction Rate (per hour on 1 server)">
+                        </i>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <input class="form-range me-3" name="keywords.num_write_transaction_per_hour_on_workload"
+                               id="keywords.num_write_transaction_per_hour_on_workload_range"
+                               max="20000000" min="10000" step="10000" value="1000000" type="range"
+                               onchange="syncSliderToNumber('keywords.num_write_transaction_per_hour_on_workload')">
+                        <input class="form-control w-auto" id="keywords.num_write_transaction_per_hour_on_workload"
+                               max="20000000" min="10000" step="10000" value="1000000" type="number"
+                               onchange="syncNumberToSlider('keywords.num_write_transaction_per_hour_on_workload')">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

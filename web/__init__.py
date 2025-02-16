@@ -79,20 +79,19 @@ async def app_lifespan(application: ASGIApp | FastAPI):
 
 
 # ==================================================================================================
-__version__ = '0.1.1'
+__version__ = '0.1.3'
 app: FastAPI = FastAPI(
     debug=False,
     title=APP_NAME_UPPER,
-    summary=f'{APP_NAME_UPPER}: The :project:`{APP_NAME_LOWER}` (or PostgreSQL: DBA & Tuner) is a SQL/Python-based '
-            f'project designed to manage and optimize PostgreSQL parameters',
+    summary=f'The :project:`{APP_NAME_LOWER}` (or PostgreSQL: DBA & Tuner) is a SQL/Python-based '
+            f'project designed to manage and optimize kernel parameters and database settings',
     description=f'''
-{APP_NAME_UPPER}: The :project:`{APP_NAME_LOWER}` (or PostgreSQL: DBA & Tuner) is a SQL/Python-based project designed 
-to manage and optimize kernel parameters and database settings, focusing on TCP networking (connection management, 
-retries, timeouts, and **buffering**) and memory/VM management (swappiness, dirty ratios, over-commit memory, 
-hugepages, and cache pressure); whilst maintaining high performance, stability, security, and concurrency for various 
-system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS 
-part, and many DBA's experts at PostgreSQL community. This project is a combination of those experiences and designed 
-to be a structured approach for various profiles and settings (easily customizable and extendable). 
+The :project:`{APP_NAME_LOWER}` (or PostgreSQL: Tuner as DBA) is a SQL/Python-based project designed 
+to manage and optimize kernel parameters and database settings, focusing on TCP networking on kernel (connection 
+management, retries, timeouts, and **buffering**), and database utilization (memory, disk, integrity); bringing the 
+highest performance with stability, data integrity, and concurrency from various system configurations. The tuning is 
+inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, many DBA experts at PostgreSQL 
+community (Azure, OnGres, PostgresPro, PostgreSQL core developers, real-world use cases, ...) and my own experience. 
 ''',
     version=__version__,
     openapi_url='/openapi.json' if _app_dev_mode else None,

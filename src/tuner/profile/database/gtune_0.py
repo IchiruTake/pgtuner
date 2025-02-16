@@ -108,7 +108,7 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
         _logger.warning('The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended '
                         'the starting point is 25% of RAM or over. Please consider increasing the ratio.')
 
-    shared_buffers: int = max(options.usable_ram_noswap * shared_buffers_ratio, 128 * Mi)
+    shared_buffers: int = max(options.usable_ram * shared_buffers_ratio, 128 * Mi)
     if shared_buffers == 128 * Mi:
         _logger.warning('No benefit is found on tuning this variable')
 
@@ -154,7 +154,7 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     # Also, we encourage the use of not maximum of 100%, could be 99.5% instead to not overly estimate.
     # For the connection memory estimation, we assumed not all connections required work_mem, but idle connections
     # persist.
-    pgmem_available = int(options.usable_ram_noswap)  # Copy the value
+    pgmem_available = int(options.usable_ram)  # Copy the value
     pgmem_available -= group_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
@@ -238,7 +238,7 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     # memory (RAM - shared_buffers): https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/server-parameters-table-query-tuning-planner-cost-constants?pivots=postgresql-17#effective_cache_size
     # and https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
     # Default is half of physical RAM memory on most tuning guideline
-    pgmem_available = int(options.usable_ram_noswap)    # Make a copy
+    pgmem_available = int(options.usable_ram)    # Make a copy
     pgmem_available -= global_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
@@ -256,7 +256,7 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
     # It is only benefit when you use COPY instead of SELECT. For other thing, the spawning of
     # WAL buffers is not necessary.
     shared_buffers = global_cache['shared_buffers']
-    usable_ram_noswap = options.usable_ram_noswap
+    usable_ram_noswap = options.usable_ram
     fn = lambda x: 1024 * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
     if shared_buffers <= 512 * Mi or usable_ram_noswap <= 4.25 * Gi:
         oldstyle_wal_buffers = shared_buffers // 32  # Measured in bytes
@@ -266,15 +266,15 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
 
     precision: int = DB_PAGE_SIZE
     # With low server usage, we push it to exploited 1 page of precision
-    # if 2.5 * Gi < usable_ram_noswap <= 4 * Gi:
+    # if 2.5 * Gi < usable_ram <= 4 * Gi:
     #     precision = 4 * DB_PAGE_SIZE
-    # elif 4 * Gi < usable_ram_noswap <= 6 * Gi:
+    # elif 4 * Gi < usable_ram <= 6 * Gi:
     #     precision = 8 * DB_PAGE_SIZE
-    # elif 6 * Gi < usable_ram_noswap <= 8 * Gi:
+    # elif 6 * Gi < usable_ram <= 8 * Gi:
     #     precision = 16 * DB_PAGE_SIZE
-    # elif 8 * Gi < usable_ram_noswap <= 16 * Gi:
+    # elif 8 * Gi < usable_ram <= 16 * Gi:
     #     precision = 24 * DB_PAGE_SIZE
-    # elif usable_ram_noswap > 16 * Gi:
+    # elif usable_ram > 16 * Gi:
     #     precision = 32 * DB_PAGE_SIZE
     return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[options.align_index]
 
@@ -438,11 +438,11 @@ _DB_VACUUM_PROFILE = {
     },
     'maintenance_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response: realign_value(
-            cap_value(options.usable_ram_noswap // 16, 64 * Mi, 8 * Gi), page_size=Ki)[options.align_index],
+            cap_value(options.usable_ram // 16, 64 * Mi, 8 * Gi), page_size=Ki)[options.align_index],
         'default': 64 * Mi,
         'hardware_scope': 'mem',
         'post-condition-group': lambda value, cache, options:
-        value * cache['autovacuum_max_workers'] < int(options.usable_ram_noswap // 2),
+        value * cache['autovacuum_max_workers'] < int(options.usable_ram // 2),
         'comment': "Specifies the maximum amount of memory to be used by maintenance operations, such as VACUUM, CREATE "
                    "INDEX, and ALTER TABLE ADD FOREIGN KEY. Since only one of these operations can be executed at a "
                    "time by a database session, and an installation normally doesn't have many of them running "
@@ -1579,7 +1579,7 @@ _DB_TIMEOUT_PROFILE = {
 # Library (You don't need to tune these variable as they are not directly related to the database performance)
 _DB_LIB_PROFILE = {
     'shared_preload_libraries': {
-        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache',   # pg_repack, Not pg_squeeze
+        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_visibility',   # pg_repack, Not pg_squeeze
         'comment': 'A comma-separated list of shared libraries to load into the server. The list of libraries must be '
                    'specified by name, not with file name or path. The libraries are loaded into the server during '
                    'startup. If a library is not found when the server is started, the server will fail to start. '

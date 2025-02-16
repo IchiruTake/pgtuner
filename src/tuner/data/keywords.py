@@ -207,6 +207,18 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                           'it is not recommended to set this beyond 0.90. The supported range is (0.50, 0.95], default '
                           'is 0.80.')
     )
+    vacuum_safety_level: PositiveInt = (
+        Field(default=2, ge=0, le=12,
+              description='The safety level of the vacuum process. Higher level would increase the risk during vacuum '
+                          'process (by pushing its limit). Non-zero value would not protect from pure READ page during '
+                          'the vacuum process, but ensuring never throttle on WRITE page(s) during vacuum. Non-zero '
+                          'value only protect the vacuum process under even distribution of READ/WRITE page from disks. '
+                          'It is recommended to set this value low or even zero when you do not know how your vacuum '
+                          'run and manage by your workload. The supported range is [0, 12], default is 2. '
+                          'This parameter is feasible only due to the use of optimized autovacuum configuration and '
+                          'visibility map, and is recommended a zero value if your PostgreSQL is less than 13.')
+    )
+
     # Transaction Rate
     num_write_transaction_per_hour_on_workload: PositiveInt = (
         Field(default=int(1 * M10), ge=K10, le=20 * M10,

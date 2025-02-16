@@ -4,7 +4,7 @@ from typing import Literal
 import httpx
 import asyncio
 
-def cleanup_css(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
+def cleanup_css_local(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
     try:
         from mincss.processor import Processor
     except (ImportError, ModuleNotFoundError):
@@ -49,7 +49,26 @@ def cleanup_html_local(html_file: str):
             minified_html_filepath = html_file.replace('.html', '.min.html')
         with open(minified_html_filepath, 'w') as f_min:
             f_min.write(minified_html)
+        print(f'Compression: {os.path.getsize(minified_html_filepath) / os.path.getsize(html_file) * 100:.2f}%')
         return minified_html_filepath
+
+def cleanup_js_local(js_file: str):
+    try:
+        import rjsmin
+    except (ImportError, ModuleNotFoundError):
+        print('Please install jsmin package')
+        return None
+
+    with open(js_file, 'r') as f:
+        minified_js = rjsmin.jsmin(f.read())
+        if js_file.endswith('.js'):
+            minified_js_filepath = js_file[:-3] + '.min.js'
+        else:
+            minified_js_filepath = js_file + '.min.js'
+        with open(minified_js_filepath, 'w') as f_min:
+            f_min.write(minified_js)
+        print(f'Compression: {os.path.getsize(minified_js_filepath) / os.path.getsize(js_file) * 100:.2f}%')
+        return minified_js_filepath
 
 
 def cleanup_js(js_file: str, client: httpx.Client):
@@ -67,10 +86,6 @@ def cleanup_js(js_file: str, client: httpx.Client):
 
             # Check the minified JS file size
             print(f'Compression: {os.path.getsize(minified_js_filepath) / os.path.getsize(js_file) * 100:.2f}%')
-            # if os.path.getsize(minified_js_filepath) > os.path.getsize(js_file):
-            #     print(f'Failed to minify the JS file: {js_file} due to the size of minified file is larger than the original file')
-            #     return None
-
             return minified_js_filepath
         else:
             print(f'Failed to minify the JS file: {js_file}')
@@ -91,7 +106,6 @@ def cleanup_html(html_file: str, client: httpx.Client):
                 f_min.write(minified_html)
 
             print(f'Compression: {os.path.getsize(minified_html_filepath) / os.path.getsize(html_file) * 100:.2f}%')
-
             return minified_html_filepath
         else:
             print(f'Failed to minify the HTML file: {html_file}')
@@ -111,6 +125,7 @@ async def cleanup_html_async(html_file: str, client: httpx.AsyncClient):
             minified_html = response.text
             with open(minified_html_filepath, 'w') as f_min:
                 f_min.write(minified_html)
+            print(f'Compression: {os.path.getsize(minified_html_filepath) / os.path.getsize(html_file) * 100:.2f}%')
             return minified_html_filepath
         else:
             print(f'Failed to minify the HTML file: {html_file}')
@@ -130,6 +145,7 @@ async def cleanup_js_async(js_file: str, client: httpx.AsyncClient):
             minified_js = response.text
             with open(minified_js_filepath, 'w') as f_min:
                 f_min.write(minified_js)
+            print(f'Compression: {os.path.getsize(minified_js_filepath) / os.path.getsize(js_file) * 100:.2f}%')
             return minified_js_filepath
         else:
             print(f'Failed to minify the JS file: {js_file}')
@@ -173,8 +189,8 @@ async def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web
                     continue
 
                 html_filepath = os.path.join(root, file)
-                # minified_html_filepath = cleanup_html_local(html_filepath)
-                minified_html_filepath = await cleanup_html_async(html_filepath, client)
+                minified_html_filepath = cleanup_html_local(html_filepath)
+                # minified_html_filepath = await cleanup_html_async(html_filepath, client)
                 print(f'Found HTML file: {html_filepath} --> {minified_html_filepath} :: Resolve legacy HTML by {old_html_treatment}')
                 if minified_html_filepath is None:
                     continue
@@ -185,7 +201,8 @@ async def migrate(dev_path: str = './web/ui/dev/static', prod_path: str = './web
                     print(f'Skip the minified JS file: {os.path.join(root, file)}')
                     continue
                 js_filepath = os.path.join(root, file)
-                minified_js_filepath = await cleanup_js_async(js_filepath, client)
+                minified_js_filepath = cleanup_js_local(js_filepath)
+                # minified_js_filepath = await cleanup_js_async(js_filepath, client)
                 print(f'Found JS file: {js_filepath} --> {minified_js_filepath} :: Resolve legacy JS by {old_js_treatment}')
                 if minified_js_filepath is None:
                     continue

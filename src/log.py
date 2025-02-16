@@ -27,7 +27,7 @@ __all__ = ["BuildLogger"]
 
 # ==================================================================================================
 # File Handler
-def _BuildLogFilepath(profile: dict[str, Any], readonly_clogger: logging.Logger) -> str:
+def _BuildLogFilepath(profile: dict[str, Any]) -> str:
     log_file_path: str = profile.get('LOG_FILE_PATH', '')
     log_file_extension: str = profile.get('LOG_FILE_EXTENSION', 'log')
     log_rotate_with_date_only = profile.get('LOG_ROTATE_WITH_DATE_ONLY', False)
@@ -75,7 +75,7 @@ def _BuildFileHandler(profile: dict[str, Any], readonly_clogger: logging.Logger)
         raise ValueError(message)
 
     # [01]: Build the log filename and Check if file exists
-    log_file_path: str = _BuildLogFilepath(profile, readonly_clogger=readonly_clogger)
+    log_file_path: str = _BuildLogFilepath(profile)
     if not os.path.exists(log_file_path):
         directory = os.path.dirname(log_file_path)
         if directory != '' and not os.path.exists(directory):

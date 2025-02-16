@@ -13,14 +13,14 @@ from src.static.vars import APP_NAME_UPPER, RANDOM_IOPS, THROUGHPUT, Gi, Mi, DB_
 from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.sizing import PG_DISK_SIZING
 
-__all__ = ['PG_DISK_PERF', 'string_disk_to_performance']
+__all__ = ['PG_DISK_PERF', '_string_disk_to_performance']
 _SIZING = ByteSize | int
 
 # =============================================================================
 # This section is managed by the application. Default setup is the value of SSDv2
 
 _logger = logging.getLogger(APP_NAME_UPPER)
-def string_disk_to_performance(value: str | int | ByteSize, mode: str) -> int | ByteSize:
+def _string_disk_to_performance(value: str | int | ByteSize, mode: str) -> int | ByteSize:
     if isinstance(value, (int, ByteSize)):
         return value
     if not isinstance(value, str):
@@ -32,25 +32,25 @@ def string_disk_to_performance(value: str | int | ByteSize, mode: str) -> int | 
 
     # Get the disk based on its name:
     for disk in PG_DISK_SIZING:
-        if disk.disk_code() == value:
+        disk_code = disk.disk_code()
+        if disk_code == value:
+            return disk.iops() if mode == RANDOM_IOPS else disk.throughput()
+        # If they just provide the disk code, we supply their minimum specification:
+        elif disk_code.startswith(value) and disk.disk_code().endswith('v1'):
             return disk.iops() if mode == RANDOM_IOPS else disk.throughput()
 
-    # If they just provide the disk code:
-    for disk in PG_DISK_SIZING:
-        if disk.disk_code().startswith(value) and disk.disk_code().endswith('v1'):
-            return disk.iops() if mode == RANDOM_IOPS else disk.throughput()
+    # If the disk is not found, we fallback to the default value:
+    _logger.warning(f'The performance value is not found specification list of PG_DISK_SIZING. ')
+    return PG_DISK_SIZING.SANv1.iops() if mode == RANDOM_IOPS else PG_DISK_SIZING.SANv1.throughput()
 
-    _logger.warning(f'The disk performance value of {value} is not found in the TOML file. Fallback to default')
-    return PG_DISK_SIZING.SSDv2.iops() if mode == RANDOM_IOPS else PG_DISK_SIZING.SSDv2.throughput()
-
-_string_disk_to_iops = partial(string_disk_to_performance, mode=RANDOM_IOPS)
-_string_disk_to_throughput = partial(string_disk_to_performance, mode=THROUGHPUT)
+_string_disk_to_iops = partial(_string_disk_to_performance, mode=RANDOM_IOPS)
+_string_disk_to_throughput = partial(_string_disk_to_performance, mode=THROUGHPUT)
 
 
 class PG_DISK_PERF(BaseModel):
     random_iops_spec: _SIZING | str = (
         Field(default_factory=PydanticFact('Enter the read performance of the single disk in random IOPs metric: ',
-                                           default_value=PG_DISK_SIZING.SSDv1.iops(), user_fn=_string_disk_to_iops),
+                                           default_value=PG_DISK_SIZING.SANv1.iops(), user_fn=_string_disk_to_iops),
               description='The random IOPS metric of a single disk measured as either the 4 KiB page size (OS default) '
                           'or using 8 KiB as PostgreSQL block size. It is best that user should provided measured '
                           'result from the benchmark (fio, CrystalDiskMark). If you are working on NVME SSD drive, '
@@ -72,7 +72,7 @@ class PG_DISK_PERF(BaseModel):
     )
     throughput_spec: _SIZING | str = (
         Field(default_factory=PydanticFact('Enter the read performance of the single disk in MiB/s: ',
-                                           default_value=PG_DISK_SIZING.SSDv1.throughput(),
+                                           default_value=PG_DISK_SIZING.SANv1.throughput(),
                                            user_fn=_string_disk_to_throughput),
               description='The read specification of the disk performance. Its value can be random IOPS or read/write '
                           'throughput in MiB/s. Note that this setup does not pair well with heterogeneous disk type. '

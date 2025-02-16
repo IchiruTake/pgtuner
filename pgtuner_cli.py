@@ -86,7 +86,7 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
 if __name__ == "__main__":
     logical_cpu: int = 16
     ram_cpu_ratio: float | int = 4.0
-    # rq = pgtuner.make_tune_request(logical_cpu=logical_cpu, ram_sample=int(logical_cpu * ram_cpu_ratio * Gi))
+    # rq = pgtuner.make_tune_request(logical_cpu=logical_cpu, total_ram=int(logical_cpu * ram_cpu_ratio * Gi))
     # optimize(rq, output_format='file')
 
     logical_cpu: int = 4

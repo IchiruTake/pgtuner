@@ -19,8 +19,8 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 
 # =============================================================================
 class _PG_WEB_DISK_PERF_BASE(BaseModel):
-    random_iops_scale_factor: PositiveFloat = Field(default=0.9, gt=0, le=1.0)
-    throughput_scale_factor: PositiveFloat = Field(default=0.9, gt=0, le=1.0)
+    random_iops_scale_factor: PositiveFloat = Field(default=1.0, gt=0, le=1.0)
+    throughput_scale_factor: PositiveFloat = Field(default=1.0, gt=0, le=1.0)
     # ========================================================================
     # RAID efficiency
     per_scale_in_raid: PositiveFloat = Field(default=0.75, ge=1e-8, le=1.0)
@@ -29,8 +29,8 @@ class _PG_WEB_DISK_PERF_BASE(BaseModel):
 
 
 class _PG_WEB_DISK_PERF_INT(_PG_WEB_DISK_PERF_BASE):
-    random_iops: PositiveInt = Field(default=PG_DISK_SIZING.SSDv1.iops())
-    throughput: PositiveInt = Field(default=PG_DISK_SIZING.SSDv1.throughput())
+    random_iops: PositiveInt = Field(default=PG_DISK_SIZING.SANv1.iops())
+    throughput: PositiveInt = Field(default=PG_DISK_SIZING.SANv1.throughput())
 
     def to_backend(self) -> PG_DISK_PERF:
         return PG_DISK_PERF(random_iops_spec=self.random_iops, throughput_spec=self.throughput,
@@ -79,8 +79,9 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
 
     # Vacuum Tuning
     autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
+    vacuum_safety_level: PositiveInt = Field(default=2, ge=0, le=12)
 
-    # Transaction Rate
+              # Transaction Rate
     num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(1 * M10), ge=K10, le=20 * M10)
 
     def to_backend(self) -> PG_TUNE_USR_KWARGS:
@@ -108,6 +109,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             max_wal_size_ratio=self.max_wal_size_ratio,
             max_wal_size_remain_upper_size=self.max_wal_size_remain_upper_size_in_gib * Gi,
             autovacuum_utilization_ratio=self.autovacuum_utilization_ratio,
+            vacuum_safety_level=self.vacuum_safety_level,
             num_write_transaction_per_hour_on_workload=self.num_write_transaction_per_hour_on_workload
         )
 
@@ -145,13 +147,11 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     opt_mem_pool: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.OPTIMUS_PRIME)
     keywords: PG_WEB_TUNE_USR_KWARGS = Field(default=PG_TUNE_USR_KWARGS())
 
-
     # ========================================================================
     # This is used for analyzing the memory available.
     operating_system: str = Field(default='linux')
     logical_cpu: PositiveInt = Field(default=4, ge=1)
-    ram_sample_in_gib: ByteSize | PositiveFloat = Field(default=16, ge=2, multiple_of=0.25)
-    add_system_reserved_memory_into_ram: bool = False
+    total_ram_in_gib: ByteSize | PositiveFloat = Field(default=16, ge=2, multiple_of=0.25)
     base_kernel_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=8 * Ki)]
     base_monitoring_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=4 * Ki)]
 
@@ -198,8 +198,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             # Analyzing the memory available
             operating_system=self.operating_system,
             vcpu=self.logical_cpu,
-            ram_sample=ByteSize(self.ram_sample_in_gib * Gi),
-            add_system_reserved_memory_into_ram=self.add_system_reserved_memory_into_ram,
+            total_ram=ByteSize(self.total_ram_in_gib * Gi),
             base_kernel_memory_usage=kernel_memory,
             base_monitoring_memory_usage=monitoring_memory,
             # Questions of Application Operations to be done
