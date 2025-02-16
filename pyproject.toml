@@ -1,0 +1,80 @@
+# https://packaging.python.org/en/latest/specifications/pyproject-toml/
+# https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#writing-pyproject-toml
+[project]
+name = "my_project"
+version = "0.1.3"
+description = "pgtuner: Optimize your PostgreSQL as a pro"
+readme = "README.md"
+requires-python = ">=3.12"
+license-files = ["LICENSE"]
+authors = [
+    { name="Minh Pham (Ichiru)", email="p.ichiru.hoangminh@gmail.com" }
+]
+maintainers = [
+    { name="Maintainer One", email="maintainer.one@example.com" },
+    { name="Maintainer Two", email="maintainer.two@example.com" }
+]
+
+keywords = ["pgtuner", "PostgreSQL",]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: Microsoft",
+    "Operating System :: OS Independent",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database :: Database Engines/Servers",
+]
+
+[project.urls]
+# https://packaging.python.org/en/latest/specifications/well-known-project-urls/#well-known-project-urls
+source = "https://github.com/IchiruTake/pgtuner"
+Github = "https://github.com/IchiruTake/pgtuner"
+
+[tool.poetry.dependencies]
+# https://python-poetry.org/docs/dependency-specification
+pydantic = { version = ">=2.10" }
+toml = { version = ">=0.10"}
+tzdata =  { version = ">=2024.2"}
+
+
+[tool.poetry.group.web.dependencies]
+fastapi = { version = ">=0.115.2" }
+orjson = { version = ">=3.10.15" }
+uvicorn = { version = ">=0.34.2" }
+httptools = { version = ">=0.6.4" }
+itsdangerous = { version = ">=2.2.0", optional = true }
+asgiref = { version = ">=3.8.1"}
+zstandard = { version = ">=0.23.0"}
+Jinja2 = { version = ">=3.1.5" }
+httpx = { version = ">=0.28.1" }
+
+[tool.poetry.group.ui.dependencies]
+minify-html = { version = ">=0.15.0" }
+mincss = { version = ">=0.11.6" }
+rjsmin = { version = ">=1.2.3" }
+
+[tool.setuptools]
+packages = ["find:"]
+
+[tool.setuptools.package-data]
+"my_project" = ["*.txt", "*.rst"]
+
+[tool.setuptools.exclude-package-data]
+"my_project" = [
+    "docs/*",
+    "tests/*",
+    "testing/*",
+    "*.pdf"
+]
+
+
+

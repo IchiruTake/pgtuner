@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 __all__ = ['GetTimezone']
 # ==================================================================================================
-__ZONE: str = "Asia/Saigon"  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'
+__ZONE: str = "UTC"  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'
 __TIMEZONE: ZoneInfo = ZoneInfo(__ZONE)  # ZoneInfo('UTC') or ZoneInfo('Europe/Paris')
 
 

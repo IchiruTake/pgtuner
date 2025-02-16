@@ -13,7 +13,7 @@ adjustments based on your simplest provided configuration into the pool of consi
 
 ## DISCLAIMER
 
-The tuning is not a silver bullet, and it is not guaranteed to work for all systems. The tuning is based on several tuning profiles and guidelines found on Internet with experiences. Also,it is not bulletproof against all possible scenarios such as business requirements change, non-proper database management, and other factors. It is recommended to test the tuning on a staging environment before applying it to the production environment. 
+The tuning is not a silver bullet, and it is not guaranteed to work for all systems. The tuning is based on several tuning profiles and guidelines found on Internet with experiences. Also, it is not bulletproof against all possible scenarios such as business requirements change, non-proper database management, and other factors. It is recommended to test the tuning on a staging environment before applying it to the production environment. 
 
 ## Contributing
 
