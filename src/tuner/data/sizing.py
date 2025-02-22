@@ -59,7 +59,7 @@ class PG_SIZING(Enum):
 ## These values are gained from TechPowerUp's SSD IOPS Database.
 ## Please note that the naming model with suffix _v1, _v2, _v3, etc. is used to differentiate the IOPS value based on
 ## the read/write ratio, rather than the comparison of the disk itself. Also, we don't take into the consideration of
-## DRAM-availabiltiy on the SSD as we are focusing on the disk read/write after (p)SLC cache is full and not full.
+## DRAM-availability on the SSD as we are focusing on the disk read/write after (p)SLC cache is full and not full.
 ## For NVME drive, when pseudo-SLC cache is full, unless you are using too small drive such as 128 GB or 256 GB, or flaw
 ## SSD with corrupted pSLC, or the drive is nearly full (80% full) the drive could write as around 60-80% of the
 ## throughput provided by the manufacturer

@@ -11,7 +11,6 @@ _<Scope>_<Description>_PROFILE = {
             "*_default": <default_value>,  # Optional, used to define the default value for each tuning profile
             "*": Callable(),               # Optional, used to define the function to calculate the value
         }
-
     }
 }
 
@@ -255,6 +254,7 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
     # See this article https://www.cybertec-postgresql.com/en/wal_level-what-is-the-difference/
     # It is only benefit when you use COPY instead of SELECT. For other thing, the spawning of
     # WAL buffers is not necessary.
+    # We don't care the large of one single WAL file
     shared_buffers = global_cache['shared_buffers']
     usable_ram_noswap = options.usable_ram
     fn = lambda x: 1024 * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
@@ -407,21 +407,6 @@ _DB_VACUUM_PROFILE = {
         'comment': 'Enables the autovacuum daemon. The default is on. This parameter can only be set in the '
                    'postgresql.conf file or on the server command line.',
     },
-    'autovacuum_naptime': {
-        'instructions': {
-            'mini_default': 5 * MINUTE,  # If you have too little resources and low workload also, so decrease frequency
-            'small_default': 5 * MINUTE // 2,
-        },
-        'default': 3 * MINUTE // 2,
-        'comment': "Specifies the minimum delay between autovacuum runs on any given database. In each round the "
-                   "daemon examines the database and issues VACUUM and ANALYZE commands as needed for tables in that "
-                   "database. If this value is specified without units, it is taken as seconds. Default is one "
-                   "minute (1.5 min). Recommendation: If you have a large number of tables or database, decrease this "
-                   "to 30s or 15s, or if you otherwise see from pg_stat_user_tables that autovacuum is not keeping "
-                   "up. See https://www.postgresql.org/docs/17/routine-vacuuming.html for more information. If you "
-                   "have a large number of databases, you may want to increase this value.",
-        'partial_func': lambda value: f'{value}s',
-    },
     'autovacuum_max_workers': {
         'instructions': {
             'mini_default': 1,
@@ -435,6 +420,17 @@ _DB_VACUUM_PROFILE = {
         'comment': "Specifies the maximum number of autovacuum worker processes that may be running at any one time. "
                    "The default is 3. Best options should be less than the number of CPU cores. Increase this if "
                    "you have a large number of databases and you have a lot of CPU to spare",
+    },
+    'autovacuum_naptime': {
+        'tune_op': lambda group_cache, global_cache, options, response:
+            SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
+        'default': 1 * MINUTE,
+        'comment': "Specifies the minimum delay between autovacuum runs on any given database. In each round the "
+                   "daemon examines the database and issues VACUUM and ANALYZE commands as needed for tables in that "
+                   "database. If this value is specified without units, it is taken as seconds. Default is 15 second "
+                   "for one worker and 30 seconds for each additional worker. See "
+                   "https://www.postgresql.org/docs/17/routine-vacuuming.html for more information.",
+        'partial_func': lambda value: f'{value}s',
     },
     'maintenance_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response: realign_value(
@@ -470,17 +466,17 @@ _DB_VACUUM_PROFILE = {
     },
     # Threshold: For the information, I would use the [08] as the base optimization profile and could be applied
     # on most scenarios, except that you are having an extremely large table where 0.1% is too large.
-    'autovacuum_vacuum_threshold': {
+    'autovacuum_vacuum_threshold; autovacuum_vacuum_insert_threshold': {
         'instructions': {
             'mini_default': 200,
-            'bigt_default': 3 * K10,
         },
         'hardware_scope': 'overall',
         'default': K10,
-        'comment': "Specifies the minimum number of updated or deleted tuples needed to trigger a VACUUM in any one "
-                   "table. Default is 1000 tuples and 1K-3K tuples on a larger system.",
+        'comment': "Specifies the minimum number of updated or deleted tuples, inserted tuples (usually single INSERT"
+                   "command in transaction) needed to trigger a VACUUM in any one table. Default is 1K tuples "
+                   "and 1K-3K tuples on a larger system.",
     },
-    'autovacuum_vacuum_scale_factor': {
+    'autovacuum_vacuum_scale_factor; autovacuum_vacuum_insert_scale_factor': {
         'instructions': {
             'mini_default': 0.010,
             'mall_default': 0.002,
@@ -492,20 +488,17 @@ _DB_VACUUM_PROFILE = {
                    'to trigger a VACUUM. Default is 0.005 (or 0.5%); and can be reduced to 0.1% on an extreme '
                    'large system',
     },
-    'autovacuum_vacuum_insert_threshold; autovacuum_analyze_threshold': {
+    'autovacuum_analyze_threshold': {
         'instructions': {
             'mini_default': 200,
-            'bigt_default': 3 * K10,
         },
         'hardware_scope': 'overall',
-        'default': K10,
-        'comment': "Specifies the minimum number of inserted tuples needed to trigger a VACUUM in any one table. "
-                   "or the minimum number of inserted, updated or deleted tuples needed to trigger an ANALYZE "
-                   "in any one table. Default is 1000 tuples and 3K tuples on a larger system. This is twice "
-                   "compared to the normal VACUUM/ANALYZE since UPDATE/DELETE cause data bloating and index "
-                   "fragmentation more.",
+        'default': 2 * K10,
+        'comment': "Specifies the minimum number of changed tuples needed to trigger a VACUUM in any one table. "
+                   "Default is 2K tuples since by PostgreSQL, the ANALYZE is usually fast since it only sample "
+                   "when threshold met and sample at randomly `300 * default_statistics_target` rows .",
     },
-    'autovacuum_vacuum_insert_scale_factor; autovacuum_analyze_scale_factor': {
+    'autovacuum_analyze_scale_factor': {
         'instructions': {
             'mini_default': 0.020,
             'mall_default': 0.002,
@@ -514,10 +507,10 @@ _DB_VACUUM_PROFILE = {
         'hardware_scope': 'overall',
         'default': 0.0075,
         'comment': "Specifies a fraction of the table size to add to autovacuum_vacuum_insert_threshold when deciding "
-                   "whether to trigger a VACUUM or ANALYZE. Default is 0.0075 (or 0.75%); and can be reduced to 0.1% "
-                   "on an extreme large system.",
+                   "whether to trigger a ANALYZE. Default is 0.0075 (or 0.75%); and can be reduced to 0.1% on an "
+                   "extreme large system.",
     },
-    # Cost Delay, Limit, and Naptime (Naptime would not be changed)
+    # Cost Delay, Limit
     'autovacuum_vacuum_cost_delay': {
         'default': 2,
         'comment': "Specifies the cost delay value that will be used in automatic VACUUM operations. If -1 is "
@@ -912,6 +905,7 @@ _DB_WAL_PROFILE = {
     # but reducing un-necessary read/write operation
     'checkpoint_timeout': {
         'instructions': {
+            'mini_default': 30 * MINUTE,
             'mall_default': 10 * MINUTE,
             'bigt_default': 10 * MINUTE,
         },
@@ -964,10 +958,10 @@ _DB_WAL_PROFILE = {
     'max_wal_size': {
         'instructions': {
             'mini_default': 2 * Gi,
-            'medium_default': 8 * Gi,
-            'large_default': 24 * Gi,
-            'mall_default': 40 * Gi,
-            'bigt_default': 64 * Gi,
+            'medium_default': 4 * Gi,
+            'large_default': 8 * Gi,
+            'mall_default': 16 * Gi,
+            'bigt_default': 32 * Gi,
         },
         'default': 8 * Gi,
         'comment': 'Maximum size to let the WAL grow during automatic checkpoints (soft limit only); WAL size can '
@@ -1033,8 +1027,8 @@ exit 0
     },
     'archive_timeout': {
         'instructions': {
-            'mall_default': 10 * MINUTE,  # 10 minutes
-            'bigt_default': int(7.5 * MINUTE),  # 7.5 minutes
+            'mini_default': 1 * HOUR,
+            'medium_default': 30 * MINUTE,
         },
         'default': 15 * MINUTE,
         'hardware_scope': 'overall',  # But based on data rate
@@ -1049,9 +1043,7 @@ exit 0
                    'still the same length as completely full files. Therefore, it is unwise to use a very short '
                    ':var:`archive_timeout` — it will bloat your archive storage. In general this parameter is used for '
                    'safety and long PITR and want to revert back to a far time in the past. Default to 15 minutes on '
-                   'small system and 10 minutes or less on larger system. For the higher critical system with shorter '
-                   'RTO, you can set to 5 minutes (preferred) or less (but it could bloat your data storage, and '
-                   'putting additional constraint on the archive storage system).',
+                   'general system and up to 1 hour on smaller scale.',
         'partial_func': lambda value: f"{value}s",
     },
     'restore_command': {
@@ -1112,7 +1104,7 @@ _DB_REPLICATION_PROFILE = {
         'hardware_scope': 'net',
         'comment': 'Specifies the maximum number of concurrent connections from standby servers or streaming base '
                    'backup clients (i.e., the maximum number of simultaneously running WAL sender processes). The '
-                   'default is 10. The value 0 means replication is disabled. Abrupt disconnection of a streaming '
+                   'default is 3. The value 0 means replication is disabled. Abrupt disconnection of a streaming '
                    'client might leave an orphaned connection slot behind until a timeout is reached, so this '
                    'parameter should be set slightly higher than the maximum number of expected clients so '
                    'disconnected clients can immediately reconnect.'
@@ -1121,27 +1113,39 @@ _DB_REPLICATION_PROFILE = {
         'default': 3,
         'hardware_scope': 'net',
         'comment': 'Specifies the maximum number of replication slots (see streaming-replication-slots) that the '
-                   'server can support. The default is 10. This parameter can only be set at server start. Setting '
+                   'server can support. The default is 3. This parameter can only be set at server start. Setting '
                    'it to a lower value than the number of currently existing replication slots will prevent the '
                    'server from starting. Also, wal_level must be set to replica or higher to allow replication '
                    'slots to be used.'
     },
     'wal_keep_size': {
+        # Don't worry since if you use replication_slots, its default is -1 (keep all WAL); but if replication
+        # for disaster recovery (not for offload READ queries or high-availability)
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value(cap_value(global_cache['max_wal_size'] // 20, 10 * options.tuning_kwargs.wal_segment_size,
-                                options.wal_spec.disk_usable_size // 10),
-                      page_size=options.tuning_kwargs.wal_segment_size)[options.align_index],
-        'default': 10 * BASE_WAL_SEGMENT_SIZE,
+        realign_value(cap_value(
+            global_cache['max_wal_size'] // 40, 25 * options.tuning_kwargs.wal_segment_size,
+            int(0.8 * options.wal_spec.disk_usable_size)
+        ), page_size=options.tuning_kwargs.wal_segment_size)[options.align_index],
+        'default': 25 * BASE_WAL_SEGMENT_SIZE,
         'comment': 'Specifies the minimum size of past WAL files kept in the pg_wal directory, in case a standby '
                    'server needs to fetch them for streaming replication. If a standby server connected to the '
                    'sending server falls behind by more than wal_keep_size megabytes, the sending server might '
-                   'remove a WAL segment still needed by the standby, in which case the replication connection '
-                   'will be terminated. Downstream connections will also eventually fail as a result. (However, '
-                   'the standby server can recover by fetching the segment from archive, if WAL archiving is in use). '
-                   'We set this value to be 5% of the max_wal_size instead of zero in official PostgreSQL '
-                   'documentation.',
+                   'remove a WAL segment still needed by the standby (e.x pg_archivecleanup), resulting in downstream '
+                   'connections will also eventually fail as a result. If you required DR server to catch up more with '
+                   'latest data, reduce this value more. The default is maximum of 25 WAL files and 2.5% of '
+                   'max_wal_size. ',
         'partial_func': lambda value: f'{value // Mi}MB',
     },
+    'max_slot_wal_keep_size': {
+        'default': -1,
+        'comment': 'Specify the maximum size of WAL files that replication slots are allowed to retain in the pg_wal '
+                   'directory at checkpoint time for replication slots. If max_slot_wal_keep_size is -1 (the default), '
+                   'replication slots may retain an unlimited amount of WAL files. Otherwise, if restart_lsn of a '
+                   'replication slot falls behind the current LSN by more than the given size, the standby using the '
+                   'slot may no longer be able to continue replication due to removal of required WAL files. You can '
+                   'see the WAL availability of replication slots in pg_replication_slots.'
+    },
+
     'wal_sender_timeout': {
         'instructions': {
             'mall_default': 2 * MINUTE,
@@ -1235,6 +1239,11 @@ _DB_QUERY_PROFILE = {
         'partial_func': lambda value: f"{value // Mi}MB",
     },
     'default_statistics_target': {
+        'instructions': {
+            'large_default': 500,
+            'mall_default': 750,
+            'bigt_default': 1000,
+        },
         'default': 100,
         'hardware_scope': 'overall',
         'comment': "Sets the default statistics target for table columns that have not been otherwise set via ALTER "

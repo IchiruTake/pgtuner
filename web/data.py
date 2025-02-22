@@ -18,25 +18,15 @@ __all__ = ['PG_WEB_TUNE_USR_OPTIONS', 'PG_WEB_TUNE_REQUEST']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 # =============================================================================
-class _PG_WEB_DISK_PERF_BASE(BaseModel):
-    random_iops_scale_factor: PositiveFloat = Field(default=1.0, gt=0, le=1.0)
-    throughput_scale_factor: PositiveFloat = Field(default=1.0, gt=0, le=1.0)
-    # ========================================================================
-    # RAID efficiency
-    per_scale_in_raid: PositiveFloat = Field(default=0.75, ge=1e-8, le=1.0)
-    num_disks: PositiveInt = Field(default=1, ge=1, le=2 ** 6)
-    disk_usable_size_in_gib: ByteSize = Field(default=20, ge=5)
-
-
-class _PG_WEB_DISK_PERF_INT(_PG_WEB_DISK_PERF_BASE):
+class _PG_WEB_DISK_PERF_INT(BaseModel):
     random_iops: PositiveInt = Field(default=PG_DISK_SIZING.SANv1.iops())
     throughput: PositiveInt = Field(default=PG_DISK_SIZING.SANv1.throughput())
+    disk_usable_size_in_gib: ByteSize = Field(default=20, ge=5)
 
     def to_backend(self) -> PG_DISK_PERF:
         return PG_DISK_PERF(random_iops_spec=self.random_iops, throughput_spec=self.throughput,
-                            random_iops_scale_factor=self.random_iops_scale_factor,
-                            throughput_scale_factor=self.throughput_scale_factor, num_disks=self.num_disks,
-                            per_scale_in_raid=self.per_scale_in_raid, disk_usable_size=self.disk_usable_size_in_gib * Gi)
+                            random_iops_scale_factor=0.9, throughput_scale_factor=0.9, num_disks=1,
+                            per_scale_in_raid=0.75, disk_usable_size=self.disk_usable_size_in_gib * Gi)
 
 
 class PG_WEB_TUNE_USR_KWARGS(BaseModel):
@@ -56,21 +46,19 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     shared_buffers_fill_ratio: PositiveFloat = Field(default=0.995, ge=0.95, le=1.0)
     max_work_buffer_ratio: PositiveFloat = Field(default=0.075, gt=0, le=0.50)
     effective_connection_ratio: PositiveFloat = Field(default=0.75, ge=0.25, le=1.0)
-    temp_buffers_ratio: PositiveFloat = Field(default=1/3, ge=0.05, le=0.95)
+    temp_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.05, le=0.95)
 
     # These are used for memory_precision_tuning
-    max_normal_memory_usage: PositiveFloat = Field(default=0.45, ge=0.35, le=0.85)
-    mem_pool_epsilon_to_rollback: PositiveFloat = Field(default=0.01, ge=0, le=0.02)
-    mem_pool_tuning_increment: PositiveFloat = Field(default=1 / 280, ge=1 / 2000, le=0.01)
-    mem_pool_tuning_ratio: float = Field(default=0.5, ge=0, le=1)
-    hash_mem_usage_level: int = Field(default=-4, ge=-75, le=75)
-    mem_pool_parallel_estimate: bool = Field(default=False)
+    max_normal_memory_usage: PositiveFloat = Field(default=0.45, ge=0.35, le=0.80)
+    mem_pool_tuning_ratio: float = Field(default=0.6, ge=0, le=1)
+    mem_pool_parallel_estimate: bool = Field(default=True)
+    hash_mem_usage_level: int = Field(default=-6, ge=-60, le=60)
 
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
-    wal_segment_size: PositiveInt = Field(default=1, ge=1, le=128, frozen=True)
-    min_wal_ratio_scale: PositiveFloat = Field(default=0.5, ge=0.01, le=3.0)
-    max_wal_size_ratio: PositiveFloat = Field(default=0.90, gt=0.0, lt=1.0)
-    max_wal_size_remain_upper_size_in_gib: ByteSize = Field(default=256, ge=1, le=2 * Ki)
+    wal_segment_size_scale: int = Field(default=0, ge=0, le=3)  # Instead of 8
+    min_wal_size_ratio: PositiveFloat = Field(default=0.03, ge=0.0, le=0.15)
+    max_wal_size_ratio: PositiveFloat = Field(default=0.05, ge=0.0, le=0.30)
+    wal_keep_size_ratio: PositiveFloat = Field(default=0.05, ge=0.0, le=0.30)
 
     # Tune logging behaviour (query size, and query runtime)
     max_query_length_in_bytes: ByteSize = Field(default=2 * Ki, ge=64, le=64 * Mi)
@@ -81,36 +69,42 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
     vacuum_safety_level: PositiveInt = Field(default=2, ge=0, le=12)
 
-              # Transaction Rate
-    num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(1 * M10), ge=K10, le=20 * M10)
-
     def to_backend(self) -> PG_TUNE_USR_KWARGS:
         return PG_TUNE_USR_KWARGS(
+            # Connection Parameters
             user_max_connections=self.user_max_connections,
             superuser_reserved_connections_scale_ratio=self.superuser_reserved_connections_scale_ratio,
             single_memory_connection_overhead=self.single_memory_connection_overhead_in_kib * Ki,
             memory_connection_to_dedicated_os_ratio=self.memory_connection_to_dedicated_os_ratio,
+
+            # Memory Parameters
             effective_cache_size_available_ratio=self.effective_cache_size_available_ratio,
             shared_buffers_ratio=self.shared_buffers_ratio,
             max_work_buffer_ratio=self.max_work_buffer_ratio,
             effective_connection_ratio=self.effective_connection_ratio,
             temp_buffers_ratio=self.temp_buffers_ratio,
+
+            # Memory Pool Resizing
             max_normal_memory_usage=self.max_normal_memory_usage,
-            hash_mem_usage_level=self.hash_mem_usage_level,
-            mem_pool_epsilon_to_rollback=self.mem_pool_epsilon_to_rollback,
-            mem_pool_tuning_increment=self.mem_pool_tuning_increment,
             mem_pool_tuning_ratio=self.mem_pool_tuning_ratio,
             mem_pool_parallel_estimate=self.mem_pool_parallel_estimate,
-            wal_segment_size=self.wal_segment_size * BASE_WAL_SEGMENT_SIZE,
+            hash_mem_usage_level=self.hash_mem_usage_level,
+
+
+            # Logging
             max_query_length_in_bytes=self.max_query_length_in_bytes,
             max_runtime_ms_to_log_slow_query=self.max_runtime_ms_to_log_slow_query,
             max_runtime_ratio_to_explain_slow_query=self.max_runtime_ratio_to_explain_slow_query,
-            min_wal_ratio_scale=self.min_wal_ratio_scale,
+
+            # WAL
+            wal_segment_size=BASE_WAL_SEGMENT_SIZE * (2 ** self.wal_segment_size_scale),
+            min_wal_size_ratio=self.min_wal_size_ratio,
             max_wal_size_ratio=self.max_wal_size_ratio,
-            max_wal_size_remain_upper_size=self.max_wal_size_remain_upper_size_in_gib * Gi,
+            wal_keep_size_ratio=self.wal_keep_size_ratio,
+
+            # Others
             autovacuum_utilization_ratio=self.autovacuum_utilization_ratio,
             vacuum_safety_level=self.vacuum_safety_level,
-            num_write_transaction_per_hour_on_workload=self.num_write_transaction_per_hour_on_workload
         )
 
 
@@ -120,10 +114,10 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
 
     # The basic profile for the system tuning for profile-guided tuning
     workload_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    cpu_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    mem_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    disk_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    net_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    # cpu_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    # mem_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    # disk_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
+    # net_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
     pgsql_version: str = Field(default='17')
 
     # Disk options for data partitions
@@ -136,7 +130,6 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     max_backup_replication_tool: str = Field(default='pg_basebackup')
     opt_transaction_lost: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.NONE)
     opt_wal_buffers: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.SPIDEY)
-    repurpose_wal_buffers: bool = True
     max_time_transaction_loss_allow_in_millisecond: PositiveInt = Field(default=650, ge=1, le=10000)
     max_num_stream_replicas_on_primary: int = Field(default=0, ge=0, le=32)
     max_num_logical_replicas_on_primary: int = Field(default=0, ge=0, le=32)
@@ -146,6 +139,12 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     workload_type: PG_WORKLOAD = Field(default=PG_WORKLOAD.HTAP)
     opt_mem_pool: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.OPTIMUS_PRIME)
     keywords: PG_WEB_TUNE_USR_KWARGS = Field(default=PG_TUNE_USR_KWARGS())
+
+    # Wraparound Tuning
+    database_size_in_gib: int = Field(default=10, ge=0, le=32 * K10)
+    num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(50 * K10), ge=K10, le=20 * M10)
+    # https://www.postgresql.org/docs/13/functions-info.html -> pg_current_xact_id_if_assigned
+
 
     # ========================================================================
     # This is used for analyzing the memory available.
@@ -169,13 +168,13 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
         monitoring_memory = min(monitoring_memory, max(monitoring_memory, monitoring_memory * Mi))
         kernel_memory = min(kernel_memory, max(kernel_memory, kernel_memory * Mi))
 
-        backend_options = PG_TUNE_USR_OPTIONS(
+        return PG_TUNE_USR_OPTIONS(
             # The basic profile for the system tuning for profile-guided tuning
             workload_profile=self.workload_profile,
-            cpu_profile=self.cpu_profile,
-            mem_profile=self.mem_profile,
-            net_profile=self.net_profile,
-            disk_profile=self.disk_profile,
+            cpu_profile=self.workload_profile,
+            mem_profile=self.workload_profile,
+            net_profile=self.workload_profile,
+            disk_profile=self.workload_profile,
             pgsql_version=self.pgsql_version,
             # Disk partitions
             os_db_spec=None,
@@ -186,7 +185,6 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             max_backup_replication_tool=self.max_backup_replication_tool,
             opt_transaction_lost=self.opt_transaction_lost,
             opt_wal_buffers=self.opt_wal_buffers,
-            repurpose_wal_buffers=self.repurpose_wal_buffers,
             max_time_transaction_loss_allow_in_millisecond=self.max_time_transaction_loss_allow_in_millisecond,
             max_num_stream_replicas_on_primary=self.max_num_stream_replicas_on_primary,
             max_num_logical_replicas_on_primary=self.max_num_logical_replicas_on_primary,
@@ -195,6 +193,9 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             workload_type=self.workload_type,
             opt_mem_pool=self.opt_mem_pool,
             tuning_kwargs=self.keywords.to_backend(),
+            # Wraparound Tuning
+            database_size_in_gib=self.database_size_in_gib,
+            num_write_transaction_per_hour_on_workload=self.num_write_transaction_per_hour_on_workload,
             # Analyzing the memory available
             operating_system=self.operating_system,
             vcpu=self.logical_cpu,
@@ -208,14 +209,6 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
             enable_sysctl_correction_tuning=self.enable_sysctl_correction_tuning,
             align_index=1,
         )
-
-        # Scan and Update the current configuration
-        backend_options_dumps = backend_options.model_dump()
-        for key, value in backend_options_dumps.items():
-            if key in self.__dict__:
-                self.__dict__[key] = value
-
-        return backend_options
 
 class PG_WEB_TUNE_REQUEST(BaseModel):
     user_options: PG_WEB_TUNE_USR_OPTIONS

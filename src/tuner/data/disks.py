@@ -1,8 +1,3 @@
-"""
-
-
-"""
-
 import logging
 from functools import partial
 from typing import Any
@@ -112,11 +107,11 @@ class PG_DISK_PERF(BaseModel):
                           '4 to 6 (HDD) to 8 (SSD) drives.',
               )
     )
-    disk_usable_size: ByteSize = (
-        Field(default=20 * Gi, ge=5 * Gi, multiple_of=256 * Mi,
-              description='The usable size of the disk system. The supported value must be larger than 5 GiB. Default '
-                          'to be 20 GiB (followed by Azure minimum strategy) (ignored the reserved space for the OS '
-                          'filesystem and round-down the number). The number must be a multiple of 256 MiB.',
+    disk_usable_size: PositiveInt = (
+        Field(default=20 * Gi, ge=5 * Gi,
+              description='The usable size of the disk system (in bytes). The supported value must be larger than 5 '
+                          'GiB. Default to be 20 GiB (followed by Azure minimum strategy) (ignored the reserved space '
+                          'for the OS filesystem and round-down the number).',
               )
     )
 

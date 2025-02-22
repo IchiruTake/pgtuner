@@ -251,14 +251,15 @@ class PG_TUNE_RESPONSE(BaseModel):
 
         # Anti-wraparound Vacuum
         # Transaction ID
-        min_hr_txid = managed_cache['vacuum_freeze_min_age'] / _kwargs.num_write_transaction_per_hour_on_workload
-        norm_hr_txid = managed_cache['vacuum_freeze_table_age'] / _kwargs.num_write_transaction_per_hour_on_workload
-        max_hr_txid = managed_cache['autovacuum_freeze_max_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+        num_hourly_write_transaction = options.num_write_transaction_per_hour_on_workload
+        min_hr_txid = managed_cache['vacuum_freeze_min_age'] / num_hourly_write_transaction
+        norm_hr_txid = managed_cache['vacuum_freeze_table_age'] / num_hourly_write_transaction
+        max_hr_txid = managed_cache['autovacuum_freeze_max_age'] / num_hourly_write_transaction
 
         # Row Locking in Transaction
-        min_hr_row_lock = managed_cache['vacuum_multixact_freeze_min_age'] / _kwargs.num_write_transaction_per_hour_on_workload
-        norm_hr_row_lock = managed_cache['vacuum_multixact_freeze_table_age'] / _kwargs.num_write_transaction_per_hour_on_workload
-        max_hr_row_lock = managed_cache['autovacuum_multixact_freeze_max_age'] / _kwargs.num_write_transaction_per_hour_on_workload
+        min_hr_row_lock = managed_cache['vacuum_multixact_freeze_min_age'] / num_hourly_write_transaction
+        norm_hr_row_lock = managed_cache['vacuum_multixact_freeze_table_age'] / num_hourly_write_transaction
+        max_hr_row_lock = managed_cache['autovacuum_multixact_freeze_max_age'] / num_hourly_write_transaction
 
         _report = f'''
 # ===============================================================
@@ -302,13 +303,13 @@ Report Summary (memory, over usable RAM):
 
 * Zero parallelized session >> Memory in use: {max_total_memory_used_hr}
     - Memory Ratio: {max_total_memory_used_ratio * 100:.2f} (%)
-    - Normal Memory Usage: {max_total_memory_used_ratio <= min(1.0, _kwargs.max_normal_memory_usage + _epsilon_scale * _kwargs.mem_pool_epsilon_to_rollback)} ({_kwargs.max_normal_memory_usage * 100:.1f} % memory threshold)
+    - Normal Memory Usage: {max_total_memory_used_ratio <= min(1.0, _kwargs.max_normal_memory_usage)} ({_kwargs.max_normal_memory_usage * 100:.1f} % memory threshold)
     - P3: Generally Safe in Workload: {max_total_memory_used_ratio <= 0.70} (70 % memory threshold)
     - P2: Sufficiently Safe for Production: {max_total_memory_used_ratio <= 0.80} (80 % memory threshold)
     - P1: Risky for Production: {max_total_memory_used_ratio <= 0.90} (90 % memory threshold)
 * With parallelized session >> Memory in use: {max_total_memory_used_with_parallel_hr}
     - Memory Ratio: {max_total_memory_used_with_parallel_ratio * 100:.2f} (%)
-    - Normal Memory Usage: {max_total_memory_used_with_parallel_ratio <= min(1.0, _kwargs.max_normal_memory_usage + _epsilon_scale * _kwargs.mem_pool_epsilon_to_rollback)} ({_kwargs.max_normal_memory_usage * 100:.1f} % memory threshold)
+    - Normal Memory Usage: {max_total_memory_used_with_parallel_ratio <= min(1.0, _kwargs.max_normal_memory_usage)} ({_kwargs.max_normal_memory_usage * 100:.1f} % memory threshold)
     - P3: Generally Safe in Workload: {max_total_memory_used_with_parallel_ratio <= 0.70} (70 % memory threshold)
     - P2: Sufficiently Safe for Production: {max_total_memory_used_with_parallel_ratio <= 0.80} (80 % memory threshold)
     - P1: Risky for Production: {max_total_memory_used_with_parallel_ratio <= 0.90} (90 % memory threshold)
@@ -361,7 +362,7 @@ Report Summary (others):
             1:1:1 or {vacuum_report['1:1:1_page'] * 3} disk pages -> IOPS capacity of {vacuum_report['1:1:1_data']:.2f} MiB/s (write={vacuum_report['1:1:1_data'] * 1 / 2:.2f} MiB/s)
             -> Safe: {vacuum_report['1:1:1_page'] * 3 < data_iops} (< Data Disk IOPS)
     - Transaction (Tran) ID Wraparound and Anti-Wraparound Vacuum:
-        + Workload Write Transaction per Hour: {_kwargs.num_write_transaction_per_hour_on_workload}
+        + Workload Write Transaction per Hour: {num_hourly_write_transaction}
         + TXID Vacuum :: Minimum={min_hr_txid:.2f} hrs :: Manual={norm_hr_txid:.2f} hrs :: Auto-forced={max_hr_txid:.2f} hrs
         + XMIN,XMAX Vacuum :: Minimum={min_hr_row_lock:.2f} hrs :: Manual={norm_hr_row_lock:.2f} hrs :: Auto-forced={max_hr_row_lock:.2f} hrs     
         + DON'T USE our 'wraparound' vacuum settings (best to stick with OnGres recommendation or even PostgreSQL default) unless all our important guideline are followed:

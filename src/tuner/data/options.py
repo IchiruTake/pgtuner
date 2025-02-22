@@ -1,11 +1,12 @@
 import logging
 from functools import cached_property, partial
+from math import ceil
 from typing import Any, Annotated, Literal
 
 from pydantic import BaseModel, Field, ByteSize, AfterValidator
 from pydantic.types import PositiveInt
 
-from src.static.vars import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS
+from src.static.vars import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS, K10, M10, Ki
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
@@ -64,31 +65,44 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         PG_SIZING,
         Field(default_factory=PydanticFact(f'Enter the workload profile as mini, medium, large, mall, bigt: ',
                                            user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The workload profile to be used for tuning')
+              description='The workload profile to be used for tuning. Supported profiles are mini, medium, large, '
+                          'mall, and bigt. The associated value meant for the workload scale, amount of data in/out, '
+                          '...')
     ]
     cpu_profile: Annotated[
         PG_SIZING,
         Field(default_factory=PydanticFact(f'Enter the CPU profile as mini, medium, large, mall, bigt: ',
                                            user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The CPU profile to be used for profile-based tuning')
+              description='The CPU profile to be used for profile-based tuning. Supported profiles are mini, medium, '
+                          'large, mall, and bigt. The associated value meant for the CPU core regardless of any '
+                          'type of workload.')
     ]
     mem_profile: Annotated[
         PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the Memory profile as mini, medium, large, mall, bigt: ',
+        Field(default_factory=PydanticFact(f'Enter the MEM profile as mini, medium, large, mall, bigt: ',
                                            user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The memory profile to be used for profile-based tuning')
+              description='The memory profile to be used for profile-based tuning. Supported profiles are mini, '
+                          'medium, large, mall, and bigt. The associated value meant for the memory usage, RAM '
+                          'capacity regardless of any type of workload.')
     ]
     disk_profile: Annotated[
         PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the Disk profile as mini, medium, large, mall, bigt: ',
+        Field(default_factory=PydanticFact(f'Enter the DISK profile as mini, medium, large, mall, bigt: ',
                                            user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The disk profile to be used for profile-based tuning')
+              description='The disk profile to be used for profile-based tuning. Supported profiles are mini, medium, '
+                          'large, mall, and bigt. The associated value meant for the disk I/O regardless of any type '
+                          'of workload. In the PostgreSQL configuration, it is replaced by workload_profile as user '
+                          'already provided the disk specification.')
     ]
     net_profile: Annotated[
         PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the Network profile as mini, medium, large, mall, bigt: ',
+        Field(default_factory=PydanticFact(f'Enter the NET profile as mini, medium, large, mall, bigt: ',
                                            user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The network profile to be used for profile-based tuning')
+              description='The network profile to be used for profile-based tuning. Supported profiles are mini, '
+                          'medium, large, mall, and bigt. The associated value meant for the network bandwidth and '
+                          'latency regardless of any type of workload. In the PostgreSQL configuration, it is dropped '
+                          'because nearly no configuration requires step-wise profile-based tuning (for information '
+                          'only).')
     ]
     pgsql_version: Annotated[
         str, AfterValidator(_allowed_postgres_version),
@@ -151,20 +165,9 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                           'Otherwise, this would be enforced to SPIDEY.',
               )
     ]
-    repurpose_wal_buffers: Annotated[
-        bool,
-        Field(default=True,
-              description='Set to True (default) would take the difference of WAL buffers to be used in temp_buffers '
-                          'and work_mem, by increasing its pool size. This would be conducted after the final memory '
-                          'tuning. The reason not to re-purpose into the shared_buffers is that the shared_buffers is '
-                          'usually persistent when the database is online. This argument is only valid when the '
-                          'WAL buffers is reduced because your disk cannot handle between transaction loss when the '
-                          'opt_wal_buffers is different than NONE.',
-              )
-    ]
     max_time_transaction_loss_allow_in_millisecond: Annotated[
         PositiveInt,
-        Field(default=650, ge=1, le=10000,
+        Field(default=650, ge=1, le=10000, frozen=True,
               description='The maximum time (in milli-second) that user allow for transaction loss, to flush the page '
                           'in memory to WAL partition by WAL writer. The supported range is [1, 10000] and default '
                           'is 650 (translated to the default 200ms or 3.25x of wal_writer_delay). The lost ratio is '
@@ -175,7 +178,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     ]
     max_num_stream_replicas_on_primary: Annotated[
         int,
-        Field(default=0, ge=0, le=32,
+        Field(default=0, ge=0, le=32, frozen=True,
               description='The maximum number of streaming replicas for the PostgreSQL primary server. The supported '
                           'range is [0, 32], default is 0. If you are deployed on replica or receiving server, set '
                           'this number as low. ',
@@ -183,7 +186,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     ]
     max_num_logical_replicas_on_primary: Annotated[
         int,
-        Field(default=0, ge=0, le=32,
+        Field(default=0, ge=0, le=32, frozen=True,
               description='The maximum number of logical replicas for the PostgreSQL primary server. The supported '
                           'range is [0, 32], default is 0. If you are deployed on replica or receiving server, set '
                           'this number as low. ',
@@ -191,7 +194,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     ]
     offshore_replication: Annotated[
         bool,
-        Field(default=False,
+        Field(default=False, frozen=True,
               description='If set it to True, you are wishing to have an geo-replicated replicas in the offshore '
                           'country or continent. Enable it would increase the wal_sender_timeout to 2 minutes or more',
               )
@@ -211,7 +214,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         Field(default_factory=PydanticFact(f'Enter the PostgreSQL memory precision profile as {_PG_OPT_KEYS}: ',
                                            user_fn=PG_PROFILE_OPTMODE, default_value=PG_PROFILE_OPTMODE.OPTIMUS_PRIME),
               description='If not NONE, it would proceed the extra tuning to increase the memory buffer usage to '
-                          'reach to your expectation (shared_buffers, work_mem, temp_buffer, wal_buffer). Set to SPIDEY '
+                          'reach to your expectation (shared_buffers, work_mem, temp_buffer). Set to SPIDEY '
                           'use the worst case of memory usage by assuming all connections are under high load. Set to '
                           'OPTIMUS_PRIME (default) take the average between normal (active connections) and worst case '
                           'as the stopping condition; PRIMORDIAL take the normal case as the stopping condition.')
@@ -224,6 +227,26 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                           'specific tuning options). ')
     ]
 
+    # These are for anti-wraparound vacuum tuning
+    database_size_in_gib: Annotated[
+        int,
+        Field(default=10, ge=0, le=32 * Ki,
+              description='The largest database size (in GiB). This value is used to estimate the maximum database '
+                          'size for anti-wraparound vacuum. If this field is zero, the assumption is about 60 % usage '
+                          'of the data volume. The supported range is [0, 32768], default is 10 (GiB); but its '
+                          'maximum threshold silently capped at 90% of the data volume')
+    ]
+    num_write_transaction_per_hour_on_workload: Annotated[
+        PositiveInt,
+        Field(default=int(50 * K10), ge=K10, le=20 * M10, frozen=True,
+              description='The peak number of workload WRITE transaction per hour (including sub-transactions, '
+                          'accounting all attempts to make data changes (not SELECT) regardless of COMMIT and ROLLBACK). '
+                          'Note that this number requires you to have good estimation on how much your server can be '
+                          'handled during its busy workload and idle workload. It is best to collect your real-world '
+                          'data pattern before using this value.')
+    ]   # https://www.postgresql.org/docs/13/functions-info.html -> pg_current_xact_id_if_assigned
+
+
     # ========================================================================
     # This is used for analyzing the memory available.
     operating_system: Annotated[
@@ -234,13 +257,13 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     ]
     vcpu: Annotated[
         PositiveInt,
-        Field(default=4, ge=1,
+        Field(default=4, ge=1, frozen=True,
               description='The number of vCPU (logical CPU) that the PostgreSQL server is running on. Default is 4 '
                           'vCPUs. Minimum number of vCPUs is 1. ')
     ]
     total_ram: Annotated[
         ByteSize,
-        Field(default=16 * Gi, ge=2 * Gi, multiple_of=256 * Mi,
+        Field(default=16 * Gi, ge=2 * Gi, multiple_of=256 * Mi, frozen=True,
               description='The amount of RAM capacity that the PostgreSQL server is running on. Default is 16 GiB.'
                           'Minimum amount of RAM is 2 GiB. PostgreSQL would performs better when your server has '
                           'more RAM available. Note that the amount of RAM on the server must be larger than the '
@@ -346,17 +369,29 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         if self.pgsql_version not in SUPPORTED_POSTGRES_VERSIONS:
             _logger.warning(f'The PostgreSQL version {self.pgsql_version} is not in the supported version list. '
                             f'Please ensure that the version is correct and the tuning may not be accurate. '
-                            f'Forcing the version to the common version (which is the shared configuration across'
-                            f'all supported versions).')
+                            f'Forcing the version to the latest version.')
             self.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[-1]
-        if self.usable_ram < 2 * Gi:
+
+        # Check minimal RAM usage
+        if self.usable_ram < 4 * Gi and (self.workload_profile > PG_SIZING.MINI or self.mem_profile > PG_SIZING.MINI):
             _sign = '+' if self.usable_ram >= 0 else '-'
             _msg: str = (f'The usable RAM {_sign}{bytesize_to_hr(self.usable_ram)} is less than the PostgreSQL '
-                         'minimum 2 GiB. It is recommended to increase the total RAM of your server, or switch to a '
-                         'more lightweight monitoring system, kernel usage, or even the operating system. The tuning '
-                         'could be inaccurate.')
+                         'minimum 4 GiB, and your workload is not self tested or local testing. The tuning may not be '
+                         'accurate. It is recommended to increase the total RAM of your server, or switch to a more '
+                         'lightweight monitoring system, kernel usage, or even the operating system.')
             _logger.warning(_msg)
-            raise ValueError(_msg)
+
+        # Check database size to be smaller than 90% of data volume
+        _database_limit = ceil((self.data_index_spec.disk_usable_size / Gi) * 0.90)
+        if self.database_size_in_gib == 0:
+            _logger.warning('The database size is set to 0 GiB. The database size is estimated to be 60% of the data '
+                            'volume.')
+            self.database_size_in_gib = ceil((self.data_index_spec.disk_usable_size / Gi) * 0.60)
+        if self.database_size_in_gib > _database_limit:
+            _logger.warning(f'The database size {self.database_size_in_gib} GiB is larger than the data volume. The '
+                            f'database size is silently capped at 90% of the data volume.')
+            self.database_size_in_gib = _database_limit
+
         return None
 
     @cached_property
@@ -390,4 +425,5 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         mem_available: ByteSize = self.total_ram
         mem_available -= self.base_kernel_memory_usage
         mem_available -= self.base_monitoring_memory_usage
+        assert mem_available >= 0, 'The available memory is less than 0. Please check the memory usage.'
         return mem_available

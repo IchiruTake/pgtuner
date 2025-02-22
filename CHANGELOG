@@ -2,10 +2,33 @@ v0.x.x (TBD)
 =========================
 - TODO: Add automatic tests to detect error
 - TODO: More refined documentation with icon symbol of importance
-- TODO: Rewrite application as Javascript to support global user (if necessary)
+- TODO: Rewrite application as Javascript to support global user (if necessary). Python backend is still maintained
+
+v0.1.5 (Mar , 2025)
+=========================
+- UI & Backend: Propose input and configuration estimation test.
+- UI: Document revision
 
 
-v0.1.3 (Feb , 2025)
+v0.1.4 (Feb , 2025)
+=========================
+- AUTOVACUUM: Adjust autovacuum_naptime formula (Completed)
+- STATISTICS: Increase the default_statistics_target in the general tuning phase, and minor change in the advanced tuning phase
+- VACUUM: Review the anti-wraparound vacuum algorithm
+- MEMORY: Use the parallel estimation mode for memory pool resizing by default to save around `vCPU+3` of work_mem (`mem_pool_parallel_estimate`)
+- DISK: Fix the parameter `disk_usable_size` from BytesSize to PositiveInt
+- WAL: The max_slot_wal_keep_size parameter is added into the tuning guideline
+- WAL: Adjust the rule for advanced input parameter wal_segment_size, and wal_keep_size, wal_min_size parameter in the general tuning phase and correction tuning phase
+- UI: Remove the `net_profile` parameter on UI since it does not support in any configuration
+- Input: Adjust between the backend and UI
+- Backend: Update the conditions and formulas for archive_timeout and checkpoint_timeout parameters
+- MEMORY: Remove the `mem_pool_tuning_increment` parameter, now the calculation is done automatically and more precisely; but the expected output could be a little higher when the memory used per connection is large.
+- DOC: Advanced configuration documentation is revised slightly
+- WAL: Remove the `repurpose_wal_buffers` parameter
+- UI: Remove the `cpu_profile`, `mem_profile`, and `disk_profile` parameter to minimize confusion
+
+
+v0.1.3 (Feb 16th, 2025)
 =========================
 - UI: Breakdown the large tuner.html and changelog.html template into smaller templates for better maintenance
 - Internal: Add rjsmin as the minifier for the JS file
@@ -15,8 +38,6 @@ v0.1.3 (Feb , 2025)
 - UI & Backend: Switch the default disk performance from SSDv1 to SANv1
 - Backend: Update the formula for bgwriter and autovacuum
 - Fix README.md file
-
-
 
 
 v0.1.2 (Feb 14th, 2025)
@@ -33,7 +54,6 @@ Frontend:
 - Tune up some headers and meta tags for better SEO
 - Testing the HTML jinja2 template for the web page
 
-
 v0.1.1 (Feb 09th, 2025)
 =========================
 - Cleanup development and legacy code
@@ -42,7 +62,6 @@ v0.1.1 (Feb 09th, 2025)
 - Move `_version` endpoint to the `_health` endpoint with a more dedicated health check; service uptime is reported
 - Prepare CHANGELOG file for future release
 - Refactor the rate-limit middleware: Merge the global rate-limit and the user rate-limit into one middleware
-
 
 v0.1.0 (Feb 01st, 2025)
 =========================

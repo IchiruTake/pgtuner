@@ -19,7 +19,7 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 _FILE_ROTATION_TIME_MS = 0.21 * 2  # 0.21 ms on average when direct bare-metal, 2-3x on virtualized
 
 
-def wal_time(wal_buffers: ByteSize, data_amount_ratio: int | float, wal_segment_size: ByteSize | int,
+def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_segment_size: ByteSize | int,
              wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int, ) -> dict:
     # The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
