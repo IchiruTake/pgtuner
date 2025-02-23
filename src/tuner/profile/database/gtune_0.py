@@ -149,15 +149,10 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     * https://techcommunity.microsoft.com/blog/adforpostgresql/optimizing-query-performance-with-work-mem/4196408
 
     """
-    # Make minus here to correct the value and to ensure the memory is not overflow (minus shared_buffers).
-    # Also, we encourage the use of not maximum of 100%, could be 99.5% instead to not overly estimate.
-    # For the connection memory estimation, we assumed not all connections required work_mem, but idle connections
-    # persist.
-    pgmem_available = int(options.usable_ram)  # Copy the value
-    pgmem_available -= group_cache['shared_buffers']
+    pgmem_available = int(options.usable_ram) - group_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
-    if 'wal_buffers' in global_cache:
+    if 'wal_buffers' in global_cache:   # I don't know if this make significant impact?
         pgmem_available -= global_cache['wal_buffers']
 
     max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio
@@ -169,8 +164,7 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     max_cap: int = int(1.5 * Gi)
     if options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
         max_cap = 256 * Mi
-    if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.TSR_HTAP, PG_WORKLOAD.OLAP, PG_WORKLOAD.TSR_OLAP,
-                                 PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.DATA_LAKE):
+    if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE):
         # I don't think I will make risk beyond this number
         max_cap = 8 * Gi
 
@@ -918,7 +912,7 @@ _DB_WAL_PROFILE = {
         'partial_func': lambda value: f'{value // MINUTE}min',
     },
     'checkpoint_flush_after': {
-        'default': 512 * Ki,
+        'default': 256 * Ki,
         'comment': "Whenever more than this amount of data has been written while performing a checkpoint, attempt to "
                    "force the OS to issue these writes to the underlying storage. Doing so will limit the amount of "
                    "dirty data in the kernel's page cache, reducing the likelihood of stalls when an fsync is issued "
@@ -947,12 +941,11 @@ _DB_WAL_PROFILE = {
     # ============================== WAL SIZE ==============================
     'min_wal_size': {
         'tune_op': lambda group_cache, global_cache, options, response: 10 * options.tuning_kwargs.wal_segment_size,
-        'default': 80 * Mi,
+        'default': 10 * BASE_WAL_SEGMENT_SIZE,
         'comment': 'As long as WAL disk usage stays below this setting, old WAL files are always recycled for future '
                    'use at a checkpoint, rather than removed. This can be used to ensure that enough WAL space is '
                    'reserved to handle spikes in WAL usage, for example when running large batch jobs. If this value '
-                   'is specified without units, it is taken as megabytes. The default is 80 MiB, scaled to 160 MiB on '
-                   'larger system.',
+                   'is specified without units, it is taken as megabytes. The default is 160 MiB or 10 base WAL files.',
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'max_wal_size': {
@@ -1121,19 +1114,13 @@ _DB_REPLICATION_PROFILE = {
     'wal_keep_size': {
         # Don't worry since if you use replication_slots, its default is -1 (keep all WAL); but if replication
         # for disaster recovery (not for offload READ queries or high-availability)
-        'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value(cap_value(
-            global_cache['max_wal_size'] // 40, 25 * options.tuning_kwargs.wal_segment_size,
-            int(0.8 * options.wal_spec.disk_usable_size)
-        ), page_size=options.tuning_kwargs.wal_segment_size)[options.align_index],
         'default': 25 * BASE_WAL_SEGMENT_SIZE,
         'comment': 'Specifies the minimum size of past WAL files kept in the pg_wal directory, in case a standby '
                    'server needs to fetch them for streaming replication. If a standby server connected to the '
                    'sending server falls behind by more than wal_keep_size megabytes, the sending server might '
                    'remove a WAL segment still needed by the standby (e.x pg_archivecleanup), resulting in downstream '
                    'connections will also eventually fail as a result. If you required DR server to catch up more with '
-                   'latest data, reduce this value more. The default is maximum of 25 WAL files and 2.5% of '
-                   'max_wal_size. ',
+                   'latest data, reduce this value more. The default is maximum of 25 WAL files.',
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'max_slot_wal_keep_size': {
@@ -1240,9 +1227,9 @@ _DB_QUERY_PROFILE = {
     },
     'default_statistics_target': {
         'instructions': {
-            'large_default': 500,
-            'mall_default': 750,
-            'bigt_default': 1000,
+            'large_default': 300,
+            'mall_default': 400,
+            'bigt_default': 500,
         },
         'default': 100,
         'hardware_scope': 'overall',
@@ -1629,49 +1616,49 @@ _DB_LIB_PROFILE = {
     },
     'auto_explain.log_settings': {
         'default': 'off',
-        'comment': "auto_explain.log_settings controls whether the current settings are printed when an execution plan "
+        'comment': 'auto_explain.log_settings controls whether the current settings are printed when an execution plan '
                    "is logged; it's equivalent to the SETTINGS option of EXPLAIN. This parameter has no effect unless "
-                   "auto_explain.log_analyze is enabled.",
+                   'auto_explain.log_analyze is enabled.',
     },
     'auto_explain.log_triggers': {
         'default': 'off',
-        'comment': "auto_explain.log_triggers controls whether trigger statistics are printed when an execution plan "
+        'comment': 'auto_explain.log_triggers controls whether trigger statistics are printed when an execution plan '
                    "is logged; it's equivalent to the TRIGGER option of EXPLAIN. This parameter has no effect unless "
-                   "auto_explain.log_analyze is enabled.",
+                   'auto_explain.log_analyze is enabled.',
     },
     'auto_explain.log_verbose': {
         'default': 'on',
-        'comment': "auto_explain.log_verbose controls whether the output of EXPLAIN VERBOSE is included in the "
-                   "auto_explain output. The default is on.",
+        'comment': 'auto_explain.log_verbose controls whether the output of EXPLAIN VERBOSE is included in the '
+                   'auto_explain output. The default is on.',
     },
     'auto_explain.log_format': {
         'default': 'text',
-        'comment': "auto_explain.log_format controls the format of the output of auto_explain. The allowed values are "
-                   "text, xml, json, and yaml.",
+        'comment': 'auto_explain.log_format controls the format of the output of auto_explain. The allowed values are '
+                   'text, xml, json, and yaml.',
     },
     'auto_explain.log_level': {
         'default': 'LOG',
-        'comment': "auto_explain.log_level controls the log level at which auto_explain messages are emitted. The "
-                   "allowed values are DEBUG5 to DEBUG1, INFO, NOTICE, WARNING, ERROR, LOG, FATAL, and PANIC.",
+        'comment': 'auto_explain.log_level controls the log level at which auto_explain messages are emitted. The '
+                   'allowed values are DEBUG5 to DEBUG1, INFO, NOTICE, WARNING, ERROR, LOG, FATAL, and PANIC.',
     },
     'auto_explain.log_timing': {
         'default': 'on',
-        'comment': "auto_explain.log_timing controls whether per-node timing information is printed when an execution "
+        'comment': 'auto_explain.log_timing controls whether per-node timing information is printed when an execution '
                    "plan is logged; it's equivalent to the TIMING option of EXPLAIN. The overhead of repeatedly "
-                   "reading the system clock can slow down queries significantly on some systems, so it may be useful "
-                   "to set this parameter to off when only actual row counts, and not exact times, are needed. This "
-                   "parameter has no effect unless auto_explain.log_analyze is enabled."
+                   'reading the system clock can slow down queries significantly on some systems, so it may be useful '
+                   'to set this parameter to off when only actual row counts, and not exact times, are needed. This '
+                   'parameter has no effect unless auto_explain.log_analyze is enabled.'
     },
     'auto_explain.log_nested_statements': {
         'default': 'off',
-        'comment': "auto_explain.log_nested_statements causes nested statements (statements executed inside a function) "
-                   "to be considered for logging. When it is off, only top-level query plans are logged.",
+        'comment': 'auto_explain.log_nested_statements causes nested statements (statements executed inside a function) '
+                   'to be considered for logging. When it is off, only top-level query plans are logged.',
     },
     'auto_explain.sample_rate': {
         'default': 1.0,
-        'comment': "auto_explain.sample_rate causes auto_explain to only explain a fraction of the statements in "
-                   "each session. The default is 1, meaning explain all the queries. In case of nested statements, "
-                   "either all will be explained or none.",
+        'comment': 'auto_explain.sample_rate causes auto_explain to only explain a fraction of the statements in '
+                   'each session. The default is 1, meaning explain all the queries. In case of nested statements, '
+                   'either all will be explained or none.',
     },
     # PG_STAT_STATEMENTS
     'pg_stat_statements.max': {
@@ -1681,35 +1668,35 @@ _DB_LIB_PROFILE = {
             'bigt_default': 20 * K10,
         },
         'default': 5 * K10,
-        'comment': "pg_stat_statements.max is the maximum number of statements tracked by the module (i.e., the "
-                   "maximum number of rows in the pg_stat_statements view). If more distinct statements than that are "
-                   "observed, information about the least-executed statements is discarded. The number of times such "
-                   "information was discarded can be seen in the pg_stat_statements_info view. Default to 5K, reached "
-                   "to 10-20K on large system.",
+        'comment': 'pg_stat_statements.max is the maximum number of statements tracked by the module (i.e., the '
+                   'maximum number of rows in the pg_stat_statements view). If more distinct statements than that are '
+                   'observed, information about the least-executed statements is discarded. The number of times such '
+                   'information was discarded can be seen in the pg_stat_statements_info view. Default to 5K, reached '
+                   'to 10-20K on large system.',
     },
     'pg_stat_statements.track': {
         'default': 'all',
-        'comment': "pg_stat_statements.track controls which statements are counted and reported in the pg_stat_statements "
-                   "view. The allowed values are none, top, and all. top tracks only the top-level statements executed "
-                   "by clients. all tracks all statements executed by clients. none disables tracking entirely. The "
-                   "default is top.",
+        'comment': 'pg_stat_statements.track controls which statements are counted and reported in the pg_stat_statements '
+                   'view. The allowed values are none, top, and all. top tracks only the top-level statements executed '
+                   'by clients. all tracks all statements executed by clients. none disables tracking entirely. The '
+                   'default is top.',
     },
     'pg_stat_statements.track_utility': {
         'default': 'on',
-        'comment': "pg_stat_statements.track_utility controls whether utility commands are tracked by the module. "
-                   "Utility commands are all those other than SELECT, INSERT, UPDATE, DELETE, and MERGE. Default to on",
+        'comment': 'pg_stat_statements.track_utility controls whether utility commands are tracked by the module. '
+                   'Utility commands are all those other than SELECT, INSERT, UPDATE, DELETE, and MERGE. Default to on',
     },
     'pg_stat_statements.track_planning': {
         'default': 'off',
-        'comment': "pg_stat_statements.track_planning controls whether planning operations and duration are tracked "
-                   "by the module. Enabling this parameter may incur a noticeable performance penalty, especially "
-                   "when statements with identical query structure are executed by many concurrent connections which "
-                   "compete to update a small number of pg_stat_statements entries.",
+        'comment': 'pg_stat_statements.track_planning controls whether planning operations and duration are tracked '
+                   'by the module. Enabling this parameter may incur a noticeable performance penalty, especially '
+                   'when statements with identical query structure are executed by many concurrent connections which '
+                   'compete to update a small number of pg_stat_statements entries.',
     },
     'pg_stat_statements.save': {
         'default': 'on',
-        'comment': "pg_stat_statements.save controls whether the statistics gathered by pg_stat_statements are saved "
-                   "across server shutdowns and restarts. Default to on.",
+        'comment': 'pg_stat_statements.save controls whether the statistics gathered by pg_stat_statements are saved '
+                   'across server shutdowns and restarts. Default to on.',
     },
 }
 

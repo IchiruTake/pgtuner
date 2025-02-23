@@ -196,7 +196,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         effective_cache_size = managed_cache['effective_cache_size']
 
         # WAL Times
-        wal_throughput = options.wal_spec.raid_perf()[0]
+        wal_throughput = options.wal_spec.perf()[0]
         wal_time_partial = partial(wal_time, wal_buffers=wal_buffers, wal_segment_size=_kwargs.wal_segment_size,
                                    wal_writer_delay_in_ms=managed_cache['wal_writer_delay'],
                                    wal_throughput=wal_throughput)
@@ -216,12 +216,12 @@ class PG_TUNE_RESPONSE(BaseModel):
             real_autovacuum_work_mem = min(1 * Gi, real_autovacuum_work_mem)
 
         # Checkpoint Timing
-        data_iops = options.data_index_spec.raid_perf()[1]
+        data_iops = options.data_index_spec.perf()[1]
         checkpoint_timeout = managed_cache['checkpoint_timeout']
         checkpoint_completion_target = managed_cache['checkpoint_completion_target']
         checkpoint_time_partial = partial(checkpoint_time, checkpoint_timeout_second=checkpoint_timeout,
                                           checkpoint_completion_target=checkpoint_completion_target,
-                                          wal_disk_tput=options.wal_spec.raid_perf()[0],
+                                          wal_disk_tput=options.wal_spec.perf()[0],
                                           data_disk_iops=data_iops, wal_buffers=wal_buffers,
                                           wal_segment_size=_kwargs.wal_segment_size)
         ckpt01 = checkpoint_time_partial(data_amount_ratio=_kwargs.wal_segment_size / wal_buffers)  # 1 WAL buffers

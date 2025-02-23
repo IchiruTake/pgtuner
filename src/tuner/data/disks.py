@@ -1,5 +1,5 @@
 import logging
-from functools import partial
+from functools import partial, cached_property
 from typing import Any
 
 from pydantic import BaseModel, Field, ByteSize, PositiveFloat, PositiveInt
@@ -120,20 +120,23 @@ class PG_DISK_PERF(BaseModel):
             self.random_iops_spec = _string_disk_to_iops(self.random_iops_spec)
         if isinstance(self.throughput_spec, str):
             self.throughput_spec = _string_disk_to_throughput(self.throughput_spec)
-
         pass
 
+    @cached_property
     def raid_scale_factor(self) -> PositiveFloat:
         return round(max(1.0, (self.num_disks - 1) * self.per_scale_in_raid + 1.0), 2)
 
+    @cached_property
     def single_perf(self) -> tuple[_SIZING, _SIZING]:
         s_tput = int(self.throughput_spec * self.throughput_scale_factor)
         s_iops = int(self.random_iops_spec * self.random_iops_scale_factor)
         return s_tput, s_iops
 
-    def raid_perf(self) -> tuple[_SIZING, _SIZING]:
-        s_tput, s_iops = self.single_perf()
-        return int(s_tput * self.raid_scale_factor()), int(s_iops * self.raid_scale_factor())
+    def perf(self) -> tuple[_SIZING, _SIZING]:
+        raid_scale_factor = self.raid_scale_factor
+        s_tput, s_iops = self.single_perf
+        # Add fastpath when number of disk/raid_scale_factor == 1 ???
+        return int(s_tput * raid_scale_factor), int(s_iops * raid_scale_factor)
 
     @staticmethod
     def iops_to_throughput(iops: int) -> int | float:

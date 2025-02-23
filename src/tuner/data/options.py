@@ -230,7 +230,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     # These are for anti-wraparound vacuum tuning
     database_size_in_gib: Annotated[
         int,
-        Field(default=10, ge=0, le=32 * Ki,
+        Field(default=0, ge=0, le=32 * Ki,
               description='The largest database size (in GiB). This value is used to estimate the maximum database '
                           'size for anti-wraparound vacuum. If this field is zero, the assumption is about 60 % usage '
                           'of the data volume. The supported range is [0, 32768], default is 10 (GiB); but its '
