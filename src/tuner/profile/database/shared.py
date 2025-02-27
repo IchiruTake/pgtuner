@@ -52,36 +52,29 @@ def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_se
     }
 
 def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target,
-                    wal_disk_tput: int, data_disk_iops: int,
-                    wal_buffers: ByteSize, data_amount_ratio: int | float, wal_segment_size: ByteSize) -> dict:
+                    shared_buffers: int, shared_buffers_ratio: float, effective_cache_size: int,
+                    max_wal_size: int, data_disk_iops: int) -> dict:
     # Validate the maximum number of times to complete the checkpoint
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
     checkpoint_duration = ceil(checkpoint_timeout_second * checkpoint_completion_target)  # Measured in seconds
-    data_disk_translated_tput = PG_DISK_PERF.iops_to_throughput(data_disk_iops) # Measured in MiB/s
-    data_disk_max_mib_written = data_disk_translated_tput * checkpoint_duration
+    data_tran_tput = PG_DISK_PERF.iops_to_throughput(data_disk_iops) # Measured in MiB/s
+    data_max_mib_written = data_tran_tput * checkpoint_duration
 
-    data_amount = int(wal_buffers * data_amount_ratio)  # Measured in bytes
+    data_amount = int(shared_buffers * shared_buffers_ratio)  # Measured in bytes
+    data_amount = min(data_amount, effective_cache_size, max_wal_size)  # Measured in bytes
     page_amount: int = floor(data_amount / DB_PAGE_SIZE)
-    wal_amount: int = floor(data_amount / wal_segment_size)
-
-    wal_read_time: int = floor((data_amount / Mi) / wal_disk_tput)  # Measured in seconds
-    wal_disk_utilization = wal_read_time / checkpoint_duration
-
-    data_write_time: int = floor((data_amount / Mi) / data_disk_translated_tput)  # Measured in seconds
+    data_write_time: int = floor((data_amount / Mi) / data_tran_tput)  # Measured in seconds
     data_disk_utilization = data_write_time / checkpoint_duration
 
     return {
         'checkpoint_duration': checkpoint_duration,
-        'data_disk_translated_tput': data_disk_translated_tput,
-        'data_disk_max_mib_written': data_disk_max_mib_written,
+        'data_disk_translated_tput': data_tran_tput,
+        'data_disk_max_mib_written': data_max_mib_written,
 
         'data_amount': data_amount,
         'page_amount': page_amount,
-        'wal_amount': wal_amount,
 
-        'wal_read_time': wal_read_time,
-        'wal_disk_utilization': wal_disk_utilization,
         'data_write_time': data_write_time,
         'data_disk_utilization': data_disk_utilization,
     }
@@ -144,14 +137,11 @@ def vacuum_scale(threshold: int, scale_factor: float) -> dict:
     # Table Size (medium): 300K rows
     dead_at_300k = _fn(300_000)
 
-    # Table Size (large): 5M rows
-    dead_at_5m = _fn(5_000_000)
-
-    # Table Size (huge): 25M rows
-    dead_at_25m = _fn(25_000_000)
+    # Table Size (large): 10M rows
+    dead_at_10m = _fn(10_000_000)
 
     # Table Size (giant): 300M rows
-    dead_at_400m = _fn(300_000_000)
+    dead_at_100m = _fn(100_000_000)
 
     # Table Size (huge): 1B rows
     dead_at_1b = _fn(1_000_000_000)
@@ -163,17 +153,15 @@ def vacuum_scale(threshold: int, scale_factor: float) -> dict:
             f'exceeds {threshold * scale_factor} tuples.'
             f'\n-> Table Size: 10K rows -> Dead Tuples: {dead_at_10k} tuples'
             f'\n-> Table Size: 300K rows -> Dead Tuples: {dead_at_300k} tuples'
-            f'\n-> Table Size: 5M rows -> Dead Tuples: {dead_at_5m} tuples'
-            f'\n-> Table Size: 25M rows -> Dead Tuples: {dead_at_25m} tuples'
-            f'\n-> Table Size: 300M rows -> Dead Tuples: {dead_at_400m} tuples'
+            f'\n-> Table Size: 5M rows -> Dead Tuples: {dead_at_10m} tuples'
+            f'\n-> Table Size: 100M rows -> Dead Tuples: {dead_at_100m} tuples'
             f'\n-> Table Size: 1B rows -> Dead Tuples: {dead_at_1b} tuples'
             f'\n-> Table Size: 10B rows -> Dead Tuples: {dead_at_10b} tuples')
     return {
         '10k': dead_at_10k,
         '300k': dead_at_300k,
-        '5m': dead_at_5m,
-        '25m': dead_at_25m,
-        '400m': dead_at_400m,
+        '10m': dead_at_10m,
+        '100m': dead_at_100m,
         '1b': dead_at_1b,
         '10b': dead_at_10b,
         'msg': _msg

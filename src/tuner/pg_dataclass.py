@@ -221,14 +221,14 @@ class PG_TUNE_RESPONSE(BaseModel):
         checkpoint_completion_target = managed_cache['checkpoint_completion_target']
         checkpoint_time_partial = partial(checkpoint_time, checkpoint_timeout_second=checkpoint_timeout,
                                           checkpoint_completion_target=checkpoint_completion_target,
-                                          wal_disk_tput=options.wal_spec.perf()[0],
-                                          data_disk_iops=data_iops, wal_buffers=wal_buffers,
-                                          wal_segment_size=_kwargs.wal_segment_size)
-        ckpt01 = checkpoint_time_partial(data_amount_ratio=_kwargs.wal_segment_size / wal_buffers)  # 1 WAL buffers
-        ckpt50 = checkpoint_time_partial(data_amount_ratio=5.0)
-        ckpt500 = checkpoint_time_partial(data_amount_ratio=50.0)
-        ckpt2500 = checkpoint_time_partial(data_amount_ratio=250.0)
-        ckpt10k = checkpoint_time_partial(data_amount_ratio=1000.0)
+                                          data_disk_iops=data_iops * 0.7, shared_buffers=shared_buffers,
+                                          effective_cache_size=effective_cache_size,
+                                          max_wal_size=managed_cache['max_wal_size'])
+        ckpt05 = checkpoint_time_partial(shared_buffers_ratio=0.05)
+        ckpt10 = checkpoint_time_partial(shared_buffers_ratio=0.10)
+        ckpt30 = checkpoint_time_partial(shared_buffers_ratio=0.30)
+        ckpt60 = checkpoint_time_partial(shared_buffers_ratio=0.60)
+        ckpt95 = checkpoint_time_partial(shared_buffers_ratio=0.95)
 
         # Background Writers
         bgwriter_page_per_second = ceil(managed_cache['bgwriter_lru_maxpages'] * (K10 / managed_cache['bgwriter_delay']))
@@ -317,32 +317,29 @@ Report Summary (memory, over usable RAM):
 Report Summary (others):
 ----------------------- 
 * Maintenance and (Auto-)Vacuum:
-    - Autovacuum working memory (by definition): {managed_cache['autovacuum_work_mem']} --> Maintenance Work Mem: {bytesize_to_hr(managed_cache['maintenance_work_mem'])}
-        + Autovacuum working memory on 1 worker: {bytesize_to_hr(real_autovacuum_work_mem)}
-        + Autovacuum max workers: {managed_cache['autovacuum_max_workers']}
-        + Autovacuum total memory: {bytesize_to_hr(real_autovacuum_work_mem * managed_cache['autovacuum_max_workers'])} or {real_autovacuum_work_mem * managed_cache['autovacuum_max_workers'] / usable_ram_noswap * 100:.2f} (%)
-        + Parallelism:
-            -> Maintenance workers: {managed_cache['max_parallel_maintenance_workers']}
-            -> Maintenance total memory: {bytesize_to_hr(managed_cache['maintenance_work_mem'] * managed_cache['max_parallel_maintenance_workers'])} or {managed_cache['maintenance_work_mem'] * managed_cache['max_parallel_maintenance_workers'] / usable_ram_noswap * 100:.2f} (%)
-            -> Parallel table scan size: {bytesize_to_hr(managed_cache['min_parallel_table_scan_size'])}
-            -> Parallel index scan size: {bytesize_to_hr(managed_cache['min_parallel_index_scan_size'])}
-    - Normal Vacuum at Table Size:
-        + Threshold and Scale Factor for Normal Vacuum:
-            -> Vacuum  :: Scale Factor={managed_cache['autovacuum_vacuum_scale_factor'] * 100} (%) :: Threshold={managed_cache['autovacuum_vacuum_threshold']}
-            -> Analyze :: Scale Factor={managed_cache['autovacuum_analyze_scale_factor'] * 100} (%) :: Threshold={managed_cache['autovacuum_analyze_threshold']}
-            -> Insert  :: Scale Factor={managed_cache['autovacuum_vacuum_insert_scale_factor'] * 100} (%) :: Threshold={managed_cache['autovacuum_vacuum_insert_threshold']}
-            Report when number of dead tuples is reached:
-            -> 10K rows :: Vacuum={normal_vacuum['10k']} :: Insert/Analyze={normal_analyze['10k']}
-            -> 300K rows :: Vacuum={normal_vacuum['300k']} :: Insert/Analyze={normal_analyze['300k']}
-            -> 5M rows :: Vacuum={normal_vacuum['5m']} :: Insert/Analyze={normal_analyze['5m']}
-            -> 25M rows :: Vacuum={normal_vacuum['25m']} :: Insert/Analyze={normal_analyze['25m']}
-            -> 400M rows :: Vacuum={normal_vacuum['400m']} :: Insert/Analyze={normal_analyze['400m']}
-            -> 1B rows :: Vacuum={normal_vacuum['1b']} :: Insert/Analyze={normal_analyze['1b']}
-    - Normal Vacuum:
+    - Autovacuum (by definition): {managed_cache['autovacuum_work_mem']}
+        + Working memory per worker: {bytesize_to_hr(real_autovacuum_work_mem)}
+        + Max Workers: {managed_cache['autovacuum_max_workers']} --> Total Memory: {bytesize_to_hr(real_autovacuum_work_mem * managed_cache['autovacuum_max_workers'])} or {real_autovacuum_work_mem * managed_cache['autovacuum_max_workers'] / usable_ram_noswap * 100:.2f} (%)
+    - Maintenance:
+        + Max Workers: {managed_cache['max_parallel_maintenance_workers']}
+        + Total Memory: {bytesize_to_hr(managed_cache['maintenance_work_mem'] * managed_cache['max_parallel_maintenance_workers'])} or {managed_cache['maintenance_work_mem'] * managed_cache['max_parallel_maintenance_workers'] / usable_ram_noswap * 100:.2f} (%)
+        + Parallel table scan size: {bytesize_to_hr(managed_cache['min_parallel_table_scan_size'])}
+        + Parallel index scan size: {bytesize_to_hr(managed_cache['min_parallel_index_scan_size'])}
+    - Autovacuum Trigger (table-level):
+        + Vacuum  :: Scale Factor={managed_cache['autovacuum_vacuum_scale_factor'] * 100} (%) :: Threshold={managed_cache['autovacuum_vacuum_threshold']}
+        + Analyze :: Scale Factor={managed_cache['autovacuum_analyze_scale_factor'] * 100} (%) :: Threshold={managed_cache['autovacuum_analyze_threshold']}
+        + Insert  :: Scale Factor={managed_cache['autovacuum_vacuum_insert_scale_factor'] * 100} (%) :: Threshold={managed_cache['autovacuum_vacuum_insert_threshold']}
+        Report when number of dead tuples is reached:
+        + 10K rows :: Vacuum={normal_vacuum['10k']} :: Insert/Analyze={normal_analyze['10k']}
+        + 300K rows :: Vacuum={normal_vacuum['300k']} :: Insert/Analyze={normal_analyze['300k']}
+        + 10M rows :: Vacuum={normal_vacuum['10m']} :: Insert/Analyze={normal_analyze['10m']}
+        + 100M rows :: Vacuum={normal_vacuum['100m']} :: Insert/Analyze={normal_analyze['100m']}
+        + 1B rows :: Vacuum={normal_vacuum['1b']} :: Insert/Analyze={normal_analyze['1b']}
+    - Cost-based Vacuum:
         + Page Cost Relative Factor :: Hit={managed_cache['vacuum_cost_page_hit']} :: Miss={managed_cache['vacuum_cost_page_miss']} :: Dirty/Disk={managed_cache['vacuum_cost_page_dirty']}
         + Autovacuum cost: {managed_cache['autovacuum_vacuum_cost_limit']} --> Vacuum cost: {managed_cache['vacuum_cost_limit']}
         + Autovacuum delay: {managed_cache['autovacuum_vacuum_cost_delay']} (ms) --> Vacuum delay: {managed_cache['vacuum_cost_delay']} (ms)
-        + IOPS Spent: {data_iops * _kwargs.autovacuum_utilization_ratio:.1f} pages or {PG_DISK_PERF.iops_to_throughput(data_iops * _kwargs.autovacuum_utilization_ratio):.2f} MiB/s
+        + IOPS Spent: {data_iops * _kwargs.autovacuum_utilization_ratio:.1f} pages or {PG_DISK_PERF.iops_to_throughput(data_iops * _kwargs.autovacuum_utilization_ratio):.1f} MiB/s
         + Vacuum Report on Worst Case Scenario:
             We safeguard against WRITE since most READ in production usually came from RAM/cache before auto-vacuuming, 
             but not safeguard against pure, zero disk read.
@@ -364,62 +361,43 @@ Report Summary (others):
     - Transaction (Tran) ID Wraparound and Anti-Wraparound Vacuum:
         + Workload Write Transaction per Hour: {num_hourly_write_transaction}
         + TXID Vacuum :: Minimum={min_hr_txid:.2f} hrs :: Manual={norm_hr_txid:.2f} hrs :: Auto-forced={max_hr_txid:.2f} hrs
-        + XMIN,XMAX Vacuum :: Minimum={min_hr_row_lock:.2f} hrs :: Manual={norm_hr_row_lock:.2f} hrs :: Auto-forced={max_hr_row_lock:.2f} hrs     
-        + DON'T USE our 'wraparound' vacuum settings (best to stick with OnGres recommendation or even PostgreSQL default) unless all our important guideline are followed:
-            -> [IMPORTANT] Identify application queries, use-case and optimize transaction patterns by concern separation of READ and WRITE trans/conns/sessions: 
-                # https://www.postgresql.org/docs/current/sql-set-transaction.html
-                SET TRANSACTION READ ONLY; # at the beginning of (sub-)transactions to minimize xid consumption on READ queries
-            -> Minimize the number of operations, sub-transaction within a single transaction to prevent row/page/tran locking, which could increase un-necessary use of xmin/xmax; and hanging transactions
-            -> Apply caching or materialized views or CTEs for better performance with minimal transactions.
-            -> Proper monitoring setup and quick response, especially the increment of xid/xmin/xmax
-            -> Estimate properly your client's scope and disk strength (on data/index volume) to be able to handle aggressive vacuuming with zero to minimal impact on the application performance.
-            -> Estimate correctly the number of WRITE transactions per HOUR or even per DAY (and divide by 24).
-            -> Use pg_cron or similar tool to perform regular vacuuming and maintenance based on your business requirements.
+        + XMIN,XMAX Vacuum :: Minimum={min_hr_row_lock:.2f} hrs :: Manual={norm_hr_row_lock:.2f} hrs :: Auto-forced={max_hr_row_lock:.2f} hrs
         
 * Background Writers:
     - Delay: {managed_cache['bgwriter_delay']} (ms) for maximum {managed_cache['bgwriter_lru_maxpages']} dirty pages
-        + {bgwriter_page_per_second} pages per second or {bgwriter_throughput} MiB/s in random WRITE IOPs
+        + {bgwriter_page_per_second} pages per second or {bgwriter_throughput:.1f} MiB/s in random WRITE IOPs
 
+* Checkpoint:
+    - Effective Timeout: {checkpoint_timeout * checkpoint_completion_target:.1f} seconds ({checkpoint_timeout}::{checkpoint_completion_target})
+    - Analyze Checkpoint Time (ensure the checkpoint can be written within the timeout and ignore dirty buffers on-the-go):
+        + 5% of shared_buffers:
+            -> Data Amount: {bytesize_to_hr(ckpt05['data_amount'])} :: {ckpt05['page_amount']} pages
+            -> Expected Time: {ckpt05['data_write_time']} seconds with {ckpt05['data_disk_utilization'] * 100:.2f} (%) utilization
+            -> Safe Test :: Time-based Check <- {ckpt05['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}
+        + 10% of shared_buffers:
+            -> Data Amount: {bytesize_to_hr(ckpt10['data_amount'])} :: {ckpt10['page_amount']} pages
+            -> Expected Time: {ckpt10['data_write_time']} seconds with {ckpt10['data_disk_utilization'] * 100:.2f} (%) utilization
+            -> Safe Test :: Time-based Check <- {ckpt10['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}
+        + 30% of shared_buffers:
+            -> Data Amount: {bytesize_to_hr(ckpt30['data_amount'])} :: {ckpt30['page_amount']} pages
+            -> Expected Time: {ckpt30['data_write_time']} seconds with {ckpt30['data_disk_utilization'] * 100:.2f} (%) utilization
+            -> Safe Test :: Time-based Check <- {ckpt30['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}
+        + 60% of shared_buffers:
+            -> Data Amount: {bytesize_to_hr(ckpt60['data_amount'])} :: {ckpt60['page_amount']} pages
+            -> Expected Time: {ckpt60['data_write_time']} seconds with {ckpt60['data_disk_utilization'] * 100:.2f} (%) utilization
+            -> Safe Test :: Time-based Check <- {ckpt60['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}    
+        + 95% of shared_buffers:
+            -> Data Amount: {bytesize_to_hr(ckpt95['data_amount'])} :: {ckpt95['page_amount']} pages
+            -> Expected Time: {ckpt95['data_write_time']} seconds with {ckpt95['data_disk_utilization'] * 100:.2f} (%) utilization
+            -> Safe Test :: Time-based Check <- {ckpt95['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}   
+     
 * Query Planning and Optimization:
     - Page Cost :: Sequential={managed_cache['seq_page_cost']:.2f} :: Random={managed_cache['random_page_cost']:.2f}
     - CPU Cost :: Tuple={managed_cache['cpu_tuple_cost']:.4f} :: Index={managed_cache['cpu_index_tuple_cost']:.4f} :: Operator={managed_cache['cpu_operator_cost']:.4f}
     - Bitmap Heap Planning :: Workload={managed_cache['effective_io_concurrency']:} :: Maintenance={managed_cache['maintenance_io_concurrency']:}
     - Parallelism :: Setup={managed_cache['parallel_setup_cost']} :: Tuple={managed_cache['parallel_tuple_cost']:.2f}
     - Batched Commit Delay: {managed_cache['commit_delay']} (ms)
-    - Checkpoint: 
-        + Effective Timeout: {checkpoint_timeout * checkpoint_completion_target:.1f} seconds ({checkpoint_timeout}::{checkpoint_completion_target})
-        + Analyze Checkpoint Time (ensure the checkpoint can be written within the timeout and ignore dirty buffers on-the-go):
-            -> 1 WAL file:
-                * Data Amount: {bytesize_to_hr(ckpt01['data_amount'])} :: {ckpt01['page_amount']} pages :: {ckpt01['wal_amount']} WAL files
-                * Expected Time:
-                    - READ: {ckpt01['wal_read_time']} seconds with {ckpt01['wal_disk_utilization'] * 100:.2f} (%) utilization
-                    - WRITE: {ckpt01['data_write_time']} seconds with {ckpt01['data_disk_utilization'] * 100:.2f} (%) utilization
-                * Safe Test :: Time-based Check <- {ckpt01['data_write_time'] + ckpt01['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}            
-            -> 5.0x WAL Buffers (General):
-                * Data Amount: {bytesize_to_hr(ckpt50['data_amount'])} :: {ckpt50['page_amount']} pages :: {ckpt50['wal_amount']} WAL files
-                * Expected Time:
-                    - READ: {ckpt50['wal_read_time']} seconds with {ckpt50['wal_disk_utilization'] * 100:.2f} (%) utilization
-                    - WRITE: {ckpt50['data_write_time']} seconds with {ckpt50['data_disk_utilization'] * 100:.2f} (%) utilization
-                * Safe Test :: Time-based Check <- {ckpt50['data_write_time'] + ckpt50['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
-            -> 50.0x WAL Buffers (Heavy):
-                * Data Amount: {bytesize_to_hr(ckpt500['data_amount'])} :: {ckpt500['page_amount']} pages :: {ckpt500['wal_amount']} WAL files
-                * Expected Time:
-                    - READ: {ckpt500['wal_read_time']} seconds with {ckpt500['wal_disk_utilization'] * 100:.2f} (%) utilization
-                    - WRITE: {ckpt500['data_write_time']} seconds with {ckpt500['data_disk_utilization'] * 100:.2f} (%) utilization
-                * Safe Test :: Time-based Check <- {ckpt500['data_write_time'] + ckpt500['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
-            -> 250.0x WAL Buffers (Extreme):
-                * Data Amount: {bytesize_to_hr(ckpt2500['data_amount'])} :: {ckpt2500['page_amount']} pages :: {ckpt2500['wal_amount']} WAL files
-                * Expected Time:
-                    - READ: {ckpt2500['wal_read_time']} seconds with {ckpt2500['wal_disk_utilization'] * 100:.2f} (%) utilization
-                    - WRITE: {ckpt2500['data_write_time']} seconds with {ckpt2500['data_disk_utilization'] * 100:.2f} (%) utilization
-                * Safe Test :: Time-based Check <- {ckpt2500['data_write_time'] + ckpt2500['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
-            -> 1000.0x WAL Buffers (Crazy to Insane):
-                * Data Amount: {bytesize_to_hr(ckpt10k['data_amount'])} :: {ckpt10k['page_amount']} pages :: {ckpt10k['wal_amount']} WAL files
-                * Expected Time:
-                    - READ: {ckpt10k['wal_read_time']} seconds with {ckpt10k['wal_disk_utilization'] * 100:.2f} (%) utilization
-                    - WRITE: {ckpt10k['data_write_time']} seconds with {ckpt10k['data_disk_utilization'] * 100:.2f} (%) utilization
-                * Safe Test :: Time-based Check <- {ckpt10k['data_write_time'] + ckpt10k['wal_read_time'] <= checkpoint_timeout * checkpoint_completion_target}
-                
+       
 * Write-Ahead Logging and Data Integrity:
     - WAL Level: {managed_cache['wal_level']} with {managed_cache['wal_compression']} compression algorithm 
     - WAL Segment Size (1 file): {bytesize_to_hr(_kwargs.wal_segment_size)}

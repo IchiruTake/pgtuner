@@ -460,67 +460,46 @@ _DB_VACUUM_PROFILE = {
     },
     # Threshold: For the information, I would use the [08] as the base optimization profile and could be applied
     # on most scenarios, except that you are having an extremely large table where 0.1% is too large.
-    'autovacuum_vacuum_threshold; autovacuum_vacuum_insert_threshold': {
+    'autovacuum_vacuum_threshold; autovacuum_vacuum_insert_threshold; autovacuum_analyze_threshold': {
         'instructions': {
-            'mini_default': 200,
+            'mini_default': K10 // 2,
         },
         'hardware_scope': 'overall',
-        'default': K10,
-        'comment': "Specifies the minimum number of updated or deleted tuples, inserted tuples (usually single INSERT"
-                   "command in transaction) needed to trigger a VACUUM in any one table. Default is 1K tuples "
-                   "and 1K-3K tuples on a larger system.",
+        'default': 2 * K10,
+        'comment': 'Specifies the minimum number of updated or deleted tuples, inserted tuples (usually single INSERT'
+                   'command in transaction) needed to trigger a VACUUM in any one table. Default is 2K tuples. For '
+                   'ANALYZE operation, the ANALYZE is usually fast since it only sample when threshold met and sample '
+                   'at randomly `300 * default_statistics_target` rows . ',
     },
-    'autovacuum_vacuum_scale_factor; autovacuum_vacuum_insert_scale_factor': {
+    'autovacuum_vacuum_scale_factor; autovacuum_vacuum_insert_scale_factor; autovacuum_analyze_scale_factor': {
         'instructions': {
             'mini_default': 0.010,
             'mall_default': 0.002,
-            'bigt_default': 0.001,
+            'bigt_default': 0.002,
         },
         'hardware_scope': 'overall',
         'default': 0.005,
         'comment': 'Specifies a fraction of the table size to add to autovacuum_vacuum_threshold when deciding whether '
-                   'to trigger a VACUUM. Default is 0.005 (or 0.5%); and can be reduced to 0.1% on an extreme '
+                   'to trigger a VACUUM. Default is 0.005 (or 0.5%); and can be reduced to 0.2% on an extreme '
                    'large system',
-    },
-    'autovacuum_analyze_threshold': {
-        'instructions': {
-            'mini_default': 200,
-        },
-        'hardware_scope': 'overall',
-        'default': 2 * K10,
-        'comment': "Specifies the minimum number of changed tuples needed to trigger a VACUUM in any one table. "
-                   "Default is 2K tuples since by PostgreSQL, the ANALYZE is usually fast since it only sample "
-                   "when threshold met and sample at randomly `300 * default_statistics_target` rows .",
-    },
-    'autovacuum_analyze_scale_factor': {
-        'instructions': {
-            'mini_default': 0.020,
-            'mall_default': 0.002,
-            'bigt_default': 0.001,
-        },
-        'hardware_scope': 'overall',
-        'default': 0.0075,
-        'comment': "Specifies a fraction of the table size to add to autovacuum_vacuum_insert_threshold when deciding "
-                   "whether to trigger a ANALYZE. Default is 0.0075 (or 0.75%); and can be reduced to 0.1% on an "
-                   "extreme large system.",
     },
     # Cost Delay, Limit
     'autovacuum_vacuum_cost_delay': {
         'default': 2,
-        'comment': "Specifies the cost delay value that will be used in automatic VACUUM operations. If -1 is "
-                   "specified, the regular vacuum_cost_delay value will be used. The default value is 2 milliseconds "
-                   "to follow the official PostgreSQL documentation. With 2ms value, it meant that the wake-up "
-                   "operation costs 2ms, resulting in a 500 wake-up per second. See [10] for more information. We "
-                   "want auto-vacuum behave same with manual vacuum but different delay.",
+        'comment': 'Specifies the cost delay value that will be used in automatic VACUUM operations. If -1 is '
+                   'specified, the regular vacuum_cost_delay value will be used. The default value is 2 milliseconds '
+                   'to follow the official PostgreSQL documentation. With 2ms value, it meant that the wake-up '
+                   'operation costs 2ms, resulting in a 500 wake-up per second. See [10] for more information. We '
+                   'want auto-vacuum behave same with manual vacuum but different delay.',
         'partial_func': lambda value: f'{value}ms' if isinstance(value, int) else f'{value:.4f}ms',
     },
     'autovacuum_vacuum_cost_limit': {
         'default': -1,
-        'comment': "Specifies the cost limit value that will be used in automatic VACUUM operations. If -1 is specified "
-                   "(which is the default), the regular vacuum_cost_limit value will be used. Note that the value is "
-                   "distributed proportionally among the running autovacuum workers, if there is more than one, so that "
-                   "the sum of the limits for each worker does not exceed the value of this variable. In our tuning"
-                   "model, we would focus on the vacuum_cost_limit instead.",
+        'comment': 'Specifies the cost limit value that will be used in automatic VACUUM operations. If -1 is specified '
+                   '(which is the default), the regular vacuum_cost_limit value will be used. Note that the value is '
+                   'distributed proportionally among the running autovacuum workers, if there is more than one, so that '
+                   'the sum of the limits for each worker does not exceed the value of this variable. In our tuning'
+                   'model, we would focus on the vacuum_cost_limit instead.',
     },
     'vacuum_cost_delay': {
         'default': 0,
@@ -707,6 +686,18 @@ _DB_ASYNC_DISK_PROFILE = {
                    "of many client sessions. The default is 10 on supported systems, otherwise 0. During maintenance, "
                    "since the operation is mostly involved in sequential disk read and write during vacuuming and "
                    "index creation; thus, increasing this value may not benefit much.",
+    },
+    'backend_flush_after': {
+        'default': 0,
+        'comment': 'Whenever more than backend_flush_after bytes have been written by a single backend, attempt to '
+                   'force the OS to issue these writes to the underlying storage. Doing so will limit the amount of '
+                   "dirty data in the kernel's page cache, reducing the likelihood of stalls when an fsync is issued "
+                   'at the end of a checkpoint, or when the OS writes data back in larger batches in the background. '
+                   'Often that will result in greatly reduced transaction latency, but there also are some cases, '
+                   "especially with workloads that are bigger than shared_buffers, but smaller than the OS's page "
+                   'cache, where performance might degrade. This setting may have no effect on some platforms. The '
+                   'valid range is between 0, which disables forced writeback, and 2MB. The default is 0, i.e., no '
+                   'forced writeback. ',
     },
 }
 

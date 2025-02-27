@@ -351,21 +351,22 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
 
     # Display the content and perform memory testing validation
+    exclude_names = ['archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
+                     'log_directory']
     if request.ignore_non_performance_setting:
-        exclude_names = {
-            'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command', 'log_directory',
-            'statement_timeout', 'lock_timeout', 'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout',
-            'archive_timeout', 'log_line_prefix',
-        }
-    else:
-        exclude_names = {
-            'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command', 'log_directory',
-        }
+        exclude_names.extend(['statement_timeout', 'lock_timeout', 'deadlock_timeout', 'transaction_timeout',
+                              'idle_session_timeout', 'log_line_prefix'])
+
+    if backend_request.options.operating_system == 'windows':
+        exclude_names.extend(['checkpoint_flush_after', 'bgwriter_flush_after', 'wal_writer_flush_after',
+                              'backend_flush_after'])
+
+
     content = response.generate_content(
         target=PGTUNER_SCOPE.DATABASE_CONFIG,
         request=backend_request,
         output_format=request.output_format,
-        exclude_names=exclude_names,
+        exclude_names=set(exclude_names),
         backup_settings=False, # request.backup_settings,
     )
     mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,

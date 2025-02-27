@@ -385,7 +385,9 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         _database_limit = ceil((self.data_index_spec.disk_usable_size / Gi) * 0.90)
         if self.database_size_in_gib == 0:
             _logger.warning('The database size is set to 0 GiB. The database size is estimated to be 60% of the data '
-                            'volume.')
+                            'volume, which is a common but highest amount of data I observed in general. Even for '
+                            'TiB-scaled data, in usual they add in 1 TiB storage every review interval (1-3 years) '
+                            'depending on use-case and growth (not accounting media files such as images or videos).')
             self.database_size_in_gib = ceil((self.data_index_spec.disk_usable_size / Gi) * 0.60)
         if self.database_size_in_gib > _database_limit:
             _logger.warning(f'The database size {self.database_size_in_gib} GiB is larger than the data volume. The '
