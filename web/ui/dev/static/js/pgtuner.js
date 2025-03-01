@@ -70,9 +70,6 @@ function ram_calculator() {
     const final_ram = total_ram - kernel_memory - monitoring_memory;
     const postgresql_ram_available_block = document.getElementById("total_usable_ram");
     postgresql_ram_available_block.value = final_ram;
-    if (final_ram < 2048) {
-        alert('The remaining memory is less than 2 GiB. It is recommended to increase the total RAM of your server, or switch to a more lightweight monitoring system, kernel usage, or even the operating system. The tuning could be inaccurate.');
-    }
     // We already have a stronger backend validation with Pydantic so we don't need to check it here
     return final_ram;
 }
