@@ -8,8 +8,7 @@ You can experience our on-demand tool under the URL https://pgtuner.onrender.com
 
 ## How tuning works?
 
-The tuning works by analyzing your provided workload model, its sizing, hardware specification (CPU, RAM, Disk, ...), and apply corresponding tuning profiles to optimize them. The tuning consists of two phases: general tuning and correction tuning. The first phase is to directly apply the generic tuning guidelines (usually from the Internet) with some simple 
-adjustments based on your simplest provided configuration into the pool of consideration. The second phase if the fine-tuning process, aiming to delegate and honor your specific requirements, such as workload type, disk sizing, some user-defined configuration, free tuning headroom, risk level, etc. However, not everything can be covered as the database requirements can be changed over time, storage capacity, business changes, hardware degradation; and especially, the tuning is not a silver bullet.
+The tuning works by analyzing your provided workload model, its sizing, hardware specification (CPU, RAM, Disk, ...), and apply corresponding tuning profiles to optimize them. The tuning consists of two phases: general tuning and correction tuning. The first phase is to directly apply the generic tuning guidelines (usually from the Internet) with some simple adjustments based on your simplest provided configuration into the pool of consideration. The second phase if the fine-tuning process, aiming to delegate and honor your specific requirements, such as workload type, disk sizing, some user-defined configuration, free tuning headroom, risk level, etc. However, not everything can be covered as the database requirements can be changed over time, storage capacity, business changes, hardware degradation; and especially, the tuning is not a silver bullet.
 
 ## DISCLAIMER
 

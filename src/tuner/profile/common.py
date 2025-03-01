@@ -1,5 +1,9 @@
 """
-This contains some common functions during the general tuning
+This contains some common functions during the general tuning, which is used to perform the validation and
+modification of the profile data. The functions are:
+- merge_extra_info_to_profile: Merge the extra information into the profile data.
+- type_validation: Perform the type validation for the profile data.
+- rewrite_items: Drop the deprecated items from the profile data.
 
 """
 import logging

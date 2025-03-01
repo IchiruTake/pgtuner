@@ -2,6 +2,7 @@
     <h4 class="mb-3">Data Integrity, Transaction Efficiency, Crash Recovery, and Replication</h4>
     <div class="row">
         <!-- Data Integrity with Tools and Replication -->
+        <!-- max_backup_replication_tool -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="max_backup_replication_tool"> Max Level of Backup & Replication Tool </label>
@@ -18,6 +19,7 @@
                 <option value="pg_logical">3: pg_logical and alike: Logical replication</option>
             </select>
         </div>
+        <!-- opt_transaction_lost -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="opt_transaction_lost">Transaction Optimization Profile </label>
@@ -34,6 +36,7 @@
                 <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
             </select>
         </div>
+        <!-- opt_wal_buffers -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="opt_wal_buffers">WAL Buffer Optimization Profile </label>
@@ -50,6 +53,7 @@
                 <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
             </select>
         </div>
+        <!-- max_num_stream_replicas_on_primary -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="max_num_stream_replicas_on_primary">
@@ -70,6 +74,7 @@
                        onchange="syncNumberToSlider('max_num_stream_replicas_on_primary')">
             </div>
         </div>
+        <!-- max_num_logical_replicas_on_primary -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="max_num_logical_replicas_on_primary">
@@ -90,6 +95,7 @@
                        onchange="syncNumberToSlider('max_num_logical_replicas_on_primary')">
             </div>
         </div>
+        <!-- max_time_transaction_loss_allow_in_millisecond -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="max_time_transaction_loss_allow_in_millisecond">
@@ -111,22 +117,7 @@
                        onchange="syncNumberToSlider('max_time_transaction_loss_allow_in_millisecond')">
             </div>
         </div>
-        <div class="col-4 mb-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label" for="repurpose_wal_buffers">
-                    Transfer WAL buffers to Working Memory
-                </label>
-                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                   data-bs-content="Set to True (default) would take the difference of WAL buffers before the general tuning and correction tuning to be used in temp_buffers and work_mem, by increasing its pool size. This argument is only visible when your WAL buffers is reduced because the WAL volume cannot handle transaction loss ontime."
-                   title="Transfer WAL buffers to Working Memory">
-                </i>
-            </div>
-            <div class="d-flex align-items-center form-check form-switch">
-                <input class="form-check-input" type="checkbox" role="switch" id="repurpose_wal_buffers" checked >
-                <label class="form-check-label px-3" for="repurpose_wal_buffers">Yes</label>
-            </div>
-        </div>
+        <!-- offshore_replication -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="offshore_replication">

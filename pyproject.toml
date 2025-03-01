@@ -2,7 +2,7 @@
 # https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#writing-pyproject-toml
 [project]
 name = "my_project"
-version = "0.1.3"
+version = "0.1.4"
 description = "pgtuner: Optimize your PostgreSQL as a pro"
 readme = "README.md"
 requires-python = ">=3.12"

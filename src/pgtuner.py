@@ -139,13 +139,12 @@ _DB_LOG_DISK_STRING_CODE = 'hddv1'
 def make_disk(disk_string_code_throughput: str = _OS_DB_DISK_STRING_CODE,
               disk_string_code_rand_iops: str = _OS_DB_DISK_STRING_CODE,
               num_disks: PositiveInt = 1, disk_usable_size: _SIZING = 500 * Gi,
-              read_random_iops_spec: _SIZING | str = None, write_random_iops_spec: _SIZING | str = None,
-              random_iops_scale_factor: PositiveFloat = 0.9, read_throughput_spec: _SIZING | str = None,
-              write_throughput_spec: _SIZING | str = None, throughput_scale_factor: PositiveFloat = 0.9,
+              random_iops_spec: _SIZING | str = None, random_iops_scale_factor: PositiveFloat = 0.9,
+              throughput_spec: _SIZING | str = None, throughput_scale_factor: PositiveFloat = 0.9,
               per_scale_in_raid: PositiveFloat = 0.75) -> PG_DISK_PERF:
-    return PG_DISK_PERF(random_iops_spec=read_random_iops_spec or disk_string_code_rand_iops,
+    return PG_DISK_PERF(random_iops_spec=random_iops_spec or disk_string_code_rand_iops,
                         random_iops_scale_factor=random_iops_scale_factor,
-                        throughput_spec=read_throughput_spec or disk_string_code_throughput,
+                        throughput_spec=throughput_spec or disk_string_code_throughput,
                         throughput_scale_factor=throughput_scale_factor, disk_usable_size=disk_usable_size,
                         per_scale_in_raid=per_scale_in_raid, num_disks=num_disks)
 

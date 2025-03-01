@@ -12,21 +12,17 @@
                 </i>
             </div>
             <select class="form-select" id="workload_type" name="workload_type">
-                <option value="soltp">SOLTP: Single-User or Simple OLTP </option>
+                <option value="soltp">SOLTP: Only for database feature. </option>
                 <option value="log">LOG: Logging or Log Data Ingestion</option>
                 <option value="tst">TST: Time Series Data of OLTP or IoT</option>
                 <option value="oltp">OLTP: Online Transaction Processing</option>
                 <option selected value="htap">HTAP: Hybrid Transactional/Analytical Processing</option>
-                <option value="tsh">TSH: Time-Series of Analytic and Transaction</option>
                 <option value="olap">OLAP: Online Analytical Processing</option>
-                <option value="tsa">TSA: Time-Series of OLAP</option>
                 <option value="dw">DW: Data Warehouse</option>
-                <option value="dl">DL: Data Lake</option>
-                <option value="search">Search: Full-Text Search and Indexing</option>
-                <option value="rag">RAG: Retrieval-Augmented Generation</option>
-                <option value="geo">Geo: Geospatial Data</option>
+                <option value="vector">Vector: Full-Text Search, RAG, Geospatial Data</option>
             </select>
         </div>
+
         <!-- Memory Pool Optimization Mode -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
@@ -44,6 +40,7 @@
                 <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
             </select>
         </div>
+
         <!-- Operating System and its Specification (CPU, RAM) -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
@@ -98,6 +95,7 @@
                        onchange="syncNumberToSlider('total_ram_in_gib'); ram_calculator()">
             </div>
         </div>
+
         <!-- RAM usage -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
