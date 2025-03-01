@@ -3,18 +3,62 @@
     <h2 class="accordion-header" id="hdr000104">
         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse000104"
                 aria-expanded="true" aria-controls="collapse000104">
-            v0.1.4 (Alpha) - Expected Date: Feb 23rd 2025
+            v0.1.4 (Alpha.RC) - Expected Date: March 01st 2025
         </button>
     </h2>
     <div id="collapse000104" class="accordion-collapse collapse show" aria-labelledby="hdr000104"
          data-bs-parent="#changelogAccordion">
         <div class="accordion-body">
             <ul>
-                <li>UI & Backend: Remove the "os_reserved_memory" parameter</li>
-                <li>UI: Remove RAID configuration for disk parameters</li>
-                <li>UI & Backend: Add vacuum_safety_level parameter into the tuning guideline</li>
-                <li>UI & Backend: Switch the default disk performance from SSDv1 to SANv1</li>
-                <li>Backend: Update the formula for bgwriter and autovacuum</li>
+                <li>
+                    Generic
+                    <ul>
+                        <li>Backend: Now input added the `frozen` attribute to indicate whether the parameter expect changes or not.</li>
+                        <li>DOC (UI & Backend): Most documentations from the backend and UI are better understanding, helping new developers and users understand what formula is calculated inside.</li>
+                    </ul>
+                </li>
+                <li>
+                    Input Changes
+                    <ul>
+                        <li>The default of parameter `temp_buffers_ratio` is changed from 1/3 (0.33) to 1/4 (0.25)</li>
+                        <li>The upper bound of parameter `max_normal_memory_usage` is changed from 0.85 to 0.80</li>
+                        <li>The parameters `mem_pool_epsilon_to_rollback` and `mem_pool_tuning_increment` is removed from user input, and hard-coded as 0.0075 and 1/560 in the correction tuning phase.</li>
+                        <li>The default parameter of `mem_pool_tuning_ratio` is changed from 0.5 to 0.6</li>
+                        <li>The default parameter of `hash_mem_usage_level` is changed from -4 to -6 -> If the PostgreSQL configuration is 2.0, the working memory usage per connection for one arbitrary operation is reduced from 1.2635 to 1.1400)</li>
+                        <li>The default parameter `mem_pool_parallel_estimate` is changed from False to True to assume at any time, PostgreSQL can use parallel operation in general, thereby hopefully reduce the working memory per connection for one arbitrary operation by around `vCPU+3` unit of `work_mem * average_ratio`.</li>
+                        <li>The upper bound of `wal_segment_size` is reduced from 2 GiB to 128 MiB. The reason of change is added directly from the code `Increase this value is only beneficial when (1) you have a lot of incoming WRITE beyond 16 MiB per transaction, (2) high WAL file rotation time during workload (usually at old kernel and old PostgreSQL version), (3) high archive transfer due to small files (a lot of 16 MiB files) that translated into a mix of random and sequential IOPS, and (4) low number of allowed files in filesystem`</li>
+                        <li>Fix the underlying meaning of `min_wal_size`, `max_wal_size`, and `wal_keep_size` in our PostgreSQL understanding by introducing new algorithm that is based on the WAL volume capacity, ensuring checkpoint can be run in a timely manner, during burst workload, and maintained a reasonable number WAL records for streaming replication.</li>
+                        <li>Drop the parameter `max_wal_size_remain_upper_size`</li>
+                        <li>The lower bound of parameter `autovacuum_utilization_ratio` is changed from 0.50 to 0.30</li>
+                        <li>Move the parameter of `num_write_transaction_per_hour_on_workload` from advanced configuration to basic configuration.</li>
+                        <li>The default of parameter `num_write_transaction_per_hour_on_workload` is changed from 1M (1 million) to 50K (50 thousand) -> This is translated from 270 attempted WRITE transactions to 13.5 attempted WRITE transactions.</li>
+                        <li>Drop the parameter `repurpose_wal_buffers` as it makes zero contribution against small server, unless you having too little RAM and a low-end HDD on the WAL partition.</li>
+                        <li>Introduce the parameter `database_size_in_gib` in the basic configuration (default to 10 GiB and maximum at 32 TiB). This is used in the anti-wraparound tuning to be served as the minimum boundary hopefully the data volume can scan randomly at 30% WRITE IOPS on the full data files (not index files). If user don't know the amount of data they would have (for example new on-boarded application), then set to zero value meant a 60% of used volume in the data partition.</li>
+                    </ul>
+                </li>
+
+                <li>
+                    Algorithm Changes
+                    <ul>
+                        <li>Add small warning if the server is not MINI and available RAM is lower than 4 GiB instead of hard-coded 2 GiB for any profile</li>
+                        <li>The parameter `autovacuum_naptime` is now 15 second for one worker and 30 seconds for each additional worker.</li>
+                        <li>The autovacuum parameter when INSERT (*_insert_threshold and *_insert_scale_factor) is now share same value as when normal autovacuum.</li>
+                        <li>Reduce the `max_wal_size` parameter on general tuning phase.</li>
+                        <li>The parameter `archive_timeout` is 15 minutes on large system and 30 to 1 hour on small system in general tuning phase</li>
+                        <li>The parameter `checkpoint_timeout` is 30 minutes on MINI profile instead of 15 minutes in general tuning phase</li>
+                        <li>The parameter `wal_keep_size` is default to 25 base WAL files (400 MiB as Azure)</li>
+                        <li>Introduce the parameter `max_slot_wal_keep_size` (default to -1)</li>
+                        <li>Un-necessary workloads are grouped: SEARCH / RAG / GEO --> VECTOR; TSR_HTAP --> HTAP; TSR_OLAP --> OLAP</li>
+                        <li>The parameter `default_statistics_target` has minor change.</li>
+                        <li>The parameter `checkpoint_flush_after` is backed to 256 KiB at general tuning phase, and bump to 512 KiB and 1 MiB if data volume is strong.</li>
+                        <li>Revise failsafe at anti-wraparound tuning</li>
+                        <li>Fix the underlying meaning of `min_wal_size`, `max_wal_size`, and `wal_keep_size` in our PostgreSQL understanding by introducing new algorithm that is based on the WAL volume capacity, ensuring checkpoint can be run in a timely manner, during burst workload, and maintained a reasonable number WAL records for streaming replication.</li>
+                        <li>The parameter `archive_timeout` is scaled by extra 10 minutes for one unit of larger WAL size (capped at 2 hour)</li>
+                        <li>The parameter `checkpoint_timeout` added the minimum time of finishing the checkpoint (at 70 % of mixed data IOPS) depending on the type of workload (workload scale is independent) in the correction tuning phase.</li>
+                        <li>The parameter `bgwriter_lru_maxpages` is increased when the disk performance is SSD or stronger.</li>
+                        <li>The four parameters `*_flush_after` is added into the correction tuning phase</li>
+                    </ul>
+                </li>
             </ul>
         </div>
     </div>

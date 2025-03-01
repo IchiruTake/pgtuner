@@ -642,7 +642,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     _data_tput, _data_iops = request.options.data_index_spec.perf()
     _data_tran_tput = PG_DISK_PERF.iops_to_throughput(_data_iops)
     _wraparound_effective_io = 0.80     # Assume during aggressive anti-wraparound vacuum the effective IO is 80%
-    _data_avg_tput = generalized_mean(_data_tran_tput, _data_tput, level=0.5)
+    _data_avg_tput = generalized_mean(_data_tran_tput, _data_tput, level=0.85)
 
     _data_size = 0.75 * request.options.database_size_in_gib * Ki   # Measured in MiB
     _index_size = 0.25 * request.options.database_size_in_gib * Ki  # Measured in MiB

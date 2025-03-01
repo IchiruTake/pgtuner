@@ -12,17 +12,17 @@
                     Database Size (in GiB) </label>
                 <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                    data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                   data-bs-content="The largest database size (in GiB). This value is used to estimate the maximum database size for anti-wraparound vacuum. If this field is zero, the assumption is about 60 % usage of the data volume. The supported range is [0, 32768], but its maximum threshold silently capped at 90% of the data volume."
-                   title="Database Size (in GiB)">
+                   data-bs-content="The total data size on server (in GiB). This value is used to estimate the maximum database size for anti-wraparound vacuum. If this field is zero, the assumption is about 60 % usage of the data volume. The supported range is [0, 32768], but its maximum threshold silently capped at 90% of the data volume."
+                   title="Total data size (in GiB)">
                 </i>
             </div>
             <div class="d-flex align-items-center">
                 <input class="form-range me-3" name="database_size_in_gib"
                        id="database_size_in_gib_range"
-                       max="32768" min="0" step="1" value="0" type="range"
+                       max="32768" min="0" step="1" value="100" type="range"
                        onchange="syncSliderToNumber('database_size_in_gib')">
                 <input class="form-control w-auto" id="database_size_in_gib"
-                       max="32768" min="0" step="1" value="0" type="number"
+                       max="32768" min="0" step="1" value="100" type="number"
                        onchange="syncNumberToSlider('database_size_in_gib')">
             </div>
         </div>
@@ -33,8 +33,8 @@
                     Number of Write Transactions per Hour on Workload </label>
                 <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                    data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                   data-bs-content="The peak number of workload WRITE transaction per hour (including sub-transactions, accounting all attempts to make data changes (not SELECT) regardless of COMMIT and ROLLBACK).  Note that this number requires you to have good estimation on how much your server can be handled during its busy workload and idle workload. It is best to collect your real-world data pattern before using this value."
-                   title="Number of Write Transactions per Hour on Workload">
+                   data-bs-content="The peak number of workload WRITE transaction per hour (including sub-transactions, accounting all attempts to make data changes (not SELECT) regardless of COMMIT and ROLLBACK). Note that this number requires you to have good estimation on how much your server can be handled during its busy workload and idle workload. It is best to collect your real-world data pattern before using this value."
+                   title="Number of Write Transactions per Hour on Workload on Server">
                 </i>
             </div>
             <div class="d-flex align-items-center">

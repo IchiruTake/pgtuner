@@ -21,11 +21,11 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 class _PG_WEB_DISK_PERF_INT(BaseModel):
     random_iops: PositiveInt = Field(default=PG_DISK_SIZING.SANv1.iops())
     throughput: PositiveInt = Field(default=PG_DISK_SIZING.SANv1.throughput())
-    disk_usable_size_in_gib: ByteSize = Field(default=20, ge=5)
+    disk_usable_size_in_gib: ByteSize = Field(default=256, ge=5)
 
     def to_backend(self) -> PG_DISK_PERF:
         return PG_DISK_PERF(random_iops_spec=self.random_iops, throughput_spec=self.throughput,
-                            random_iops_scale_factor=0.9, throughput_scale_factor=0.9, num_disks=1,
+                            random_iops_scale_factor=1.0, throughput_scale_factor=1.0, num_disks=1,
                             per_scale_in_raid=0.75, disk_usable_size=self.disk_usable_size_in_gib * Gi)
 
 
@@ -90,7 +90,6 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
             mem_pool_parallel_estimate=self.mem_pool_parallel_estimate,
             hash_mem_usage_level=self.hash_mem_usage_level,
 
-
             # Logging
             max_query_length_in_bytes=self.max_query_length_in_bytes,
             max_runtime_ms_to_log_slow_query=self.max_runtime_ms_to_log_slow_query,
@@ -141,7 +140,7 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
     keywords: PG_WEB_TUNE_USR_KWARGS = Field(default=PG_TUNE_USR_KWARGS())
 
     # Wraparound Tuning
-    database_size_in_gib: int = Field(default=10, ge=0, le=32 * K10)
+    database_size_in_gib: int = Field(default=100, ge=0, le=32 * K10)
     num_write_transaction_per_hour_on_workload: PositiveInt = Field(default=int(50 * K10), ge=K10, le=20 * M10)
     # https://www.postgresql.org/docs/13/functions-info.html -> pg_current_xact_id_if_assigned
 
