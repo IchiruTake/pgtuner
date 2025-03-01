@@ -17,7 +17,7 @@ from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
 from src.tuner.profile.database.shared import wal_time
-from src.utils.avg import pow_avg
+from src.utils.mean import generalized_mean
 from src.utils.pydantic_utils import bytesize_to_hr
 from src.utils.pydantic_utils import realign_value, cap_value
 from src.utils.timing import time_decorator
@@ -72,13 +72,42 @@ def _item_tuning(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPON
     return None
 
 
+def _flush_log_pool(log_pool: list[str]) -> None:
+    _info_log_pool = [] # This is used for the info log
+    _flush_info = lambda : _logger.info('\n'.join(_info_log_pool)) if _info_log_pool else None
+
+    for log_text in log_pool:
+        if log_text.startswith('DEBUG'):
+            _flush_info()
+            _logger.debug(log_text)
+        elif log_text.startswith('WARN') or log_text.startswith('WARNING'):
+            _flush_info()
+            _logger.warning(log_text)
+        elif log_text.startswith('ERROR'):
+            _flush_info()
+            _logger.error(log_text)
+        elif log_text.startswith('CRITICAL'):
+            _flush_info()
+            _logger.critical(log_text)
+        else:
+            _info_log_pool.append(log_text)
+
+    _info_log_pool.append('')         # Add a new line to separate the log
+    _flush_info()       # Flush the remaining info log
+    return None
+
+
+
 # =============================================================================
-# CPU & Statistics
 @time_decorator
-def _conn_cache_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]) -> None:
-    _log_pool.append('Start tuning the connection, statistic caching, disk cache of the PostgreSQL database server '
-                     'based on the database workload. \nImpacted Attributes: max_connections, temp_buffers, work_mem, '
-                     'effective_cache_size, idle_in_transaction_session_timeout. ')
+def _conn_cache_query_timeout_tune(
+        request: PG_TUNE_REQUEST,
+        response: PG_TUNE_RESPONSE,
+) -> None:
+    _log_pool = ['\n ===== CPU & Statistics Tuning =====',
+                 'Start tuning the connection, statistic caching, disk cache of the PostgreSQL database server '
+                 'based on the database workload. \nImpacted Attributes: max_connections, temp_buffers, work_mem, '
+                 'effective_cache_size, idle_in_transaction_session_timeout. ']
     _kwargs = request.options.tuning_kwargs
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
 
@@ -123,11 +152,7 @@ def _conn_cache_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_
         _item_tuning(key='idle_in_transaction_session_timeout', after=max(31, after_idle_in_transaction_session_timeout),
                      scope=PG_SCOPE.OTHERS, response=response, _log_pool=_log_pool)
 
-    return None
-
-
-@time_decorator
-def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]) -> None:
+    # ----------------------------------------------------------------------------------------------
     _log_pool.append('Start tuning the query timeout of the PostgreSQL database server based on the database workload. '
                      '\nImpacted Attributes: statement_timeout, lock_timeout, cpu_tuple_cost, parallel_tuple_cost, '
                      'default_statistics_target, commit_delay. ')
@@ -167,23 +192,23 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
     default_statistics_target = 'default_statistics_target'
     managed_items, managed_cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
     after_default_statistics_target = managed_cache[default_statistics_target]
-    hw_scope = managed_items[default_statistics_target].hardware_scope[1]
+    default_statistics_target_hw_scope = managed_items[default_statistics_target].hardware_scope[1]
     if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.HTAP):
         after_default_statistics_target = 200
-        if hw_scope == PG_SIZING.MEDIUM:
+        if default_statistics_target_hw_scope == PG_SIZING.MEDIUM:
             after_default_statistics_target = 350
-        elif hw_scope == PG_SIZING.LARGE:
+        elif default_statistics_target_hw_scope == PG_SIZING.LARGE:
             after_default_statistics_target = 500
-        elif hw_scope == PG_SIZING.MALL:
+        elif default_statistics_target_hw_scope == PG_SIZING.MALL:
             after_default_statistics_target = 750
-        elif hw_scope == PG_SIZING.BIGT:
+        elif default_statistics_target_hw_scope == PG_SIZING.BIGT:
             after_default_statistics_target = 1000
     elif request.options.workload_type in (PG_WORKLOAD.OLTP, PG_WORKLOAD.VECTOR):
-        if hw_scope == PG_SIZING.LARGE:
+        if default_statistics_target_hw_scope == PG_SIZING.LARGE:
             after_default_statistics_target = 250
-        elif hw_scope == PG_SIZING.MALL:
+        elif default_statistics_target_hw_scope == PG_SIZING.MALL:
             after_default_statistics_target = 400
-        elif hw_scope == PG_SIZING.BIGT:
+        elif default_statistics_target_hw_scope == PG_SIZING.BIGT:
             after_default_statistics_target = 600
     _item_tuning(key=default_statistics_target, after=after_default_statistics_target, scope=PG_SCOPE.QUERY_TUNING,
                  response=response, _log_pool=_log_pool, suffix_text=_suffix_text)
@@ -197,11 +222,9 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
     # high-transaction rate, the READ operation on WAL partition is used intensively. Thus, we use the minimum
     # IOPS between the data partition and WAL partition.
     # Now we can calculate the commit_delay (* K10 to convert to millisecond)
-    commit_delay = 'commit_delay'
-    after_commit_delay = managed_cache[commit_delay]
+    after_commit_delay = managed_cache['commit_delay']
     managed_items = response.get_managed_items(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
-    commit_delay_hw_scope = managed_items[commit_delay].hardware_scope[1]
-
+    commit_delay_hw_scope = managed_items['commit_delay'].hardware_scope[1]
     if request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
         # These workloads are not critical so we can set a high commit_delay. In normal case, the constraint is
         # based on the number of commits and disk size. The server largeness may not impact here
@@ -219,12 +242,6 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
             after_commit_delay = 2 * K10
         else:
             after_commit_delay = 1 * K10
-    elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE):
-        # Workload: OLAP and Data Warehouse
-        # These workloads are critical but not require end-user and internally managed and transformed by the
-        # application side so a high commit_delay is allowed, but it does not bring large impact since commit_delay
-        # affected group/batched commit of small transactions.
-        after_commit_delay = 2 * K10
     elif request.options.workload_type in (PG_WORKLOAD.VECTOR, ):
         # Workload: VECTOR (Search, RAG, Geospatial)
         # The workload pattern of this is usually READ, the indexing is added incrementally if user make new
@@ -232,26 +249,35 @@ def _query_timeout_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _l
         # impact.
         after_commit_delay = int(K10 // 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
 
-    elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP):
+    elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.OLAP,
+                                           PG_WORKLOAD.DATA_WAREHOUSE):
         # Workload: HTAP and OLTP
         # These workloads have highest and require the data integrity. Thus, the commit_delay should be set to the
         # minimum value. The higher data rate change, the burden caused on the disk is large, so we want to minimize
         # the disk impact, but hopefully we got UPS or BBU for the disk.
+        # Workload: OLAP and Data Warehouse
+        # These workloads are critical but not require end-user and internally managed and transformed by the
+        # application side so a high commit_delay is allowed, but it does not bring large impact since commit_delay
+        # affected group/batched commit of small transactions.
         after_commit_delay = K10
-    _item_tuning(key=commit_delay, after=int(after_commit_delay), scope=PG_SCOPE.QUERY_TUNING, response=response,
+    _item_tuning(key='commit_delay', after=int(after_commit_delay), scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_log_pool, suffix_text=_suffix_text)
     _item_tuning(key='commit_siblings', after=5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
                  scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_log_pool, suffix_text=_suffix_text)
-    return None
+    return _flush_log_pool(_log_pool)
 
 
 # =============================================================================
 # Disk-based (Performance)
 @time_decorator
-def _generic_disk_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
-    _log_pool.append('Start tuning the disk of the PostgreSQL database server based on the data disk random IOPS. '
-                     '\nImpacted Attributes: random_page_cost, effective_io_concurrency, maintenance_io_concurrency, '
-                     '')
+def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
+        request: PG_TUNE_REQUEST,
+        response: PG_TUNE_RESPONSE,
+) -> None:
+    _log_pool = ['\n ===== Disk-based Tuning =====',
+                 'Start tuning the disk of the PostgreSQL database server based on the data disk random IOPS. '
+                 '\nImpacted Attributes: random_page_cost, effective_io_concurrency, maintenance_io_concurrency, '
+                 '*_flush_after. ']
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
 
     # The WRITE operation in WAL partition is sequential, but its read (when WAL content is not flushed to the
@@ -387,19 +413,15 @@ def _generic_disk_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _lo
         _item_tuning(key='backend_flush_after', after=0, scope=PG_SCOPE.OTHERS,
                      response=response, _log_pool=_log_pool)
 
-    return None
-
-
-@time_decorator
-def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
+    # -------------------------------------------------------------------------
     _log_pool.append('Start tuning the background writer of the PostgreSQL database server based on the database '
                      'workload. \nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.')
     _kwargs = request.options.tuning_kwargs
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     _data_iops = request.options.data_index_spec.perf()[1]
 
-    # Tune the bgwriter_delay (5 ms per 1K iops
-    after_bgwriter_delay = max(100, managed_cache['bgwriter_delay'] - 5 * _data_iops // int(1 * K10))
+    # Tune the bgwriter_delay (10 ms per 1K iops)
+    after_bgwriter_delay = floor(max(100, managed_cache['bgwriter_delay'] - 10 * _data_iops // int(1 * K10)))
     _item_tuning(key='bgwriter_delay', after=after_bgwriter_delay,
                  scope=PG_SCOPE.OTHERS, response=response, _log_pool=_log_pool)
 
@@ -414,11 +436,8 @@ def _bgwriter_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
         after_bgwriter_lru_maxpages += 100 + 150 + 200
     _item_tuning(key='bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
                  response=response, _log_pool=_log_pool)
-    return None
 
-
-@time_decorator
-def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
+    # -------------------------------------------------------------------------
     """
     This docstring aims to describe how we tune the autovacuum. Basically, we run autovacuum more frequently, the ratio
     of dirty pages compared to total is minimized (usually between 1/8 - 1/16, average at 1/12). But if the autovacuum
@@ -486,26 +505,28 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     data_iops = request.options.data_index_spec.perf()[1]
 
-    # Since we are leveraging the cost-based tuning, and the *_cost_limit we have derived from the data disk IOPs,
-    # thus the high value of dirty pages seems use-less and make other value difficult as based on the below thread,
-    # those pages are extracted from shared_buffers (HIT) and RAM/effective_cache_size (MISS). Whilst technically,
-    # the idea is to tell that dirtying the pages (DIRTY -> WRITE) is 10x dangerous. The main reason is that PostgreSQL
-    # don't know about your disk hardware or capacity, so it is better to have a high cost for the dirty page.
-    # But now, we acknowledge that our cost is managed under control by the data disk IOPS, we could revise the cost
-    # of dirty page so as it can be running more frequently.
-    #
-    # On this algorithm, increase either MISS cost or DIRTY cost would allow more pages as HIT but from our perspective,
-    # it is mostly useless, even the RAM is not the best as bare metal, usually at around 10 GiB/s (same as low-end
-    # DDR3 or DDR2, 20x times stronger than SeqIO of SSD) (DB server are mostly virtualized or containerized),
-    # but our real-world usually don't have NVME SSD for data volume due to the network bandwidth on SSD, and in the
-    # database, performance can be easily improved by adding more RAM on most cases (hopefully more cache hit due to
-    # RAM lacking) rather focusing on increasing the disk strength solely which is costly and not always have high
-    # cost per performance improvement.
-    # Thereby, we want to increase the MISS cost (as compared to HIT cost) to scale our budget, and close the gap
-    # between the MISS and DIRTY cost. This is the best way to improve the autovacuum performance.
-    # Meanwhile, a high cost delay would allow lower budget, and let the IO controller have time to "breathe" and flush
-    # data in a timely interval, without overflowing the disk queue.
-
+    """
+    Since we are leveraging the cost-based tuning, and the *_cost_limit we have derived from the data disk IOPs, thus 
+    the high value of dirty pages seems use-less and make other value difficult as based on the below thread, those 
+    pages are extracted from shared_buffers (HIT) and RAM/effective_cache_size (MISS). Whilst technically, the idea 
+    is to tell that dirtying the pages (DIRTY -> WRITE) is 10x dangerous. The main reason is that PostgreSQL don't 
+    know about your disk hardware or capacity, so it is better to have a high cost for the dirty page. But now, we 
+    acknowledge that our cost is managed under control by the data disk IOPS, we could revise the cost of dirty page 
+    so as it can be running more frequently.
+    
+    On this algorithm, increase either MISS cost or DIRTY cost would allow more pages as HIT but from our perspective,
+    it is mostly useless, even the RAM is not the best as bare metal, usually at around 10 GiB/s (same as low-end
+    DDR3 or DDR2, 20x times stronger than SeqIO of SSD) (DB server are mostly virtualized or containerized),
+    but our real-world usually don't have NVME SSD for data volume due to the network bandwidth on SSD, and in the
+    database, performance can be easily improved by adding more RAM on most cases (hopefully more cache hit due to
+    RAM lacking) rather focusing on increasing the disk strength solely which is costly and not always have high
+    cost per performance improvement.
+    
+    Thereby, we want to increase the MISS cost (as compared to HIT cost) to scale our budget, and close the gap between 
+    the MISS and DIRTY cost. This is the best way to improve the autovacuum performance. Meanwhile, a high cost delay 
+    would allow lower budget, and let the IO controller have time to "breathe" and flush data in a timely interval, 
+    without overflowing the disk queue.
+    """
     autovacuum_vacuum_cost_delay = 'autovacuum_vacuum_cost_delay'
     vacuum_cost_page_dirty = 'vacuum_cost_page_dirty'
     after_vacuum_cost_page_miss = 3
@@ -574,12 +595,7 @@ def _vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool
     _item_tuning(key='vacuum_cost_limit', after=after_vacuum_cost_limit, scope=PG_SCOPE.MAINTENANCE, response=response,
                  _log_pool=_log_pool)
 
-    return None
-
-
-@time_decorator
-def _wraparound_vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
-    # =============================================================================
+    # -------------------------------------------------------------------------
     # The dependency here is related to workload (amount of transaction), disk strength (to run wrap-around), the
     # largest table size (the amount of data to be vacuumed), and especially if the user can predict correctly
     _log_pool.append('Start tuning the autovacuum of the PostgreSQL database server based on the database workload. '
@@ -599,38 +615,34 @@ def _wraparound_vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE
     # in worst case scenario
     _future_data_scaler = 2.5 + (0.5 * request.options.workload_profile.num())
 
-    # Tuning ideology for extreme anti-wraparound vacuum: Whilst the internal algorithm can have some optimization or
-    # skipping non-critical workloads, we can't completely rely on it so it is better to have a good future-proof
-    # estimation
-    # Based on this PR: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=1e55e7d17
-    # At failsafe, the index vacuuming is executed only if it more than 1 index (usually the primary key holds one)
-    # and PostgreSQL does not have cross-table index, thus the index vacuum and pruning is bypassed, unless it is
-    # index vacuum from the current vacuum then PostgreSQL would complete that index vacuum but stop all other index
-    # vacuuming (could be at the page or index level).
-    # --> See function lazy_check_wraparound_failsafe in /src/backend/access/heap/vacuumlazy.c
-    # Generally a good-designed database would have good index with approximately 20 - 1/3 of the whole database size.
-    # During the failsafe, whilst the database can still perform the WRITE operation on non too-old table, in practice,
-    # it is not practical as user in normal only access several 'hottest' large table, thus maintaining its impact.
-    # However, during the failsafe, cost-based vacuuming limit is removed and only SHARE UPDATE EXCLUSIVE lock is held
-    # that is there to prevent DDL command (schema change, index alteration, table structure change, ...).  Also, since
-    # the free-space map (1/256 of pages) and visibility map (2b/pages) could be updated, so we must take those
-    # into consideration, so guessing we could have around 50-70 % of the random I/O during the failsafe.
-    # Unfortunately, the amount of data review could be twice as much as the normal vacuum so we should con
+    """
+    Tuning ideology for extreme anti-wraparound vacuum: Whilst the internal algorithm can have some optimization or 
+    skipping non-critical workloads, we can't completely rely on it to have a good future-proof estimation
+    
+    Based on this PR: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=1e55e7d17
+    At failsafe, the index vacuuming is executed only if it more than 1 index (usually the primary key holds one)
+    and PostgreSQL does not have cross-table index, thus the index vacuum and pruning is bypassed, unless it is
+    index vacuum from the current vacuum then PostgreSQL would complete that index vacuum but stop all other index
+    vacuuming (could be at the page or index level).
+    --> See function lazy_check_wraparound_failsafe in /src/backend/access/heap/vacuumlazy.c
+    
+    Generally a good-designed database would have good index with approximately 20 - 1/3 of the whole database size.
+    During the failsafe, whilst the database can still perform the WRITE operation on non too-old table, in practice,
+    it is not practical as user in normal only access several 'hottest' large table, thus maintaining its impact.
+    However, during the failsafe, cost-based vacuuming limit is removed and only SHARE UPDATE EXCLUSIVE lock is held
+    that is there to prevent DDL command (schema change, index alteration, table structure change, ...).  Also, since
+    the free-space map (1/256 of pages) and visibility map (2b/pages) could be updated, so we must take those
+    into consideration, so guessing we could have around 50-70 % of the random I/O during the failsafe.
+    
+    Unfortunately, the amount of data review could be twice as much as the normal vacuum so we should consider it into 
+    our internal algorithm (as during aggressive anti-wraparound vacuum, those pages are mostly on disk, but not on 
+    dirty buffers in shared_buffers region).
 
+    """
     _data_tput, _data_iops = request.options.data_index_spec.perf()
     _data_tran_tput = PG_DISK_PERF.iops_to_throughput(_data_iops)
     _wraparound_effective_io = 0.80     # Assume during aggressive anti-wraparound vacuum the effective IO is 80%
-
-    # The random IOPS but better version
-    if request.options.versioning()[0] >= 18:
-        # Add PostgreSQL 18 support for eager vacuuming, focusing on a small neighborhood of the table to speed up the
-        # in the assumption of 'hottest' table where localized nearby pages in 1 GiB (having sequential IOPS) having
-        # the same of close XID. It is hard to estimate the performance improvement by this due to workload different,
-        # business change (rare), so this level would not be exposed to the end user, once I can gather enough
-        # data for this
-        _data_avg_tput = pow_avg(_data_tran_tput, _data_tput, level=-1.5)
-    else:
-        _data_avg_tput = _data_tran_tput
+    _data_avg_tput = generalized_mean(_data_tran_tput, _data_tput, level=0.5)
 
     _data_size = 0.75 * request.options.database_size_in_gib * Ki   # Measured in MiB
     _index_size = 0.25 * request.options.database_size_in_gib * Ki  # Measured in MiB
@@ -638,59 +650,68 @@ def _wraparound_vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE
 
     _failsafe_data_size = (2 * _fsm_vm_size + 2 * _data_size)
     _failsafe_hour = (2 * _fsm_vm_size / (_data_tput * _wraparound_effective_io)) / HOUR
-    _failsafe_hour += (_data_size / (_data_tput * _wraparound_effective_io)) / HOUR
-    _failsafe_hour = (_failsafe_data_size / (_data_tput * _wraparound_effective_io)) / HOUR
+    _failsafe_hour += (_failsafe_data_size / (_data_tput * _wraparound_effective_io)) / HOUR
     _log_pool.append(
         f'In the worst-case scenario (where failsafe triggered and cost-based vacuum is disabled), the amount '
         f'of data read and write is usually twice the data files, resulting in {_failsafe_data_size} MiB with '
         f'effective throughput of {_wraparound_effective_io * 100:.1f}% or {_data_tput * _wraparound_effective_io:.1f} '
-        f'MiB/s; Thereby having a theoretical worst-case of {_failsafe_hour:.1f} hours for failsafe vacuuming. '
+        f'MiB/s; Thereby having a theoretical worst-case of {_failsafe_hour:.1f} hours for failsafe vacuuming, and '
+        f'a safety scale factor of {_future_data_scaler:.1f} times the worst-case scenario.'
     )
 
     _norm_hour = (2 * _fsm_vm_size / (_data_tput * _wraparound_effective_io)) / HOUR
-    _norm_hour += ((_data_size + _index_size) / (_data_tput * _wraparound_effective_io))
-    _norm_hour += (0.2 * (_data_size + _index_size) / (_data_avg_tput * _wraparound_effective_io))
+    _norm_hour += ((_data_size + _index_size) / (_data_tput * _wraparound_effective_io)) / HOUR
+    _norm_hour += ((0.35 * (_data_size + _index_size)) / (_data_avg_tput * _wraparound_effective_io)) / HOUR
 
     _data_vacuum_time = max(_norm_hour, _failsafe_hour)
     _worst_data_vacuum_time = _data_vacuum_time * _future_data_scaler
     _log_pool.append(
-        f'WARNING: The anti-wraparound vacuuming time is estimated to be {_data_vacuum_time:.1f} hours, which is '
-        f'too long and worst expected at {_worst_data_vacuum_time:.1f} hours, either you should (1) upgrade the '
-        f'data volume to have a better performance with higher IOPS and throughput, or (2) leverage pg_cron, '
-        f'pg_timetable, or any cron-scheduled alternative to schedule manual vacuuming when age is coming to '
-        f'normal vacuuming threshold.'
+        f'WARNING: The anti-wraparound vacuuming time is estimated to be {_data_vacuum_time:.1f} hours and scaled time '
+        f'of {_worst_data_vacuum_time:.1f} hours, either you should (1) upgrade the data volume to have a better '
+        f'performance with higher IOPS and throughput, or (2) leverage pg_cron, pg_timetable, or any cron-scheduled '
+        f'alternative to schedule manual vacuuming when age is coming to normal vacuuming threshold.'
     )
 
-    # Our wish is to have a better estimation of how anti-wraparound vacuum works with good enough analysis, so that
-    # we can either delay or fasten the VACUUM process as our wish. Since the maximum safe cutoff point from PostgreSQL
-    # is 2.0B (100M less than the theory), we would like to take our value a bit less than that (1.9B), so we can
-    # have a safe margin for the future.
-    # Our tuning direction is to do useful work with minimal IO and less disruptive as possible, either doing
-    # frequently with minimal IO (and probably useless work, if not optimize), or doing high IO workload at stable
-    # rate during emergency (but leaving headroom for the future).
-    # Tune the vacuum_failsafe_age for relfrozenid, and vacuum_multixact_failsafe_age
-    # Ref: https://gitlab.com/groups/gitlab-com/gl-infra/-/epics/413
-    # Ref: https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/12630
+    """
+    Our wish is to have a better estimation of how anti-wraparound vacuum works with good enough analysis, so that we 
+    can either delay or fasten the VACUUM process as our wish. Since the maximum safe cutoff point from PostgreSQL is 
+    2.0B (100M less than the theory), we would like to take our value a bit less than that (1.9B), so we can have a 
+    safe margin for the future. 
+    
+    Our tuning direction is to do useful work with minimal IO and less disruptive as possible, either doing frequently 
+    with minimal IO (and probably useless work, if not optimize), or doing high IO workload at stable rate during 
+    emergency (but leaving headroom for the future). 
+    
+    Tune the vacuum_failsafe_age for relfrozenid, and vacuum_multixact_failsafe_age
+    Ref: https://gitlab.com/groups/gitlab-com/gl-infra/-/epics/413
+    Ref: https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/12630
 
-    # =============================================================================
-    # Whilst this seems to be a good estimation, encourage the use of strong SSD drive (I know it is costly),
-    # but we need to forecast the workload scaling and data scaling. In general, the data scaling is varied across
-    # application. For example in 2019, the relational database in Notion is double every 18 months, but the
-    # Stackoverflow has around 2.8 TiB in 2013, so whilst the data scaling is varied, we can do a good estimation
-    # Normal anti-wraparound is not aggressive as it still applied the cost-based vacuuming limit, but the index
-    # vacuuming is still OK.
-    # Our algorithm format allows you to deal with worst case (that you can deal with *current* full table scan), but
-    # we can also deal with low amount of data on WRITE but extremely high concurrency such as 1M attempted-WRITE
-    # transactions per hour
+    Whilst this seems to be a good estimation, encourage the use of strong SSD drive (I know it is costly), but we need 
+    to forecast the workload scaling and data scaling. In general, the data scaling is varied across application. For 
+    example in 2019, the relational database in Notion is double every 18 months, but the Stackoverflow has around 
+    2.8 TiB in 2013, so whilst the data scaling is varied, we can do a good estimation based on the current number of 
+    WRITE transaction per hour, and the data scaling (plus the future scaling).
+    
+    Normal anti-wraparound is not aggressive as it still applied the cost-based vacuuming limit, but the index vacuum 
+    is still OK. Our algorithm format allows you to deal with worst case (that you can deal with *current* full table 
+    scan), but we can also deal with low amount of data on WRITE but extremely high concurrency such as 1M 
+    attempted-WRITE transactions per hour. From Cybertec *, you could set autovacuum_freeze_max_age to 1.000.000.000, 
+    making the full scans happen 5x less often. More adventurous souls may want to go even closer to the limit, 
+    although the incremental gains are much smaller. If you do increase the value, monitor that autovacuum is actually 
+    keeping up so you don’t end up with downtime when your transaction rate outpaces autovacuum’s ability to freeze.
+    Ref: https://www.cybertec-postgresql.com/en/autovacuum-wraparound-protection-in-postgresql/
 
-    # Maximum time of un-vacuumed table is 2B - *_min_age (by last vacuum) --> PostgreSQL introduce the *_failsafe_age
-    # which is by default 80% of 2B (1.6B) to prevent the overflow of the XID. However, when overflowed at xmin or
-    # xmax, only a subset of the WRITE is blocked compared to xid exhaustion which blocks all WRITE transaction.
-    # See Section 24.1.5.1: Multixacts and Wraparound in PostgreSQL documentation.
-    # Our perspective is that we either need to set our failsafe as low as possible (ranging as 1.4B to 1.9B), for
-    # xid failsafe, and a bit higher for xmin/xmax failsafe
-    _decre_xid = max(24 + (18 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time)
-    _decre_mxid = max(24 + (12 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time)
+    Maximum time of un-vacuumed table is 2B - *_min_age (by last vacuum) --> PostgreSQL introduce the *_failsafe_age
+    which is by default 80% of 2B (1.6B) to prevent the overflow of the XID. However, when overflowed at xmin or
+    xmax, only a subset of the WRITE is blocked compared to xid exhaustion which blocks all WRITE transaction.
+    
+    See Section 24.1.5.1: Multixacts and Wraparound in PostgreSQL documentation.
+    Our perspective is that we either need to set our failsafe as low as possible (ranging as 1.4B to 1.9B), for
+    xid failsafe, and a bit higher for xmin/xmax failsafe.
+    """
+
+    _decre_xid = generalized_mean(24 + (18 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time, level=0.5)
+    _decre_mxid = generalized_mean(24 + (12 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time, level=0.5)
     xid_failsafe_age = max(1_900_000_000 - _transaction_rate * _decre_xid, 1_400_000_000)
     xid_failsafe_age = realign_value(xid_failsafe_age, 500 * K10)[request.options.align_index]
     mxid_failsafe_age = max(1_900_000_000 - _transaction_rate * _decre_mxid, 1_400_000_000)
@@ -702,15 +723,27 @@ def _wraparound_vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE
         _item_tuning(key='vacuum_multixact_failsafe_age', after=mxid_failsafe_age, scope=PG_SCOPE.MAINTENANCE,
                      response=response, _log_pool=_log_pool)
 
-    # Tune the autovacuum_*_max_age. We want the autovacuum can be run frequently to leverage the visibility map
-    _decre_max_xid = max(48 + (24 - _transaction_coef) * _transaction_coef, 1.5 * _worst_data_vacuum_time)
-    _decre_max_mxid = max(36 + (20 - _transaction_coef) * _transaction_coef, 1.25 * _worst_data_vacuum_time)
+    _decre_max_xid = max(1.25 * _worst_data_vacuum_time,
+                         generalized_mean(36 + (24 - _transaction_coef) * _transaction_coef,
+                                          1.5 * _worst_data_vacuum_time, level=0.5))
+    _decre_max_mxid = max(1.25 * _worst_data_vacuum_time,
+                          generalized_mean(24 + (20 - _transaction_coef) * _transaction_coef,
+                                           1.25 * _worst_data_vacuum_time, level=0.5))
 
-    xid_max_age = max(400_000_000, 0.80 * xid_failsafe_age - _transaction_rate * _decre_max_xid)
+    xid_max_age = max(int(0.95 * managed_cache['autovacuum_freeze_max_age']),
+                      0.85 * xid_failsafe_age - _transaction_rate * _decre_max_xid)
     xid_max_age = realign_value(xid_max_age, 250 * K10)[request.options.align_index]
 
-    mxid_max_age = max(700_000_000, 0.80 * mxid_failsafe_age - _transaction_rate * _decre_max_mxid)
+    mxid_max_age = max(int(0.95 * managed_cache['autovacuum_multixact_freeze_max_age']),
+                       0.85 * mxid_failsafe_age - _transaction_rate * _decre_max_mxid)
     mxid_max_age = realign_value(mxid_max_age, 250 * K10)[request.options.align_index]
+
+    if xid_max_age <= int(1.15 * managed_cache['autovacuum_freeze_max_age']) or \
+        mxid_max_age <= int(1.05 * managed_cache['autovacuum_multixact_freeze_max_age']):
+        _log_pool.append(
+            f'WARNING: The autovacuum freeze max age is already at the minimum value. Please check if you can have a '
+            f'better SSD for data volume or apply sharding or partitioned to distribute data across servers or tables.'
+        )
 
     _item_tuning(key='autovacuum_freeze_max_age', after=xid_max_age, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_log_pool)
@@ -720,14 +753,16 @@ def _wraparound_vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE
         PG_SCOPE.MAINTENANCE: ('vacuum_freeze_table_age', 'vacuum_multixact_freeze_table_age',)
     }, request, response, _log_pool)
 
-    # =============================================================================
-    # Tune the *_freeze_min_age high enough so that it can be stable, and allowing some newer rows to remain unfrozen.
-    # These rows can be frozen later when the database is stable and operating normally.
-    # One disadvantage of decreasing vacuum_freeze_min_age is that it might cause VACUUM to do useless work: freezing
-    # a row version is a waste of time if the row is modified soon thereafter (causing it to acquire a new XID). So
-    # the setting should be large enough that rows are not frozen until they are unlikely to change anymore.
-    # Whilst it silently capped at 50%, since the maximum has been tuned for larger value, we would cap it result
-    # to be lower than the maximum value.
+    # -------------------------------------------------------------------------
+    """
+    Tune the *_freeze_min_age high enough so that it can be stable, and allowing some newer rows to remain unfrozen.
+    These rows can be frozen later when the database is stable and operating normally. One disadvantage of decreasing
+    vacuum_freeze_min_age is that it might cause VACUUM to do useless work: freezing a row version is a waste of time 
+    if the row is modified soon thereafter (causing it to acquire a new XID). So the setting should be large enough 
+    that rows are not frozen until they are unlikely to change anymore. We silently capped the value to be in 
+    between of 20M and 1/4 of the maximum value.
+    """
+
     xid_min_age = cap_value(_transaction_rate * 24, 20 * M10,
                             managed_cache['autovacuum_freeze_max_age'] * 0.25)
     xid_min_age = realign_value(xid_min_age, 250 * K10)[request.options.align_index]
@@ -739,21 +774,27 @@ def _wraparound_vacuum_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE
     # concurrent Kafka stream, etc are writing during incident). Usually, unless you need the row visibility on
     # long time for transaction, this could be low (5M of xmin/xmax vs 50M of xid by default).
     # Tune the *_freeze_min_age
-    multixact_min_age = cap_value(_transaction_rate * 18, 1 * M10,
+    multixact_min_age = cap_value(_transaction_rate * 18, 2 * M10,
                                   managed_cache['autovacuum_multixact_freeze_max_age'] * 0.25)
     multixact_min_age = realign_value(multixact_min_age, 250 * K10)[request.options.align_index]
     _item_tuning(key='vacuum_multixact_freeze_min_age', after=multixact_min_age, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_log_pool)
 
+    return _flush_log_pool(_log_pool)
+
 
 # =============================================================================
 # Write-Ahead Logging (WAL)
 @time_decorator
-def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
-    _log_pool.append('Start tuning the WAL of the PostgreSQL database server based on the data integrity and HA '
-                     'requirements. \nImpacted Attributes: wal_level, max_wal_senders, max_replication_slots, '
-                     'wal_sender_timeout, log_replication_commands, synchronous_commit, full_page_writes, fsync, '
-                     'logical_decoding_work_mem')
+def _wal_integrity_buffer_size_tune(
+        request: PG_TUNE_REQUEST,
+        response: PG_TUNE_RESPONSE,
+) -> None:
+    _log_pool = ['\n ===== Data Integrity and Write-Ahead Log Tuning =====',
+                 'Start tuning the WAL of the PostgreSQL database server based on the data integrity and HA '
+                 'requirements. \nImpacted Attributes: wal_level, max_wal_senders, max_replication_slots, '
+                 'wal_sender_timeout, log_replication_commands, synchronous_commit, full_page_writes, fsync, '
+                 'logical_decoding_work_mem']
 
     replication_level: int = backup_description()[request.options.max_backup_replication_tool][1]
     num_replicas: int = (request.options.max_num_logical_replicas_on_primary +
@@ -851,11 +892,7 @@ def _wal_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: l
                 _item_tuning(key=fsync, after='off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response,
                              _log_pool=_log_pool)
 
-    return None
-
-
-@time_decorator
-def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]) -> None:
+    # -------------------------------------------------------------------------
     _logger.info('Start tuning the WAL size of the PostgreSQL database server based on the WAL disk sizing'
                  '\nImpacted Attributes: min_wal_size, max_wal_size, wal_keep_size, archive_timeout, '
                  'checkpoint_timeout, checkpoint_warning')
@@ -864,7 +901,6 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
     _scope = PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE
     managed_items, managed_cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=_scope)
 
-    # -------------------------------------------------------------------------
     # Tune the max_wal_size (This is easy to tune as it is based on the maximum WAL disk total size) to trigger
     # the CHECKPOINT process. It is usually used to handle spikes in WAL usage (when the interval between two
     # checkpoints is not met soon, and data integrity is highly preferred).
@@ -938,40 +974,7 @@ def _wal_size_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_po
         _item_tuning(key=archive_timeout, after=after_archive_timeout, scope=_scope, response=response,
                      _log_pool=_log_pool)
 
-    # Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
-    # and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
-    # the time of reading 64 WAL files sequentially by 30% and writing those data randomly by 30%
-    # See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
-    # method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
-    # buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
-    # Also, I decide to increase checkpoint time by due to this thread: https://postgrespro.com/list/thread-id/2342450
-    # The minimum data amount is under normal condition of working (not initial bulk load)
-    _data_tput = PG_DISK_PERF.iops_to_throughput(request.options.data_index_spec.perf()[1] * 0.70)
-    _shared_buffers_ratio = 0.30
-    if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR):
-        _shared_buffers_ratio = 0.15
-
-    # max_wal_size is added for automatic checkpoint as threshold
-    # Technically the upper limit is at 1/2 of available RAM (since shared_buffers + effective_cache_size ~= RAM)
-    _data_amount = min(int(managed_cache['shared_buffers'] * _shared_buffers_ratio) // Mi,
-                       managed_cache['effective_cache_size'] // Ki,
-                       managed_cache['max_wal_size'] // Ki,) # Measured by MiB.
-    min_ckpt_time = ceil(_data_amount / managed_cache['checkpoint_completion_target'] * 1 / _data_tput)
-    _log_pool.append(f'The minimum checkpoint time is estimated to be {min_ckpt_time:.2f} seconds under estimation '
-                     f'of {_data_amount} MiB of data amount and {_data_tput:.2f} MiB/s of disk throughput.')
-    after_checkpoint_timeout = realign_value(
-        max(managed_cache['checkpoint_timeout'] + int(_wal_scale_factor * 7.5 * MINUTE),
-            min_ckpt_time), page_size=MINUTE // 2
-    )[request.options.align_index]
-    _item_tuning(key='checkpoint_timeout', after=after_checkpoint_timeout,
-                 scope=_scope, response=response, _log_pool=_log_pool)
-    _item_tuning(key='checkpoint_warning', after=after_checkpoint_timeout // 10,
-                 scope=_scope, response=response, _log_pool=_log_pool)
-    return None
-
-
-@time_decorator
-def _wal_buffers_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
+    # -------------------------------------------------------------------------
     _log_pool.append('Start tuning the WAL integrity of the PostgreSQL database server based on the data integrity '
                      'and provided allowed time of data transaction loss.'
                      '\nImpacted Attributes: wal_buffers, wal_writer_delay ')
@@ -1041,10 +1044,11 @@ def _wal_buffers_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log
     wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
                                after_wal_writer_delay, wal_tput)['msg']
     _log_pool.append(f'The wal_buffers is set to {bytesize_to_hr(current_wal_buffers)} -> {wal_time_report}')
-    return None
+
+    return _flush_log_pool(_log_pool)
 
 
-# =============================================================================
+# -----------------------------------------------------------------------------
 # Tune the memory usage based on specific workload
 def _get_wrk_mem_func():
     def _func_v1(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
@@ -1111,13 +1115,14 @@ def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, 
 
 
 @time_decorator
-def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
+def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> list[str]:
     # Tune the shared_buffers and work_mem by boost the scale factor (we don't change heuristic connection
     # as it represented their real-world workload). Similarly, with the ratio between temp_buffers and work_mem
     # Enable extra tuning to increase the memory usage if not meet the expectation.
     # Note that at this phase, we don't trigger auto-tuning from other function
 
     # Additional workload for specific workload
+    _log_pool = ['\n ===== Memory Usage Tuning =====']
     _hash_mem_adjust(request, response) # Ensure the hash_mem adjustment is there before the tuning.
     if request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
         # Disable the additional memory tuning as these workload does not make benefits when increase the memory
@@ -1196,7 +1201,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
         PG_PROFILE_OPTMODE.OPTIMUS_PRIME: (1.0 + _kwargs.effective_connection_ratio) / (2 * _kwargs.effective_connection_ratio),
         PG_PROFILE_OPTMODE.PRIMORDIAL: 1.0,
     }
-    hash_mem = pow_avg(1, managed_cache['hash_mem_multiplier'], level=_kwargs.hash_mem_usage_level)
+    hash_mem = generalized_mean(1, managed_cache['hash_mem_multiplier'], level=_kwargs.hash_mem_usage_level)
     work_mem_single = (1 - _kwargs.temp_buffers_ratio) * hash_mem
     if _kwargs.mem_pool_parallel_estimate:
         parallel_scale_nonfull = response.calc_worker_in_parallel(
@@ -1237,7 +1242,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
                                    for scope, func in _get_wrk_mem_func().items()])
     _log_pool.append('---------')
     _log_pool.append(f'DEBUG: The working memory usage based on memory profile increased to {bytesize_to_hr(working_memory)} '
-                     f'or {working_memory / ram * 100:.2f} (%) of {srv_mem_str} after {x} steps.')
+                     f'or {working_memory / ram * 100:.2f} (%) of {srv_mem_str} after {x:.2f} steps.')
     _log_pool.append(f'DEBUG: The working memory usage based on memory profile on all profiles are {_mem_check_string} '
                      f'after {x} steps.')
 
@@ -1267,15 +1272,50 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_poo
                                    for scope, func in _get_wrk_mem_func().items()])
     _log_pool.append(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.')
 
-    return None
+    # Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
+    # and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
+    # the time of reading 64 WAL files sequentially by 30% and writing those data randomly by 30%
+    # See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
+    # method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
+    # buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
+    # Also, I decide to increase checkpoint time by due to this thread: https://postgrespro.com/list/thread-id/2342450
+    # The minimum data amount is under normal condition of working (not initial bulk load)
+    _data_tput, _data_iops = request.options.data_index_spec.perf()
+    _data_trans_tput = 0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput, level=-2.5)
+    _shared_buffers_ratio = 0.30
+    if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR):
+        _shared_buffers_ratio = 0.15
+
+    # max_wal_size is added for automatic checkpoint as threshold
+    # Technically the upper limit is at 1/2 of available RAM (since shared_buffers + effective_cache_size ~= RAM)
+    _data_amount = min(int(managed_cache['shared_buffers'] * _shared_buffers_ratio) // Mi,
+                       managed_cache['effective_cache_size'] // Ki,
+                       managed_cache['max_wal_size'] // Ki,) # Measured by MiB.
+    min_ckpt_time = ceil(_data_amount * 1 / _data_trans_tput)
+    _log_pool.append(f'The minimum checkpoint time is estimated to be {min_ckpt_time:.1f} seconds under estimation '
+                     f'of {_data_amount} MiB of data amount and {_data_trans_tput:.2f} MiB/s of disk throughput.')
+    after_checkpoint_timeout = realign_value(
+        max(managed_cache['checkpoint_timeout'] +
+            int(int(log2(_kwargs.wal_segment_size // BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
+            min_ckpt_time / managed_cache['checkpoint_completion_target']), page_size=MINUTE // 2
+    )[request.options.align_index]
+    _item_tuning(key='checkpoint_timeout', after=after_checkpoint_timeout,
+                 scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_log_pool)
+    _item_tuning(key='checkpoint_warning', after=after_checkpoint_timeout // 10,
+                 scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_log_pool)
+    return _flush_log_pool(_log_pool)
 
 # =============================================================================
 @time_decorator
-def _logger_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, _log_pool: list[str]):
-    _log_pool.append('Start tuning the logging and query statistics on the PostgreSQL database server based on the '
-                     'database workload and production guidelines. Impacted attributes: track_activity_query_size, '
-                     'log_parameter_max_length, log_parameter_max_length_on_error, log_min_duration_statement, '
-                     'auto_explain.log_min_duration, track_counts, track_io_timing, track_wal_io_timing, ')
+def _logger_tune(
+        request: PG_TUNE_REQUEST,
+        response: PG_TUNE_RESPONSE,
+) -> None:
+    _log_pool = ['\n ===== Logging and Query Statistics Tuning =====',
+                 'Start tuning the logging and query statistics on the PostgreSQL database server based on the '
+                 'database workload and production guidelines. Impacted attributes: track_activity_query_size, '
+                 'log_parameter_max_length, log_parameter_max_length_on_error, log_min_duration_statement, '
+                 'auto_explain.log_min_duration, track_counts, track_io_timing, track_wal_io_timing, ']
     _kwargs = request.options.tuning_kwargs
 
     # Configure the track_activity_query_size, log_parameter_max_length, log_parameter_max_error_length
@@ -1324,56 +1364,23 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
         return None
 
     # -------------------------------------------------------------------------
-    # CPU & Statistics
-    # Connection and Disk Cache Tuning
-    _cpu_stat_log = ['\n ===== CPU & Statistics Tuning =====']
-    _conn_cache_tune(request, response, _cpu_stat_log)
-
-    # Query Tuning
-    _query_timeout_tune(request, response, _cpu_stat_log)
-
-    if len(_cpu_stat_log) > 1:
-        _logger.info('\n'.join(_cpu_stat_log))
+    # Connection, Disk Cache, Query, and Timeout Tuning
+    _conn_cache_query_timeout_tune(request, response)
 
     # -------------------------------------------------------------------------
-    # Disk-based
-    # Background Writer
-    _disk_log = ['\n ===== Disk-based Tuning =====']
-    _bgwriter_tune(request, response, _disk_log)
-
     # Disk-based (Performance) Tuning
-    _generic_disk_tune(request, response, _disk_log)
-
-    # Vacuum Tuning
-    _vacuum_tune(request, response, _disk_log)
-    _wraparound_vacuum_tune(request, response, _disk_log)
-
-    if len(_disk_log) > 1:
-        _logger.info('\n'.join(_disk_log))
+    _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
 
     # -------------------------------------------------------------------------
-    # Data Integrity Tuning
     # Write-Ahead Logging
-    _wal_log = ['\n ===== Data Integrity and Write-Ahead Log Tuning =====']
-    _wal_tune(request, response, _wal_log)
-
-    _wal_size_tune(request, response, _wal_log)
-
-    _wal_buffers_tune(request, response, _wal_log)
+    _wal_integrity_buffer_size_tune(request, response)
 
     # Logging Tuning
-    _logger_tune(request, response, _wal_log)
-
-    if len(_wal_log) > 1:
-        _logger.info('\n'.join(_wal_log))
+    _logger_tune(request, response)
 
     # -------------------------------------------------------------------------
     # Working Memory Tuning
-    _wrk_mem_log = ['\n ===== Working Memory Tuning =====']
-    _wrk_mem_tune(request, response, _wrk_mem_log)
-
-    if len(_wrk_mem_log) > 1:
-        _logger.info('\n'.join(_wrk_mem_log))
+    _wrk_mem_tune(request, response)
 
     # -------------------------------------------------------------------------
     if not WEB_MODE:

@@ -13,7 +13,7 @@ from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.profile.database.shared import wal_time, checkpoint_time, vacuum_time, vacuum_scale
-from src.utils.avg import pow_avg
+from src.utils.mean import generalized_mean
 from src.utils.pydantic_utils import bytesize_to_hr
 
 __all__ = ['PG_TUNE_REQUEST', 'PG_TUNE_RESPONSE']
@@ -155,7 +155,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         # Higher level would assume more hash-based operations, which reduce the work_mem in correction-tuning phase
         # Smaller level would assume less hash-based operations, which increase the work_mem in correction-tuning phase
         # real_world_work_mem = work_mem * hash_mem_multiplier
-        real_world_mem_scale = pow_avg(1, hash_mem_multiplier, level=_kwargs.hash_mem_usage_level)
+        real_world_mem_scale = generalized_mean(1, hash_mem_multiplier, level=_kwargs.hash_mem_usage_level)
         real_world_work_mem = work_mem * real_world_mem_scale
         total_working_memory = (temp_buffers + real_world_work_mem)
         total_working_memory_hr = bytesize_to_hr(total_working_memory)
@@ -216,18 +216,20 @@ class PG_TUNE_RESPONSE(BaseModel):
             real_autovacuum_work_mem = min(1 * Gi, real_autovacuum_work_mem)
 
         # Checkpoint Timing
-        data_iops = options.data_index_spec.perf()[1]
+        data_tput, data_iops = options.data_index_spec.perf()
         checkpoint_timeout = managed_cache['checkpoint_timeout']
         checkpoint_completion_target = managed_cache['checkpoint_completion_target']
-        checkpoint_time_partial = partial(checkpoint_time, checkpoint_timeout_second=checkpoint_timeout,
-                                          checkpoint_completion_target=checkpoint_completion_target,
-                                          data_disk_iops=data_iops * 0.7, shared_buffers=shared_buffers,
-                                          effective_cache_size=effective_cache_size,
-                                          max_wal_size=managed_cache['max_wal_size'])
+        checkpoint_time_partial = partial(
+            checkpoint_time, checkpoint_timeout_second=checkpoint_timeout,
+            checkpoint_completion_target=checkpoint_completion_target,
+            shared_buffers=shared_buffers, max_wal_size=managed_cache['max_wal_size'],
+            effective_cache_size=effective_cache_size,
+            data_disk_iops=PG_DISK_PERF.throughput_to_iops(
+                0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(data_iops), data_tput, level=-2.5)
+            )
+        )
         ckpt05 = checkpoint_time_partial(shared_buffers_ratio=0.05)
-        ckpt10 = checkpoint_time_partial(shared_buffers_ratio=0.10)
         ckpt30 = checkpoint_time_partial(shared_buffers_ratio=0.30)
-        ckpt60 = checkpoint_time_partial(shared_buffers_ratio=0.60)
         ckpt95 = checkpoint_time_partial(shared_buffers_ratio=0.95)
 
         # Background Writers
@@ -341,8 +343,7 @@ Report Summary (others):
         + Autovacuum delay: {managed_cache['autovacuum_vacuum_cost_delay']} (ms) --> Vacuum delay: {managed_cache['vacuum_cost_delay']} (ms)
         + IOPS Spent: {data_iops * _kwargs.autovacuum_utilization_ratio:.1f} pages or {PG_DISK_PERF.iops_to_throughput(data_iops * _kwargs.autovacuum_utilization_ratio):.1f} MiB/s
         + Vacuum Report on Worst Case Scenario:
-            We safeguard against WRITE since most READ in production usually came from RAM/cache before auto-vacuuming, 
-            but not safeguard against pure, zero disk read.
+            We safeguard against WRITE since most READ in production usually came from RAM/cache before auto-vacuuming, but not safeguard against pure, zero disk read.
             -> Hit (page in shared_buffers): Maximum {vacuum_report['max_num_hit_page']} pages or RAM throughput {vacuum_report['max_hit_data']:.2f} MiB/s 
                 RAM Safety: {vacuum_report['max_hit_data'] < 10 * K10} (< 10 GiB/s for low DDR3)
             -> Miss (page in disk cache): Maximum {vacuum_report['max_num_miss_page']} pages or Disk throughput {vacuum_report['max_miss_data']:.2f} MiB/s
@@ -369,23 +370,15 @@ Report Summary (others):
 
 * Checkpoint:
     - Effective Timeout: {checkpoint_timeout * checkpoint_completion_target:.1f} seconds ({checkpoint_timeout}::{checkpoint_completion_target})
-    - Analyze Checkpoint Time (ensure the checkpoint can be written within the timeout and ignore dirty buffers on-the-go):
+    - Checkpoint Timing Analysis at 70% random IOPS:
         + 5% of shared_buffers:
             -> Data Amount: {bytesize_to_hr(ckpt05['data_amount'])} :: {ckpt05['page_amount']} pages
             -> Expected Time: {ckpt05['data_write_time']} seconds with {ckpt05['data_disk_utilization'] * 100:.2f} (%) utilization
             -> Safe Test :: Time-based Check <- {ckpt05['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}
-        + 10% of shared_buffers:
-            -> Data Amount: {bytesize_to_hr(ckpt10['data_amount'])} :: {ckpt10['page_amount']} pages
-            -> Expected Time: {ckpt10['data_write_time']} seconds with {ckpt10['data_disk_utilization'] * 100:.2f} (%) utilization
-            -> Safe Test :: Time-based Check <- {ckpt10['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}
         + 30% of shared_buffers:
             -> Data Amount: {bytesize_to_hr(ckpt30['data_amount'])} :: {ckpt30['page_amount']} pages
             -> Expected Time: {ckpt30['data_write_time']} seconds with {ckpt30['data_disk_utilization'] * 100:.2f} (%) utilization
-            -> Safe Test :: Time-based Check <- {ckpt30['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}
-        + 60% of shared_buffers:
-            -> Data Amount: {bytesize_to_hr(ckpt60['data_amount'])} :: {ckpt60['page_amount']} pages
-            -> Expected Time: {ckpt60['data_write_time']} seconds with {ckpt60['data_disk_utilization'] * 100:.2f} (%) utilization
-            -> Safe Test :: Time-based Check <- {ckpt60['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}    
+            -> Safe Test :: Time-based Check <- {ckpt30['data_write_time'] <= checkpoint_timeout * checkpoint_completion_target}   
         + 95% of shared_buffers:
             -> Data Amount: {bytesize_to_hr(ckpt95['data_amount'])} :: {ckpt95['page_amount']} pages
             -> Expected Time: {ckpt95['data_write_time']} seconds with {ckpt95['data_disk_utilization'] * 100:.2f} (%) utilization

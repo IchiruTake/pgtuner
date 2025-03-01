@@ -252,25 +252,9 @@ def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, respo
     shared_buffers = global_cache['shared_buffers']
     usable_ram_noswap = options.usable_ram
     fn = lambda x: 1024 * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
-    if shared_buffers <= 512 * Mi or usable_ram_noswap <= 4.25 * Gi:
-        oldstyle_wal_buffers = shared_buffers // 32  # Measured in bytes
-        wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki)
-    else:
-        wal_buffers = fn(usable_ram_noswap / Gi) * Ki  # Measured in MiB
-
-    precision: int = DB_PAGE_SIZE
-    # With low server usage, we push it to exploited 1 page of precision
-    # if 2.5 * Gi < usable_ram <= 4 * Gi:
-    #     precision = 4 * DB_PAGE_SIZE
-    # elif 4 * Gi < usable_ram <= 6 * Gi:
-    #     precision = 8 * DB_PAGE_SIZE
-    # elif 6 * Gi < usable_ram <= 8 * Gi:
-    #     precision = 16 * DB_PAGE_SIZE
-    # elif 8 * Gi < usable_ram <= 16 * Gi:
-    #     precision = 24 * DB_PAGE_SIZE
-    # elif usable_ram > 16 * Gi:
-    #     precision = 32 * DB_PAGE_SIZE
-    return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=precision)[options.align_index]
+    oldstyle_wal_buffers = min(shared_buffers // 32, options.tuning_kwargs.wal_segment_size)  # Measured in bytes
+    wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki)
+    return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=DB_PAGE_SIZE)[options.align_index]
 
 
 # =============================================================================

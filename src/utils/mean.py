@@ -1,10 +1,11 @@
 
-__all__ = ['pow_avg']
+__all__ = ['generalized_mean']
 
-def pow_avg(*args: int | float, level: int | float, round_ndigits: int | None = 4) -> int | float:
+def generalized_mean(*args: int | float, level: int | float, round_ndigits: int | None = 4) -> int | float:
     """
     This function is used to calculate the average of the given arguments using the power of the level.
     If level = 1, it will be the same as the normal average.
+    Ref: https://en.wikipedia.org/wiki/Generalized_mean
 
     Arguments:
     ---------
@@ -23,5 +24,7 @@ def pow_avg(*args: int | float, level: int | float, round_ndigits: int | None = 
 
     if level == 0:
         level = 1e-6    # Small value to prevent division by zero
+    elif level == -0:
+        level = -1e-6
     n = len(args)
     return round((sum((arg ** level) / n for arg in args)) ** (1 / level), ndigits=round_ndigits)
