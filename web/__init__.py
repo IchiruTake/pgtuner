@@ -299,8 +299,14 @@ async def js(
 
 @app.get('/robots.txt', status_code=status.HTTP_200_OK)
 async def robots():
+    content = """User-agent: *
+Disallow: /api/
+Disallow: /docs/
+Disallow: /redoc/
+Allow: /
+"""
     return PlainTextResponse(
-        content=open(f'{_default_path}/robots.txt', 'r').read(),
+        content=content,
         status_code=status.HTTP_200_OK,
         headers={
             'Cache-Control': _static_cache

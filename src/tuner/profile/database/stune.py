@@ -158,22 +158,19 @@ def _conn_cache_query_timeout_tune(
                      'default_statistics_target, commit_delay. ')
 
     # Tune the cpu_tuple_cost, parallel_tuple_cost, lock_timeout, statement_timeout
-    _workload_translations: dict[PG_WORKLOAD, tuple[float, tuple[int, int]]] = {
-        PG_WORKLOAD.LOG: (0.005, (3 * MINUTE, 5)),
-        PG_WORKLOAD.SOLTP: (0.0075, (5 * MINUTE, 5)),
-        PG_WORKLOAD.TSR_IOT: (0.0075, (5 * MINUTE, 5)),
-
-        PG_WORKLOAD.OLTP: (0.015, (10 * MINUTE, 3)),
-
-        PG_WORKLOAD.VECTOR: (0.025, (5 * MINUTE, 5)),  # Vector-search
-        PG_WORKLOAD.HTAP: (0.025, (45 * MINUTE, 2)),
-
-        PG_WORKLOAD.OLAP: (0.03, (90 * MINUTE, 2)),
-        PG_WORKLOAD.DATA_WAREHOUSE: (0.03, (90 * MINUTE, 2)),
+    _workload_translations: dict[PG_WORKLOAD, tuple[float, int]] = {
+        PG_WORKLOAD.LOG: (0.005, 3 * MINUTE),
+        PG_WORKLOAD.SOLTP: (0.0075, 5 * MINUTE),
+        PG_WORKLOAD.TSR_IOT: (0.0075, 5 * MINUTE),
+        PG_WORKLOAD.VECTOR: (0.025, 10 * MINUTE),  # Vector-search
+        PG_WORKLOAD.OLTP: (0.015, 10 * MINUTE),
+        PG_WORKLOAD.HTAP: (0.025, 30 * MINUTE),
+        PG_WORKLOAD.OLAP: (0.03, 60 * MINUTE),
+        PG_WORKLOAD.DATA_WAREHOUSE: (0.03, 60 * MINUTE),
     }
     _suffix_text: str = f'by workload: {request.options.workload_type}'
     if request.options.workload_type in _workload_translations:
-        new_cpu_tuple_cost, (base_timeout, multiplier_timeout) = _workload_translations[request.options.workload_type]
+        new_cpu_tuple_cost, base_timeout = _workload_translations[request.options.workload_type]
         if _item_tuning(key='cpu_tuple_cost', after=new_cpu_tuple_cost, scope=PG_SCOPE.QUERY_TUNING, response=response,
                         _log_pool=_log_pool, suffix_text=_suffix_text):
             _trigger_tuning({
@@ -181,11 +178,9 @@ def _conn_cache_query_timeout_tune(
             }, request, response, _log_pool)
 
         # 3 seconds was added as the reservation for query plan before taking the lock
-        new_lock_timeout = int(base_timeout * multiplier_timeout)
-        new_statement_timeout = new_lock_timeout + 3
-        _item_tuning(key='lock_timeout', after=new_lock_timeout, scope=PG_SCOPE.OTHERS, response=response,
+        _item_tuning(key='lock_timeout', after=base_timeout, scope=PG_SCOPE.OTHERS, response=response,
                      _log_pool=_log_pool, suffix_text=_suffix_text)
-        _item_tuning(key='statement_timeout', after=new_statement_timeout, scope=PG_SCOPE.OTHERS, response=response,
+        _item_tuning(key='statement_timeout', after=base_timeout + 3, scope=PG_SCOPE.OTHERS, response=response,
                      _log_pool=_log_pool, suffix_text=_suffix_text)
 
     # Tune the default_statistics_target
@@ -416,26 +411,28 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # -------------------------------------------------------------------------
     _log_pool.append('Start tuning the background writer of the PostgreSQL database server based on the database '
                      'workload. \nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.')
-    _kwargs = request.options.tuning_kwargs
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     _data_iops = request.options.data_index_spec.perf()[1]
 
-    # Tune the bgwriter_delay (10 ms per 1K iops)
-    after_bgwriter_delay = floor(max(100, managed_cache['bgwriter_delay'] - 10 * _data_iops // int(1 * K10)))
+    # Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
+    # --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
+    after_bgwriter_delay = floor(max(100, managed_cache['bgwriter_delay'] - 8 * _data_iops // int(1 * K10)))
     _item_tuning(key='bgwriter_delay', after=after_bgwriter_delay,
                  scope=PG_SCOPE.OTHERS, response=response, _log_pool=_log_pool)
 
     # Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
-    # workload, hopefully dirty buffers can get flushed at large amount of data
-    after_bgwriter_lru_maxpages = int(managed_cache['bgwriter_lru_maxpages'])   # Make a copy
-    if PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd', interval='weak'):
-        after_bgwriter_lru_maxpages += 100
-    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd', interval='strong'):
-        after_bgwriter_lru_maxpages += 100 + 150
-    elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'nvme'):
-        after_bgwriter_lru_maxpages += 100 + 150 + 200
-    _item_tuning(key='bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
-                 response=response, _log_pool=_log_pool)
+    # workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
+    # workload required WRITE-intensive operation during daily.
+    if ((request.options.workload_type == PG_WORKLOAD.VECTOR and request.options.workload_profile >= PG_SIZING.MALL) or
+            request.options.workload_type != PG_WORKLOAD.SOLTP):
+        after_bgwriter_lru_maxpages = int(managed_cache['bgwriter_lru_maxpages'])   # Make a copy
+        if PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd', interval='weak'):
+            after_bgwriter_lru_maxpages += 100
+        elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd', interval='strong'):
+            after_bgwriter_lru_maxpages += 100 + 150
+        elif PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'nvme'):
+            after_bgwriter_lru_maxpages += 100 + 150 + 200
+        _item_tuning(key='bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
+                     response=response, _log_pool=_log_pool)
 
     # -------------------------------------------------------------------------
     """
@@ -502,7 +499,6 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
                      '\nImpacted Attributes: *_vacuum_cost_delay, vacuum_cost_page_dirty, *_vacuum_cost_limit, '
                      '*_freeze_min_age, *_failsafe_age, *_table_age ')
     _kwargs = request.options.tuning_kwargs
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     data_iops = request.options.data_index_spec.perf()[1]
 
     """
@@ -600,8 +596,6 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # largest table size (the amount of data to be vacuumed), and especially if the user can predict correctly
     _log_pool.append('Start tuning the autovacuum of the PostgreSQL database server based on the database workload. '
                      '\nImpacted Attributes: *_freeze_min_age, *_failsafe_age, *_table_age ')
-    _kwargs = request.options.tuning_kwargs
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
 
     # Use-case: We extracted the TXID use-case from the GitLab PostgreSQL database, which has the TXID of 55M per day
     # or 2.3M per hour, at some point, it has 1.4K/s on weekday (5M/h) and 600/s (2M/h) on weekend.
@@ -955,31 +949,27 @@ def _wal_integrity_buffer_size_tune(
 
     # -------------------------------------------------------------------------
     # Tune the archive_timeout based on the WAL segment size. This is easy because we want to flush the WAL
-    # segment to make it have better database health
-    # Tune the checkpoint timeout: This is hard to tune as it mostly depends on the amount of data change
-    # (workload_profile), disk strength (IO), expected RTO.
+    # segment to make it have better database health. We increased it when we have larger WAL segment, but decrease
+    # when we have more replicas, but capping between 30 minutes and 2 hours.
+    # archive_timeout: Force a switch to next WAL file after the timeout is reached. On the READ replicas
+    # or during idle time, the LSN or XID don't increase so no WAL file is switched unless manually forced
+    # See CheckArchiveTimeout() at line 679 of postgres/src/backend/postmaster/checkpoint.c
+    # For the tuning guideline, it is recommended to have a large enough value, but not too large to
+    # force the streaming replication (copying **ready** WAL files)
     # In general, this is more on the DBA and business strategies. So I think the general tuning phase is good enough
     _wal_scale_factor = int(log2(_kwargs.wal_segment_size // BASE_WAL_SEGMENT_SIZE))
-    if _wal_scale_factor > 0:
-        # archive_timeout: Force a switch to next WAL file after the timeout is reached. On the READ replicas
-        # or during idle time, the LSN or XID don't increase so no WAL file is switched unless manually forced
-        # See CheckArchiveTimeout() at line 679 of postgres/src/backend/postmaster/checkpoint.c
-        # For the tuning guideline, it is recommended to have a large enough value, but not too large to
-        # force the streaming replication (copying **ready** WAL files)
-        archive_timeout = 'archive_timeout'
-        after_archive_timeout = realign_value(
-            min(managed_cache[archive_timeout] + int(_wal_scale_factor * 10 * MINUTE), 2 * HOUR),
-            page_size=MINUTE // 4
-        )[request.options.align_index]
-        _item_tuning(key=archive_timeout, after=after_archive_timeout, scope=_scope, response=response,
-                     _log_pool=_log_pool)
+    after_archive_timeout = realign_value(
+        cap_value(managed_cache['archive_timeout'] + int(MINUTE * (_wal_scale_factor * 10 - num_replicas // 2 * 5)),
+                  30 * MINUTE, 2 * HOUR),
+        page_size=MINUTE // 4
+    )[request.options.align_index]
+    _item_tuning(key='archive_timeout', after=after_archive_timeout, scope=_scope, response=response,
+                 _log_pool=_log_pool)
 
     # -------------------------------------------------------------------------
     _log_pool.append('Start tuning the WAL integrity of the PostgreSQL database server based on the data integrity '
                      'and provided allowed time of data transaction loss.'
                      '\nImpacted Attributes: wal_buffers, wal_writer_delay ')
-    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
-    _kwargs = request.options.tuning_kwargs
 
     # Apply tune the wal_writer_delay here regardless of the synchronous_commit so that we can ensure
     # no mixed of lossy and safe transactions
@@ -1003,8 +993,7 @@ def _wal_integrity_buffer_size_tune(
         _log_pool.append('WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.')
 
     wal_tput = request.options.wal_spec.perf()[0]
-    wal_buffers_str: str = 'wal_buffers'
-    current_wal_buffers = int(managed_cache[wal_buffers_str])  # Ensure a new copy
+    current_wal_buffers = int(managed_cache['wal_buffers'])  # Ensure a new copy
 
     # Just some useful information
     best_wal_time = wal_time(current_wal_buffers, 1.0, _kwargs.wal_segment_size,
@@ -1034,12 +1023,16 @@ def _wal_integrity_buffer_size_tune(
             transaction_loss_ratio = 2 / 3.25
 
     decay_rate = 16 * DB_PAGE_SIZE
-    current_wal_buffers = int(managed_cache[wal_buffers_str])  # Ensure a new copy
+    current_wal_buffers = realign_value(
+        managed_cache['wal_buffers'],
+        min(_kwargs.wal_segment_size, 64 * Mi)
+    )[1] # Bump to higher WAL buffers
+
     transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
     while transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
                                             after_wal_writer_delay, wal_tput)['total_time']:
         current_wal_buffers -= decay_rate
-    _item_tuning(key=wal_buffers_str, after=current_wal_buffers, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _item_tuning(key='wal_buffers', after=current_wal_buffers, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_log_pool)
     wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
                                after_wal_writer_delay, wal_tput)['msg']
@@ -1115,7 +1108,7 @@ def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, 
 
 
 @time_decorator
-def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> list[str]:
+def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # Tune the shared_buffers and work_mem by boost the scale factor (we don't change heuristic connection
     # as it represented their real-world workload). Similarly, with the ratio between temp_buffers and work_mem
     # Enable extra tuning to increase the memory usage if not meet the expectation.

@@ -6,11 +6,15 @@ v0.x.x (TBD)
 
 v0.1.5 (Mar , 2025)
 =========================
-- UI & Backend: Propose input and configuration estimation test.
-- UI: Document revision
+
+Algorithm Changes:
+- BGWRITER: Add the condition for `bgwriter_lru_maxpages` to be well-adapted with associated workload
+- TIMEOUT: The two parameters `statement_timeout` and `lock_timeout` is reduced significantly.
+- TIMEOUT: The parameter `archive_timeout` is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.
+- WAL: The parameter `wal_buffers` would be first scaled to a multiple of `wal_segment_size` (maximum of 64 MiB) during the correction tuning phase, but the adjustment of WAL buffers to alleviate transaction loss is maintained
 
 
-v0.1.4 (Mar 01st , 2025)
+v0.1.4 (Mar 01st, 2025)
 =========================
 Generic:
 - Backend: Now input added the `frozen` attribute to indicate whether the parameter expect changes or not.

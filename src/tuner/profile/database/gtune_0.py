@@ -290,7 +290,7 @@ _DB_CONN_PROFILE = {
     },
     'max_connections': {
         'instructions': {
-            'mini': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 5,
+            'mini': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 10,
                                                                                            30),
             'medium': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 15,
                                                                                              65),
@@ -996,9 +996,10 @@ exit 0
     'archive_timeout': {
         'instructions': {
             'mini_default': 1 * HOUR,
-            'medium_default': 30 * MINUTE,
+            'mall_default': 30 * MINUTE,
+            'bigt_default': 30 * MINUTE,
         },
-        'default': 15 * MINUTE,
+        'default': 45 * MINUTE,
         'hardware_scope': 'overall',  # But based on data rate
         'comment': 'The :var:`archive_command` or :var:`archive_library` is only invoked for completed WAL segments. '
                    'Hence, if your server generates little WAL traffic, there could be a long delay between the '
