@@ -66,8 +66,8 @@ def __get_num_connections(
     try:
         total_connections: int = managed_cache['max_connections']
         reserved_connections = managed_cache['reserved_connections'] + managed_cache['superuser_reserved_connections']
-    except KeyError as e:
-        _logger.error(f"This function required the connection must be triggered and placed in the managed cache.")
+    except (IndexError, ValueError, KeyError) as e:
+        _logger.error(f"This function required the connection must be triggered and placed in the managed cache: See error \n{e}.")
         return -1
     if not use_reserved_connection:
         total_connections -= reserved_connections

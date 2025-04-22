@@ -25,8 +25,8 @@ from src.tuner.data.sizing import PG_DISK_SIZING, PG_SIZING
 
 __all__ = ['correction_tune']
 _logger = logging.getLogger(APP_NAME_UPPER)
-_MIN_USER_CONN_FOR_ANALYTICS = 10
-_MAX_USER_CONN_FOR_ANALYTICS = 40
+_MIN_USER_CONN_FOR_ANALYTICS = 5
+_MAX_USER_CONN_FOR_ANALYTICS = 30
 _DEFAULT_WAL_SENDERS: tuple[int, int, int] = (3, 5, 7)
 _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
 
