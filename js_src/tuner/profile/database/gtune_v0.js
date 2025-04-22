@@ -392,37 +392,10 @@ _DB_VACUUM_PROFILE = {
 _DB_BGWRITER_PROFILE = {
     // We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     // to tune it
-}
-
-export default DB0_CONFIG_PROFILE
-
-
-
-// ----------------------------------------------------------------------------------------------------------------
-// Python code
-from functools import partial
-from pydantic import ByteSize
-from src.tuner.data.options import PG_TUNE_USR_OPTIONS
-from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
-from src.tuner.data.workload import PG_WORKLOAD
-from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
-from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
-from src.utils.pydantic_utils import (bytesize_to_hr, realign_value, cap_value, )
-
-# =============================================================================
-
-_DB_BGWRITER_PROFILE = {
-    # We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
-    # to tune it
     'bgwriter_delay': {
         'default': 300,
         'hardware_scope': 'overall',
-        'comment': "Specifies the delay between activity rounds for the background writer. In each round the writer "
-                   "issues writes for some number of dirty buffers (controllable by the following parameters). It "
-                   "then sleeps for the length of :var:`bgwriter_delay`, and repeats. When there are no dirty buffers "
-                   "in the buffer pool, though, it goes into a longer sleep regardless of :var:`bgwriter_delay`. "
-                   "Default value is 300 milliseconds (300ms)",
-        'partial_func': lambda value: f"{value}ms",
+        'partial_func': (value) => "${value}ms",
     },
     'bgwriter_lru_maxpages': {
         'instructions': {
@@ -431,265 +404,106 @@ _DB_BGWRITER_PROFILE = {
             'bigt_default': 500,
         },
         'default': 300,
-        'comment': "In each round, no more than this many buffers will be written by the background writer. Setting "
-                   "this to zero disables background writing. (Note that checkpoints, which are managed by a separate, "
-                   "dedicated auxiliary process, are unaffected.) The default value is 300 pages but it would be "
-                   "changed based on your data disk IOPs. On strong servers, especially with SSD, we can have "
-                   "a stronger write here.",
     },
     'bgwriter_lru_multiplier': {
         'default': 2.0,
-        'comment': "The number of dirty buffers written in each round is based on the number of new buffers that have "
-                   "been needed by server processes during recent rounds. The average recent need is multiplied by "
-                   "bgwriter_lru_multiplier to arrive at an estimate of the number of buffers that will be needed "
-                   "during the next round. Dirty buffers are written until there are that many clean, reusable "
-                   "buffers available. (However, no more than bgwriter_lru_maxpages buffers will be written per "
-                   "round.) Thus, a setting of 1.0 represents a “just in time” policy of writing exactly the number "
-                   "of buffers predicted to be needed. Larger values provide some cushion against spikes in demand, "
-                   "while smaller values intentionally leave writes to be done by server processes. The default "
-                   "is 2.0.",
     },
     'bgwriter_flush_after': {
         'default': 512 * Ki,
-        'comment': "Whenever more than this amount of data has been written by the background writer, attempt to "
-                   "force the OS to issue these writes to the underlying storage. Doing so will limit the amount of "
-                   "dirty data in the kernel's page cache, reducing the likelihood of stalls when an fsync is issued "
-                   "at the end of a checkpoint, or when the OS writes data back in larger batches in the background. "
-                   "Often that will result in greatly reduced transaction latency, but there also are some cases, "
-                   "especially with workloads that are bigger than shared_buffers, but smaller than the OS's page "
-                   "cache, where performance might degrade.",
-        'partial_func': lambda value: f"{value // Ki}kB",
+        'partial_func': (value) => "${floor(value / Ki)}kB",
     },
 }
 
 _DB_ASYNC_DISK_PROFILE = {
     'effective_io_concurrency': {
         'default': 16,
-        'comment': "Sets the number of concurrent disk I/O operations that PostgreSQL expects can be executed "
-                   "simultaneously. Raising this value will increase the number of I/O operations that any individual "
-                   "PostgreSQL session attempts to initiate in parallel. The allowed range is 1 to 1000, or zero to "
-                   "disable issuance of asynchronous I/O requests. Currently, this setting only affects bitmap heap "
-                   "scans. For magnetic drives, a good starting point for this setting is the number of separate "
-                   "drives comprising a RAID 0 stripe or RAID 1 mirror being used for the database. A value higher "
-                   "than needed to keep the disks busy will only result in extra CPU overhead. SSDs and other "
-                   "memory-based storage can often process many concurrent requests, so the best value might be in "
-                   "the hundreds. However, a search on PostgreSQL issue at reference [30-32] showing that even a "
-                   "higher value can bring more benefit with due to the cheaper prefetch operation even on HDD. "
-                   "However, it is strongly related to the disk controller and queue length. For your concern, we set "
-                   "the default value is 16 on HDD and 128 for SATA SSD (legacy). For a more modern SATA SSD, a good "
-                   "setting is 192 or 256 (up to the queue length). For NVMe PCIe v3+ SSD, a good default setting is "
-                   "512 or above (but it is limited by PostgreSQL constraint). If you think these values are bad "
-                   "during bitmap heap scan, disable it by setting it to 0. Note that this parameter is only beneficial "
-                   "for the bitmap heap scan and not a big gamechanger. ",
     },
     'maintenance_io_concurrency': {
         'default': 10,
-        'comment': "Similar to :var:`effective_io_concurrency`, but used for maintenance work that is done on behalf "
-                   "of many client sessions. The default is 10 on supported systems, otherwise 0. During maintenance, "
-                   "since the operation is mostly involved in sequential disk read and write during vacuuming and "
-                   "index creation; thus, increasing this value may not benefit much.",
     },
     'backend_flush_after': {
         'default': 0,
-        'comment': 'Whenever more than backend_flush_after bytes have been written by a single backend, attempt to '
-                   'force the OS to issue these writes to the underlying storage. Doing so will limit the amount of '
-                   "dirty data in the kernel's page cache, reducing the likelihood of stalls when an fsync is issued "
-                   'at the end of a checkpoint, or when the OS writes data back in larger batches in the background. '
-                   'Often that will result in greatly reduced transaction latency, but there also are some cases, '
-                   "especially with workloads that are bigger than shared_buffers, but smaller than the OS's page "
-                   'cache, where performance might degrade. This setting may have no effect on some platforms. The '
-                   'valid range is between 0, which disables forced writeback, and 2MB. The default is 0, i.e., no '
-                   'forced writeback. ',
     },
 }
 
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
-        'tune_op': lambda group_cache, global_cache, options, response:
-        cap_value(int(options.vcpu * 1.5) + 2, 4, 512),
+        'tune_op': (group_cache, global_cache, options, response) => cap_value(ceil(options.vcpu * 1.5) + 2, 4, 512),
         'default': 8,
-        'comment': 'Sets the maximum number of background processes that the system can support. The supported range '
-                   'is [4, 512], with default to 1.5x + 2 of the logical CPU count (8 by official documentation). We do '
-                   'not have intention on the worst case with > 128 vCPU for PostgreSQL since beyond that, the '
-                   'benefit gained is quite minimal due to OS context switching.',
     },
     'max_parallel_workers': {
-        'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
+        'tune_op': (group_cache, global_cache, options, response) => min(cap_value(ceil(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
         'default': 8,
-        'comment': 'Sets the maximum number of workers that the cluster can support for parallel operations. The '
-                   'supported range is [4, 512], with default to 1.125x of the logical CPU count (8 by official '
-                   'documentation). When increasing or decreasing this value, consider also adjusting '
-                   'max_parallel_maintenance_workers and max_parallel_workers_per_gather. Also, note that these '
-                   'workers are retrieved from max_parallel_workers so higher value than max_worker_processes will '
-                   'have no effect. See Ref [05] for more information.',
     },
     'max_parallel_workers_per_gather': {
-        'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu // 3), 2, 32), group_cache['max_parallel_workers']),
+        'tune_op': (group_cache, global_cache, options, response) => min(cap_value(ceil(options.vcpu / 3), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
-        'comment': 'Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. '
-                   'Parallel workers are taken from the pool of processes established by max_worker_processes, limited '
-                   'by max_parallel_workers. However, there are no guarantee from Ref video [33] saying that increase '
-                   'more is better due to the algorithm, lock contention and memory usage. Thus by TimescaleDB, it is '
-                   'best to keep it below 1/2 of number of CPUs or 1/2 of max_parallel_workers to allow at least 2 '
-                   '*Gather* queries to be run. The supported range is [2, 32], with default to 1/3x of the logical '
-                   'CPU count (2 by official documentation).',
     },
-
     'max_parallel_maintenance_workers': {
-        'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu // 2), 2, 32), group_cache['max_parallel_workers']),
+        'tune_op': (group_cache, global_cache, options, response) => min(cap_value(ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
-        'comment': "Sets the maximum number of parallel workers that can be started by a single utility command. "
-                   "Currently, the parallel utility commands that support the use of parallel workers are CREATE INDEX "
-                   "only when building a B-tree index, and VACUUM without FULL option. Parallel workers are taken from "
-                   "the pool of processes established by max_worker_processes, limited by max_parallel_workers. Note "
-                   "that the requested number of workers may not actually be available at run time. If this occurs, "
-                   "the utility operation will run with fewer workers than expected. The default value is 2. Note that "
-                   "parallel utility commands should not consume substantially more memory than equivalent non-parallel "
-                   "operations. This strategy differs from that of parallel query, where resource limits generally "
-                   "apply per worker process. Parallel utility commands treat the resource limit maintenance_work_mem "
-                   "as a limit to be applied to the entire utility command, regardless of the number of parallel worker "
-                   "processes. However, parallel utility commands may still consume substantially more CPU resources "
-                   "and I/O bandwidth. The supported range is [2, 16], with default to 1/2x of the logical CPU count "
-                   "(2 by official documentation). See Ref [05] for more information.",
     },
     'min_parallel_table_scan_size': {
         'instructions': {
-            "medium_default": 16 * Mi,
-            "large_default": 24 * Mi,
-            "mall_default": 32 * Mi,
-            "bigt_default": 32 * Mi,
+            'medium_default': 16 * Mi,
+            'large_default': 24 * Mi,
+            'mall_default': 32 * Mi,
+            'bigt_default': 32 * Mi,
         },
         'default': 8 * Mi,
-        'comment': "Sets the minimum amount of table data that must be scanned in order for a parallel scan to be "
-                   "considered. For a parallel sequential scan, the amount of table data scanned is always equal to "
-                   "the size of the table, but when indexes are used the amount of table data scanned will normally "
-                   "be less. The default is 8 megabytes (8MB). But you can see the 'driving' rule in video [34] to "
-                   "benefit better when your server is large. This variable is set to ensure that the parallel scan"
-                   "query plan only benefit with table or index with this size or larger.",
-        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
+        'partial_func': (value) => '${floor(value / DB_PAGE_SIZE) * floor(DB_PAGE_SIZE / Ki)}kB',
     },
     'min_parallel_index_scan_size': {
-        'tune_op': lambda group_cache, global_cache, options, response:
-        max(group_cache['min_parallel_table_scan_size'] // 16, 512 * Ki),
+        'tune_op': (group_cache, global_cache, options, response) => max(group_cache['min_parallel_table_scan_size'] / 16, 512 * Ki),
         'default': 512 * Ki,
-        'comment': "Sets the minimum amount of index data that must be scanned in order for a parallel scan to be "
-                   "considered. Note that a parallel index scan typically won't touch the entire index; it is the "
-                   "number of pages which the planner believes will actually be touched by the scan which is relevant. "
-                   "This variable is set to be the maximum of 1/16 of min_parallel_table_scan_size or 512 KiB (by "
-                   "default of official PostgreSQL documentation).",
-        'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
+        'partial_func': (value) => '${floor(value / DB_PAGE_SIZE) * floor(DB_PAGE_SIZE / Ki)}kB',
     },
 }
 
 _DB_WAL_PROFILE = {
-    # ============================== WAL ==============================
-    # For these settings, please refer to the [13] and [14] for more information
+    // For these settings, please refer to the [13] and [14] for more information
     'wal_level': {
         'default': 'replica',
-        'comment': "wal_level determines how much information is written to the WAL. The default value is "
-                   ":enum:`replica`, which writes enough data to support WAL archiving and replication, including "
-                   "running read-only queries on a standby server. :enum:`minimal` removes all logging except the "
-                   "information required to recover from a crash or immediate shutdown. Finally, :enum:`logical` adds "
-                   "information necessary to support logical decoding."
     },
     'synchronous_commit': {
         'default': 'on',
-        'comment': 'Specifies how much WAL processing must complete before the database server returns a “success” '
-                   'indication to the client. Valid values are :enum:`remote_apply`, :enum:`on` (the default), '
-                   'enum:`remote_write`, :enum:`local`, and :enum:`off`.'
     },
     'full_page_writes': {
         'default': 'on',
-        'comment': 'When this parameter is on, the PostgreSQL server writes the entire content of each disk page to '
-                   'WAL during the first modification of that page after a checkpoint. This is needed because a page '
-                   'write that is in process during an operating system crash might be only partially completed, '
-                   'leading to an on-disk page that contains a mix of old and new data. The row-level change data '
-                   'normally stored in WAL will not be enough to completely restore such a page during post-crash '
-                   'recovery. Storing the full page image guarantees that the page can be correctly restored, but at '
-                   'the price of increasing the amount of data that must be written to WAL. (Because WAL replay always '
-                   'starts from a checkpoint, it is sufficient to do this during the first change of each page after a '
-                   'checkpoint. Therefore, one way to reduce the cost of full-page writes is to increase the checkpoint '
-                   'interval parameters.)',
     },
     'fsync': {
         'default': 'on',
-        'comment': 'If this parameter is on, the PostgreSQL server will try to make sure that updates are physically '
-                   'written to disk, by issuing fsync() system calls or equivalent methods at :var:`wal_sync_method`). '
-                   'This ensures that the database cluster can recover to a consistent state after an operating system '
-                   'or hardware crash. While turning off fsync is often a performance benefit, this can result in '
-                   'unrecoverable data corruption in the event of a power failure or system crash. Thus it is only '
-                   'advisable to turn off fsync if you can easily recreate your entire database from external data. '
-                   'Examples of safe circumstances for turning off fsync include the initial loading of a new database '
-                   'cluster from a backup file, using a database cluster for processing a batch of data after which the '
-                   'database will be thrown away and recreated, or for a read-only database clone which gets recreated '
-                   'frequently and is not used for failover. High quality hardware alone is not a sufficient '
-                   'justification for turning off fsync. For reliable recovery when changing fsync off to on, it is '
-                   'necessary to force all modified buffers in the kernel to durable storage. This can be done while '
-                   'the cluster is shutdown or while fsync is on by running initdb --sync-only, running sync, '
-                   'unmounting the file system, or rebooting the server. In many situations, turning off '
-                   ':var:`synchronous_commit` for noncritical transactions can provide much of the potential '
-                   'performance benefit of turning off fsync, without the attendant risks of data corruption.'
     },
     'wal_compression': {
         'default': 'pglz',
-        'comment': 'This parameter enables compression of WAL using the specified compression method. When enabled, '
-                   'the PostgreSQL server compresses full page images written to WAL when full_page_writes is on or '
-                   'during a base backup. A compressed page image will be decompressed during WAL replay.'
     },
     'wal_init_zero': {
         'default': 'on',
-        'comment': 'If this parameter is on (default), the PostgreSQL server will initialize new WAL files with zeros. '
-                   'On some file systems, this ensures that space is allocated before we need to write WAL records. '
-                   'However, Copy-On-Write (COW) file systems may not benefit from this technique, so the option is '
-                   'given to skip the unnecessary work. If set to off, only the final byte is written when the file '
-                   'is created so that it has the expected size.'
     },
     'wal_recycle': {
         'default': 'on',
-        'comment': 'If set to on (default), this option causes WAL files to be recycled by renaming them, avoiding '
-                   'the need to create new ones. On COW file systems, it may be faster to create new ones, '
-                   'so the option is given to disable this behavior.'
     },
-
     'wal_log_hints': {
         'default': 'on',
-        'comment': "When this parameter is on, the PostgreSQL server writes the entire content of each disk page to "
-                   "WAL during the first modification of that page after a checkpoint, even for non-critical "
-                   "modifications of so-called hint bits. If data checksums are enabled, hint bit updates are always "
-                   "WAL-logged and this setting is ignored. You can use this setting to test how much extra WAL-logging "
-                   "would occur if your database had data checksums enabled."
+
     },
-    # See Ref [16-19] for tuning the wal_writer_delay and commit_delay
+    // See Ref [16-19] for tuning the wal_writer_delay and commit_delay
     'wal_writer_delay': {
         'instructions': {
             "mini_default": K10,
         },
         'default': 200,
-        'comment': 'Specifies how often the WAL writer flushes WAL, in time terms. After flushing WAL the writer '
-                   'sleeps for the length of time given by :var:`wal_writer_delay`, unless woken up sooner by an '
-                   'asynchronously committing transaction. If the last flush happened less than :var:`wal_writer_delay` '
-                   'ago and less than :var:`wal_writer_flush_after` worth of WAL has been produced since, then WAL is '
-                   'only written to the operating system, not flushed to disk. Default to 200 milliseconds (200ms), '
-                   'and 1 second on mini system, followed by the official PostgreSQL documentation.',
-        'partial_func': lambda value: f"{value}ms",
+        'partial_func': (value) => "${value}ms",
     },
     'wal_writer_flush_after': {
         'default': 1 * Mi,
-        'comment': 'Specifies how often the WAL writer flushes WAL, in volume terms. If the last flush happened less '
-                   'than :var:`wal_writer_delay` ago and less than :var:`wal_writer_flush_after` worth of WAL has been '
-                   'produced since, then WAL is only written to the operating system, not flushed to disk. If '
-                   ':var:`wal_writer_flush_after` is set to 0 then WAL data is always flushed immediately. Default to '
-                   '1 MiB followed by the official PostgreSQL documentation.',
-        'partial_func': lambda value: f"{value // Mi}MB",
+        'partial_func': (value) => "${floor(value / Mi)}MB",
     },
-    # This setting means that when you have at least 5 transactions in pending, the delay (interval by commit_delay)
-    # would be triggered (assuming maybe more transactions are coming from the client or application level)
-    # ============================== CHECKPOINT ==============================
-    # Checkpoint tuning are based on [20-23]: Our wishes is to make the database more reliable and perform better,
-    # but reducing un-necessary read/write operation
+    // This setting means that when you have at least 5 transactions in pending, the delay (interval by commit_delay)
+    // would be triggered (assuming maybe more transactions are coming from the client or application level)
+    // ============================== CHECKPOINT ==============================
+    // Checkpoint tuning are based on [20-23]: Our wishes is to make the database more reliable and perform better,
+    // but reducing un-necessary read/write operation
     'checkpoint_timeout': {
         'instructions': {
             'mini_default': 30 * MINUTE,
@@ -698,48 +512,24 @@ _DB_WAL_PROFILE = {
         },
         'default': 15 * MINUTE,
         'hardware_scope': 'overall',
-        'comment': 'Specifies the maximum amount of time between automatic WAL checkpoints. Default to 15 minutes'
-                   'on normal system and 10 minutes on large system. However, if you care about data consistency with '
-                   'minimal data loss, consider the replication as you just need to failover to the standby server '
-                   'as the checkpoint section is more focused on un-cleaned PostgreSQL crash or shutdown.',
-        'partial_func': lambda value: f'{value // MINUTE}min',
+        'partial_func': (value) => '${floor(value / MINUTE)}min',
     },
     'checkpoint_flush_after': {
         'default': 256 * Ki,
-        'comment': "Whenever more than this amount of data has been written while performing a checkpoint, attempt to "
-                   "force the OS to issue these writes to the underlying storage. Doing so will limit the amount of "
-                   "dirty data in the kernel's page cache, reducing the likelihood of stalls when an fsync is issued "
-                   "at the end of the checkpoint, or when the OS writes data back in larger batches in the background. "
-                   "Often that will result in greatly reduced transaction latency, but there also are some cases, "
-                   "especially with workloads that are bigger than shared_buffers, but smaller than the OS's page "
-                   "cache, where performance might degrade.",
-        'partial_func': lambda value: f'{value // Ki}kB',
+        'partial_func': (value) => '${floor(value / Ki)}kB',
     },
     'checkpoint_completion_target': {
         'default': 0.9,
-        'comment': 'Specifies the target of checkpoint completion, as a fraction of total time between checkpoints. '
-                   'The default is 0.9, which spreads the checkpoint across almost all of the available interval, '
-                   'providing fairly consistent I/O load while also leaving some time for checkpoint completion '
-                   'overhead. Reducing this parameter is not recommended because it causes the checkpoint to complete '
-                   'faster. This results in a higher rate of I/O during the checkpoint followed by a period of less I/O '
-                   'between the checkpoint completion and the next scheduled checkpoint.'
     },
     'checkpoint_warning': {
         'default': 30,
-        'comment': 'Write a message to the server log if checkpoints caused by the filling of WAL segment files happen '
-                   'closer together than this amount of time (which suggests that :var:`max_wal_size` ought to be '
-                   'raised). Default is 30 seconds (30s).',
-        'partial_func': lambda value: f"{value}s",
+        'partial_func': (value) => "${value}s",
     },
-    # ============================== WAL SIZE ==============================
+    // ============================== WAL SIZE ==============================
     'min_wal_size': {
-        'tune_op': lambda group_cache, global_cache, options, response: 10 * options.tuning_kwargs.wal_segment_size,
+        'tune_op': (group_cache, global_cache, options, response) => 10 * options.tuning_kwargs.wal_segment_size,
         'default': 10 * BASE_WAL_SEGMENT_SIZE,
-        'comment': 'As long as WAL disk usage stays below this setting, old WAL files are always recycled for future '
-                   'use at a checkpoint, rather than removed. This can be used to ensure that enough WAL space is '
-                   'reserved to handle spikes in WAL usage, for example when running large batch jobs. If this value '
-                   'is specified without units, it is taken as megabytes. The default is 160 MiB or 10 base WAL files.',
-        'partial_func': lambda value: f'{value // Mi}MB',
+        'partial_func': (value) => '${floor(value / Mi)}MB',
     },
     'max_wal_size': {
         'instructions': {
@@ -871,6 +661,25 @@ exit 0
                    "restart from the current restore. "
     },
 }
+
+export default DB0_CONFIG_PROFILE
+
+
+
+// ----------------------------------------------------------------------------------------------------------------
+// Python code
+from functools import partial
+from pydantic import ByteSize
+from src.tuner.data.options import PG_TUNE_USR_OPTIONS
+from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
+from src.tuner.data.workload import PG_WORKLOAD
+from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
+from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
+from src.utils.pydantic_utils import (bytesize_to_hr, realign_value, cap_value, )
+
+# =============================================================================
+
+
 
 # This is not used as the usage is different: promote standby to primary, recover with pg_rewind, failover, ...
 _DB_RECOVERY_PROFILE = {
