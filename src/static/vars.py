@@ -4,7 +4,6 @@ a base configuration for the log system, application name, ...
 
 """
 import os
-import socket
 from typing import Literal
 
 # ==================================================================================================
@@ -57,11 +56,9 @@ Ei: int = Ki ** 6
 DB_PAGE_SIZE: int = 8 * Ki  # This is already hard-coded in the PostgreSQL source code
 BASE_WAL_SEGMENT_SIZE: int = 16 * Mi  # This is already hard-coded in the PostgreSQL source code
 # ==================================================================================================
-# SHA3-512
 RANDOM_IOPS: str = 'random_iops'
 THROUGHPUT: str = 'throughput'
-SUPPORTED_ALGORITHMS = Literal['shake_256', 'sha384', 'sha224', 'sha3_512', 'shake_128', 'blake2s', 'md5', 'blake2b',
-'sha256', 'sha512', 'sha3_256', 'sha3_384', 'sha3_224', 'sha1']
+
 
 # ==================================================================================================
 # RegEx Patterns for Logging
