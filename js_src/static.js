@@ -20,7 +20,6 @@ const APP_NAME_UPPER = APP_NAME.toUpperCase();
 const PG_ARCHIVE_DIR = '/var/lib/postgresql/mnt/archive/wal';
 const PG_LOG_DIR = '/var/log/postgresql';
 
-
 // ==================================================================================================
 // Instruction Tuning
 const MULTI_ITEMS_SPLIT = ';';

@@ -20,17 +20,16 @@ _<Scope>_<Description>_PROFILE = {
 
 // ----------------------------------------------------------------------------------------------------------------
 // Importing modules
-import { Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, SECOND, PG_LOG_DIR,
-    BASE_WAL_SEGMENT_SIZE, M10 } from './static_vars.js';
+import { Ki, K10, Mi, Gi, DB_PAGE_SIZE, DAY, MINUTE, HOUR, SECOND, PG_LOG_DIR,
+    BASE_WAL_SEGMENT_SIZE, M10 } from './js_src/static.js';
 import { ceil, log, floor } from math;
-
+import { merge_extra_info_to_profile, type_validation } from './js_src/tuner/profile/common.js';
+import { realign_value, cap_value } from './js_src/utils/numeric.js';
 
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
-from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
-from src.utils.pydantic_utils import (bytesize_to_hr, realign_value, cap_value, )
 
 // ----------------------------------------------------------------------------------------------------------------
 // Constants
@@ -101,7 +100,7 @@ function _CalcSharedBuffers(options) {
     // Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
     // probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
     shared_buffers = realign_value(shared_buffers, page_size=DB_PAGE_SIZE)[options.align_index];
-    _logger.debug(`shared_buffers: ${bytesize_to_hr(shared_buffers)}`);
+    _logger.debug(`shared_buffers: ${floor(shared_buffers / Mi)}MiB`);
     return shared_buffers;
 }
 
@@ -155,8 +154,8 @@ function _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response
     // Realign the number (always use the lower bound for memory safety)
     temp_buffers = realign_value(int(temp_buffers), page_size=DB_PAGE_SIZE)[options.align_index];
     work_mem = realign_value(int(work_mem), page_size=DB_PAGE_SIZE)[options.align_index];
-    _logger.debug(`temp_buffers: ${bytesize_to_hr(temp_buffers)}`);
-    _logger.debug(`work_mem: ${bytesize_to_hr(work_mem)}`);
+    _logger.debug(`temp_buffers: ${floor(temp_buffers / Mi)}MiB`);
+    _logger.debug(`work_mem: ${floor(work_mem / Mi)}MiB`);
     
     return [temp_buffers, work_mem];
 }
@@ -218,7 +217,7 @@ function _CalcEffectiveCacheSize(group_cache, global_cache, options, response) {
     // Re-align the number (always use the lower bound for memory safety)
     effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio;
     effective_cache_size = realign_value(int(effective_cache_size), page_size=DB_PAGE_SIZE)[options.align_index];
-    console.debug("Effective cache size: ${bytesize_to_hr(effective_cache_size)}");
+    console.debug("Effective cache size: ${floor(effective_cache_size / Mi)}MiB");
     return effective_cache_size;
 }
 
