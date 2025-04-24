@@ -93,7 +93,7 @@ export const rewrite_items = (profiles) => {
                 }
                 delete items[rm_key];
             } else {
-                console.warning(`The tuning key ${rm_key} is expected to be removed but not found in its scope or tuning result.`);
+                console.warn(`The tuning key ${rm_key} is expected to be removed but not found in its scope or tuning result.`);
             }
             delete items[`-${rm_key}`];
         }
