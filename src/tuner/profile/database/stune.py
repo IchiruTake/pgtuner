@@ -115,7 +115,7 @@ def _conn_cache_query_timeout_tune(
     # Optimize the max_connections
     if _kwargs.user_max_connections > 0:
         _log_pool.append('The user has overridden the max_connections -> Skip the maximum tuning')
-    elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.LOG):
+    elif request.options.workload_type in (PG_WORKLOAD.OLAP, ):
         _log_pool.append('The workload type is primarily managed by the application such as full-based analytics or '
                          'logging/blob storage workload. ')
 
@@ -159,14 +159,11 @@ def _conn_cache_query_timeout_tune(
 
     # Tune the cpu_tuple_cost, parallel_tuple_cost, lock_timeout, statement_timeout
     _workload_translations: dict[PG_WORKLOAD, tuple[float, int]] = {
-        PG_WORKLOAD.LOG: (0.005, 3 * MINUTE),
-        PG_WORKLOAD.SOLTP: (0.0075, 5 * MINUTE),
         PG_WORKLOAD.TSR_IOT: (0.0075, 5 * MINUTE),
         PG_WORKLOAD.VECTOR: (0.025, 10 * MINUTE),  # Vector-search
         PG_WORKLOAD.OLTP: (0.015, 10 * MINUTE),
         PG_WORKLOAD.HTAP: (0.025, 30 * MINUTE),
         PG_WORKLOAD.OLAP: (0.03, 60 * MINUTE),
-        PG_WORKLOAD.DATA_WAREHOUSE: (0.03, 60 * MINUTE),
     }
     _suffix_text: str = f'by workload: {request.options.workload_type}'
     if request.options.workload_type in _workload_translations:
@@ -188,7 +185,7 @@ def _conn_cache_query_timeout_tune(
     managed_items, managed_cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
     after_default_statistics_target = managed_cache[default_statistics_target]
     default_statistics_target_hw_scope = managed_items[default_statistics_target].hardware_scope[1]
-    if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE, PG_WORKLOAD.HTAP):
+    if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP):
         after_default_statistics_target = 200
         if default_statistics_target_hw_scope == PG_SIZING.MEDIUM:
             after_default_statistics_target = 350
@@ -220,7 +217,7 @@ def _conn_cache_query_timeout_tune(
     after_commit_delay = managed_cache['commit_delay']
     managed_items = response.get_managed_items(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
     commit_delay_hw_scope = managed_items['commit_delay'].hardware_scope[1]
-    if request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
+    if request.options.workload_type in (PG_WORKLOAD.TSR_IOT, ):
         # These workloads are not critical so we can set a high commit_delay. In normal case, the constraint is
         # based on the number of commits and disk size. The server largeness may not impact here
         # The commit_siblings is tuned by sizing at general tuning phase so no actions here.
@@ -244,8 +241,7 @@ def _conn_cache_query_timeout_tune(
         # impact.
         after_commit_delay = int(K10 // 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
 
-    elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.OLAP,
-                                           PG_WORKLOAD.DATA_WAREHOUSE):
+    elif request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.OLAP):
         # Workload: HTAP and OLTP
         # These workloads have highest and require the data integrity. Thus, the commit_delay should be set to the
         # minimum value. The higher data rate change, the burden caused on the disk is large, so we want to minimize
@@ -423,7 +419,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     # workload required WRITE-intensive operation during daily.
     if ((request.options.workload_type == PG_WORKLOAD.VECTOR and request.options.workload_profile >= PG_SIZING.MALL) or
-            request.options.workload_type != PG_WORKLOAD.SOLTP):
+            request.options.workload_type != PG_WORKLOAD.VECTOR):
         after_bgwriter_lru_maxpages = int(managed_cache['bgwriter_lru_maxpages'])   # Make a copy
         if PG_DISK_SIZING.match_disk_series(_data_iops, RANDOM_IOPS, 'ssd', interval='weak'):
             after_bgwriter_lru_maxpages += 100
@@ -985,10 +981,6 @@ def _wal_integrity_buffer_size_tune(
     # Force enable the WAL buffers adjustment minimally to SPIDEY when the WAL disk throughput is too weak and
     # non-critical workload.
     if request.options.opt_wal_buffers == PG_PROFILE_OPTMODE.NONE:
-        if request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG):
-            _log_pool.append('WARNING: The WAL disk throughput is placed on non-critical workload with no requirements '
-                             'of data loss in WAL buffers that is lower than time-based interval.')
-            return None
         request.options.opt_wal_buffers = PG_PROFILE_OPTMODE.SPIDEY
         _log_pool.append('WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.')
 
@@ -1074,7 +1066,7 @@ def _hash_mem_adjust(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     after_hash_mem_multiplier = 2.0
     if request.options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.VECTOR):
         after_hash_mem_multiplier = min(2.0 + 0.125 * (current_work_mem // (40 * Mi)), 3.0)
-    elif request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE):
+    elif request.options.workload_type in (PG_WORKLOAD.OLAP, ):
         after_hash_mem_multiplier = min(2.0 + 0.150 * (current_work_mem // (40 * Mi)), 3.0)
     _item_tuning(key='hash_mem_multiplier', after=after_hash_mem_multiplier, scope=PG_SCOPE.MEMORY, response=response,
                  _log_pool=None,
@@ -1117,7 +1109,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # Additional workload for specific workload
     _log_pool = ['\n ===== Memory Usage Tuning =====']
     _hash_mem_adjust(request, response) # Ensure the hash_mem adjustment is there before the tuning.
-    if request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
+    if request.options.workload_type in (PG_WORKLOAD.TSR_IOT, ):
         # Disable the additional memory tuning as these workload does not make benefits when increase the memory
         request.options.opt_mem_pool = PG_PROFILE_OPTMODE.NONE
         _log_pool.append('WARNING: The memory precision tuning is disabled as these workload does not bring benefit '
@@ -1127,11 +1119,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
                          'Only the vacuum_buffer_usage_limit and effective_cache_size are tuned.')
         shared_buffers = 'shared_buffers'
         managed_cache = response.get_managed_cache(_TARGET_SCOPE)
-        after_shared_buffers = managed_cache[shared_buffers]
-        if request.options.workload_type == PG_WORKLOAD.LOG:
-            after_shared_buffers = min(managed_cache[shared_buffers], 8 * Gi)
-        elif request.options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.TSR_IOT):
-            after_shared_buffers = min(managed_cache[shared_buffers], 32 * Gi)
+        after_shared_buffers = min(managed_cache[shared_buffers], 32 * Gi)
 
         if after_shared_buffers != managed_cache[shared_buffers]:
             _log_pool.append(f'NOTICE: The shared_buffers is capped at {bytesize_to_hr(after_shared_buffers)} by '

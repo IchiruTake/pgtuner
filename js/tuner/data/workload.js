@@ -3,7 +3,7 @@ This enum represents some typical workloads or usage patterns that can be used t
 Options:
 -------
 
-# P
+# Business Workload
 TSR_IOT = 'tst' (Time-Series Data / Streaming)
     - Description: Database usually aggregated with timestamped data points.
     - Transaction Lifespan: Short-lived transactions optimized for high frequency for IoT data.
@@ -17,8 +17,6 @@ TSR_IOT = 'tst' (Time-Series Data / Streaming)
     - Typical Usage: Monitoring IoT data, and system performance metrics. Log analysis, monitoring, 
         anomaly detection, and security event correlation.
 
-
-# Business Workload
 OLTP = 'oltp' (Online Transaction Processing)
     - Description: Traditional OLTP workload with frequent read and write operations.
     - Transaction Lifespan: Short-lived transactions (milliseconds to seconds).
@@ -39,6 +37,11 @@ HTAP = 'htap' (Hybrid Transactional/Analytical Processing)
     - Typical Usage: Real-time dashboards, fraud detection where operational and historical data are combined.
 
 # Internal Management Workload
+PERF_NO_CONCURRENT = 'performance'
+    - Description: Workload for performance testing and query benchmarking at full load, but not designed for concurrent 
+        benchmarking. Usually used to check its maximum speed and memory consumption of query
+    - In other words, it is an even-more extreme version of the OLAP workload with less :arg:`num_connections`.
+
 OLAP = 'olap' (Online Analytical Processing) && TSR_OLAP = 'tsa' (Time-Series Data Analytics)
     - Description: Analytical workload with complex queries and aggregations.
     - Transaction Lifespan: Long-lived, complex queries (seconds to minutes, even HOUR on large database).
@@ -69,6 +72,7 @@ const PG_WORKLOAD = Object.freeze({
     OLTP: "oltp",
     HTAP: "htap",
     OLAP: "olap",
+    PERF_NO_CONCURRENT: "performance",
     VECTOR: "vector",
 });
 

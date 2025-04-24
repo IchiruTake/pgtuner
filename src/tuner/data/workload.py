@@ -10,35 +10,19 @@ class PG_WORKLOAD(str, Enum):
     -------
 
     # End-user Workload or Simple Workload
-    
-    SOLTP = 'soltp' (Single-User or Simple OLTP)
-        - Description: Only used for database `feature` testing or simple OLTP workload.
-        - Transaction Lifespan: Short-lived transactions (milliseconds to seconds).
-        - Read/Write Balance: Balanced; often read-heavy but includes frequent writes.
-        - Query Complexity: Simple and straightforward read and write queries, usually targeting single rows or small 
-            subsets. 
-        - Data Access (READ) Pattern: Random access to small subsets of data.
-        - Insertion (WRITE) Pattern: Constant insertion and updates, with high concurrency.
-
-    LOG = 'log' (Log Data Processing)
-        - Description: Application log their messages (audit or other purpose) into the dedicated database
-        - Transaction Lifespan: Varies based on log volume
-        - Read/Write Balance: Heavy writes for log ingestion, nearly zero READ operation
-        - Query Complexity: Simple
-        - Data Access (READ) Pattern: Sequential access to log entries, often with time-based filtering.
-        - Insertion (WRITE) Pattern: Continuous or batch insertion of log entries.
-        - Typical Usage: Log analysis, monitoring, anomaly detection, and security event correlation.
-
     TSR_IOT = 'tst' (Time-Series Data / Streaming)
         - Description: Database usually aggregated with timestamped data points.
         - Transaction Lifespan: Short-lived transactions optimized for high frequency for IoT data.
         - Read/Write Balance: Heavy writes with frequent time-stamped data points. Frequent READ operation (
             usually after 1 - 5 minutes) for monitoring, dashboard display, and alerting.
-        - Query Complexity: Often simple reads with time-based filtering and aggregations (non-complex data 
+        - Query Complexity: Often simple reads with time-based filtering and aggregations (non-complex data
             transformation, joins, and aggregations).
         - Data Access (READ) Pattern: Sequential access to time-ordered data.
-        - Insertion (WRITE) Pattern: Append-only; constant insertion of new, timestamped records.
-        - Typical Usage: Monitoring IoT data, and system performance metrics.
+        - Insertion (WRITE) Pattern: Append-only; constant insertion of new, timestamped records; Continuous
+            or batch insertion of log entries.
+        - Typical Usage: Monitoring IoT data, and system performance metrics. Log analysis, monitoring,
+            anomaly detection, and security event correlation.
+
 
     # Business Workload
     OLTP = 'oltp' (Online Transaction Processing)
@@ -70,15 +54,6 @@ class PG_WORKLOAD(str, Enum):
         - Insertion (WRITE) Pattern: Bulk insertion during ETL processes, usually at scheduled intervals.
         - Typical Usage: Business analytics and reporting where large data volumes are analyzed.
 
-    DATA_WAREHOUSE = 'dw' (Data Warehouse)
-        - Description: Large-scale data storage and analysis for business intelligence.
-        - Transaction Lifespan: Long-lived queries (minutes to hours).
-        - Read/Write Balance: Primarily read-heavy; writes are usually batch-loaded.
-        - Query Complexity: Very complex reads, aggregations, and data transformations.
-        - Data Access (READ) Pattern: Sequential access to large data sets.
-        - Insertion (WRITE) Pattern: Bulk insertion of data at regular intervals (daily, weekly, etc.).
-        - Typical Usage: Historical data analysis and trend reporting across large datasets.
-
     # Specific Workload such as Search, RAG, Geospatial
     VECTOR = 'vector'
         - Description: Workload operates over vector-based data type such as SEARCH (search toolbar in Azure),
@@ -95,18 +70,13 @@ class PG_WORKLOAD(str, Enum):
             geographic data analysis, proximity searches.
 
     """
-    # End-user Workload or Simple Workload
-    SOLTP = 'soltp'
-    LOG = 'log'
-    TSR_IOT = 'tst'
-
     # Business Workload
+    TSR_IOT = 'tst'
     OLTP = 'oltp'
     HTAP = 'htap'
 
     # Internal Management Workload
     OLAP = 'olap'
-    DATA_WAREHOUSE = 'dw'
 
     # Specific Workload
     VECTOR = 'vector'

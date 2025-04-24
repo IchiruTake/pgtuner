@@ -21,14 +21,14 @@ _<Scope>_<Description>_PROFILE = {
 // ----------------------------------------------------------------------------------------------------------------
 // Importing modules
 import { Ki, K10, Mi, Gi, DB_PAGE_SIZE, DAY, MINUTE, HOUR, SECOND, PG_LOG_DIR,
-    BASE_WAL_SEGMENT_SIZE, M10 } from './js_src/static.js';
+    BASE_WAL_SEGMENT_SIZE, M10 } from '../../../static.js';
 import { ceil, log, floor } from math;
-import { merge_extra_info_to_profile, type_validation } from './js_src/tuner/profile/common.js';
-import { realign_value, cap_value } from './js_src/utils/numeric.js';
+import { merge_extra_info_to_profile, type_validation } from '../common.js';
+import { realign_value, cap_value } from '../../../utils/numeric.js';
+import { PG_WORKLOAD } from '../../data/workload.js';
 
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
-from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 
 // ----------------------------------------------------------------------------------------------------------------
