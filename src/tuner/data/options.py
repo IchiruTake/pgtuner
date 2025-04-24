@@ -10,7 +10,7 @@ from src.static.vars import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS,
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
-from src.tuner.data.sizing import PG_SIZING
+from src.tuner.data.sizing import PG_SIZING, SIZE_PROFILES
 from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.workload import PG_WORKLOAD
 from src.utils.pydantic_utils import bytesize_to_hr
@@ -61,73 +61,19 @@ _allowed_os = partial(_allowed_values, values=_PG_OS_KEYS)
 # =============================================================================
 class PG_TUNE_USR_OPTIONS(BaseModel):
     # The basic profile for the system tuning for profile-guided tuning
-    workload_profile: Annotated[
-        PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the workload profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The workload profile to be used for tuning. Supported profiles are mini, medium, large, '
-                          'mall, and bigt. The associated value meant for the workload scale, amount of data in/out, '
-                          '...')
-    ]
-    cpu_profile: Annotated[
-        PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the CPU profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The CPU profile to be used for profile-based tuning. Supported profiles are mini, medium, '
-                          'large, mall, and bigt. The associated value meant for the CPU core regardless of any '
-                          'type of workload.')
-    ]
-    mem_profile: Annotated[
-        PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the MEM profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The memory profile to be used for profile-based tuning. Supported profiles are mini, '
-                          'medium, large, mall, and bigt. The associated value meant for the memory usage, RAM '
-                          'capacity regardless of any type of workload.')
-    ]
-    disk_profile: Annotated[
-        PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the DISK profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The disk profile to be used for profile-based tuning. Supported profiles are mini, medium, '
-                          'large, mall, and bigt. The associated value meant for the disk I/O regardless of any type '
-                          'of workload. In the PostgreSQL configuration, it is replaced by workload_profile as user '
-                          'already provided the disk specification.')
-    ]
-    net_profile: Annotated[
-        PG_SIZING,
-        Field(default_factory=PydanticFact(f'Enter the NET profile as mini, medium, large, mall, bigt: ',
-                                           user_fn=PG_SIZING, default_value=PG_SIZING.LARGE),
-              description='The network profile to be used for profile-based tuning. Supported profiles are mini, '
-                          'medium, large, mall, and bigt. The associated value meant for the network bandwidth and '
-                          'latency regardless of any type of workload. In the PostgreSQL configuration, it is dropped '
-                          'because nearly no configuration requires step-wise profile-based tuning (for information '
-                          'only).')
-    ]
+    workload_profile: PG_SIZING = (
+        Field(default=PG_SIZING.LARGE,
+              description=f'The workload profile to be used for tuning. Supported profiles are {SIZE_PROFILES}. The '
+                          f'associated value meant for the workload scale, amount of data in/out, ...')
+    )
     pgsql_version: Annotated[
         str, AfterValidator(_allowed_postgres_version),
         Field(default_factory=PydanticFact('Enter the PostgreSQL version: ', user_fn=str, default_value='17'),
               description='The PostgreSQL version to be used for tuning')
     ]
     # Disk options for data partitions
-    os_db_spec: Annotated[
-        PG_DISK_PERF | None,
-        Field(default=None,
-              description='The disk specification for the operating system and database (This is not used)')
-    ]
-    data_index_spec: Annotated[
-        PG_DISK_PERF,
-        Field(description='The disk specification for the data and index partition.')
-    ]
-    wal_spec: Annotated[
-        PG_DISK_PERF,
-        Field(description='The disk specification for the WAL partition.')
-    ]
-    db_log_spec: Annotated[
-        PG_DISK_PERF | None,
-        Field(default=None,
-              description='The disk specification for the database logging and backup (This is not used)')
-    ]
+    data_index_spec: PG_DISK_PERF = Field(..., description='The disk specification for the data and index partition.')
+    wal_spec: PG_DISK_PERF = Field(..., description='The disk specification for the WAL partition.')
 
     # Data Integrity, Transaction, Crash Recovery, and Replication
     max_backup_replication_tool: Annotated[
@@ -373,7 +319,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             self.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[-1]
 
         # Check minimal RAM usage
-        if self.usable_ram < 4 * Gi and (self.workload_profile > PG_SIZING.MINI or self.mem_profile > PG_SIZING.MINI):
+        if self.usable_ram < 4 * Gi:
             _sign = '+' if self.usable_ram >= 0 else '-'
             _msg: str = (f'The usable RAM {_sign}{bytesize_to_hr(self.usable_ram)} is less than the PostgreSQL '
                          'minimum 4 GiB, and your workload is not self tested or local testing. The tuning may not be '
@@ -399,8 +345,9 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     @cached_property
     def hardware_scope(self) -> dict[str, PG_SIZING]:
         """ Translate the hardware scope into the dictionary format """
-        return {'cpu': self.cpu_profile, 'mem': self.mem_profile, 'net': self.net_profile, 'disk': self.disk_profile,
-                'overall': self.workload_profile}
+        # return {'cpu': self.cpu_profile, 'mem': self.mem_profile, 'net': self.net_profile, 'disk': self.disk_profile,
+        #         'overall': self.workload_profile}
+        return {k: self.workload_profile for k in ('cpu', 'mem', 'net', 'disk', 'overall')}
 
     def translate_hardware_scope(self, term: str | None) -> PG_SIZING:
         if term:

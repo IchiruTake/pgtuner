@@ -8,6 +8,8 @@ __all__ = ['PG_TUNE_ITEM']
 
 # =============================================================================
 # This section is managed by the application
+_FLOAT_PRECISION = 4
+
 class PG_TUNE_ITEM(BaseModel):
     key: str = Field(..., description="The key of the sysctl configuration", frozen=True)
     before: Any = Field(..., description="The system information value before tuning", frozen=True)
@@ -57,8 +59,7 @@ class PG_TUNE_ITEM(BaseModel):
         if self.partial_func is not None:  # This function is used when we have hard-coded the output format already
             after = self.partial_func(after)
         elif isinstance(after, float):
-            precision = self.float_precision()
-            after = f'{round(after, precision):.{precision}f}'
+            after = f'{round(after, _FLOAT_PRECISION):.{_FLOAT_PRECISION}f}'
         if not isinstance(after, str):  # Force to be the string for easy text wrap-up
             after = str(after)
         if '.' in after:
@@ -71,10 +72,6 @@ class PG_TUNE_ITEM(BaseModel):
         if isinstance(self.after, str) and (' ' in after or any(char in string.punctuation for char in after)):
             after = f"'{after}'"
         return after
-
-    @staticmethod
-    def float_precision() -> int:
-        return 4
 
     def transform_keyname(self) -> str:
         # Text Transformation: Remove underscores to whitespace and capitalize the first character of each letter

@@ -3,8 +3,9 @@ import { K10, THROUGHPUT } from '../../static/vars.js';
 
 // -------------------------------------------------------------
 // ENUM choices
+const SIZE_PROFILE = ['mini', 'medium', 'large', 'mall', 'bigt'];
 const _ascending_specs = {
-    size: ['mini', 'medium', 'large', 'mall', 'bigt'],
+    size: SIZE_PROFILE,
     vcpu_min: [1, 2, 6, 12, 32],
     vcpu_max: [4, 8, 16, 48, 128],
     ram_gib_min: [2, 8, 24, 48, 128],
@@ -34,30 +35,14 @@ class PG_SIZING {
     eq(other) {
         return this.num() === other.num();
     }
-
-    add(other) {
-        const idx = this.num() + other.num();
-        if (idx < 0 || idx >= _ascending_specs.size.length) {
-            throw new RangeError('Resulting sizing is out of bounds');
-        }
-        return new PG_SIZING(_ascending_specs.size[idx]);
-    }
-
-    sub(other) {
-        const idx = this.num() - other.num();
-        if (idx < 0 || idx >= _ascending_specs.size.length) {
-            throw new RangeError('Resulting sizing is out of bounds');
-        }
-        return new PG_SIZING(_ascending_specs.size[idx]);
-    }
 }
 
 // Define the PG_SIZING enum members
-PG_SIZING.MINI = new PG_SIZING('mini');
-PG_SIZING.MEDIUM = new PG_SIZING('medium');
-PG_SIZING.LARGE = new PG_SIZING('large');
-PG_SIZING.MALL = new PG_SIZING('mall');
-PG_SIZING.BIGT = new PG_SIZING('bigt');
+PG_SIZING.MINI = new PG_SIZING(SIZE_PROFILE[0]);
+PG_SIZING.MEDIUM = new PG_SIZING(SIZE_PROFILE[1]);
+PG_SIZING.LARGE = new PG_SIZING(SIZE_PROFILE[2]);
+PG_SIZING.MALL = new PG_SIZING(SIZE_PROFILE[3]);
+PG_SIZING.BIGT = new PG_SIZING(SIZE_PROFILE[4]);
 
 // ----------------------------------------------------------------
 // PG_DISK_SIZING: Represents a PostgreSQL disk sizing profile
@@ -283,4 +268,4 @@ PG_DISK_SIZING.ALL = [
     PG_DISK_SIZING.NVMePCIev5x4v4, PG_DISK_SIZING.NVMePCIev5x4v5, PG_DISK_SIZING.NVMePCIev5x4v6,
 ];
 
-export { PG_DISK_SIZING, PG_SIZING };
+export { PG_DISK_SIZING, PG_SIZING, SIZE_PROFILE };

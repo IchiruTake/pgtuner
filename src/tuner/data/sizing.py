@@ -5,12 +5,13 @@ from typing import Literal
 
 from src.static.vars import K10, THROUGHPUT
 
-__all__ = ['PG_SIZING', 'PG_DISK_SIZING']
+__all__ = ['PG_SIZING', 'PG_DISK_SIZING', 'SIZE_PROFILES']
 
 # =============================================================================
 # ENUM choices
+SIZE_PROFILES = ('mini', 'medium', 'large', 'mall', 'bigt')
 _ascending_specs: dict[str, list] = {
-    'size': ['mini', 'medium', 'large', 'mall', 'bigt'],
+    'size': SIZE_PROFILES,
     'vcpu_min': [1, 2, 6, 12, 32],
     'vcpu_max': [4, 8, 16, 48, 128],
     'ram_gib_min': [2, 8, 24, 48, 128],
@@ -29,11 +30,11 @@ class PG_SIZING(Enum):
     The PostgreSQL sizing profile. This could help you analyze if your provided server is suitable with our
     defined profiles.
     """
-    MINI = 'mini'
-    MEDIUM = 'medium'
-    LARGE = 'large'
-    MALL = 'mall'
-    BIGT = 'bigt'
+    MINI = SIZE_PROFILES[0]
+    MEDIUM = SIZE_PROFILES[1]
+    LARGE = SIZE_PROFILES[2]
+    MALL = SIZE_PROFILES[3]
+    BIGT = SIZE_PROFILES[4]
 
     def num(self) -> int:
         return _str_to_num(self.value)
@@ -43,12 +44,6 @@ class PG_SIZING(Enum):
 
     def __eq__(self, other: 'PG_SIZING') -> bool:
         return self.num() == other.num()
-
-    def __add__(self, other: 'PG_SIZING') -> 'PG_SIZING':
-        return PG_SIZING(_ascending_specs['size'][self.num() + other.num()])
-
-    def __sub__(self, other: 'PG_SIZING') -> 'PG_SIZING':
-        return PG_SIZING(_ascending_specs['size'][self.num() - other.num()])
 
 # -----------------------------------------------------------------------------
 ## Note that in the list, we choose the value based on the minimum of read/write IOPS/throughput, and doing
