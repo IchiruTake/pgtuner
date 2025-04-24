@@ -9,7 +9,7 @@ class PG_WORKLOAD(str, Enum):
     Options:
     -------
 
-    # End-user Workload or Simple Workload
+    # Business Workload
     TSR_IOT = 'tst' (Time-Series Data / Streaming)
         - Description: Database usually aggregated with timestamped data points.
         - Transaction Lifespan: Short-lived transactions optimized for high frequency for IoT data.
@@ -23,8 +23,6 @@ class PG_WORKLOAD(str, Enum):
         - Typical Usage: Monitoring IoT data, and system performance metrics. Log analysis, monitoring,
             anomaly detection, and security event correlation.
 
-
-    # Business Workload
     OLTP = 'oltp' (Online Transaction Processing)
         - Description: Traditional OLTP workload with frequent read and write operations.
         - Transaction Lifespan: Short-lived transactions (milliseconds to seconds).

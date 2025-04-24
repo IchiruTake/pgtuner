@@ -81,7 +81,7 @@ class PG_DISK_SIZING(Enum):
     """
     # SATA HDDs
     HDDv1 = ('hddv1', 100, 250)     # Some old HDDs or SD cards (efficiency around 80 - 120 MiB/s)
-    HDDv2 = ('hddv2', 200, K10)
+    HDDv2 = ('hddv2', 200, 1 *K10)
     HDDv3 = ('hddv3', 260, 2500)    # Some Western Digital HDDs, or modern HDDs with small SSD/DRAM cache (220 - 290 MiB/s)
 
     # SAN/NAS SSDs

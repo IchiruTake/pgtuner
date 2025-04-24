@@ -9,7 +9,7 @@ during the tuning process, the maximum number of connections allowed is usually 
 it by default. The magic number means that this is the average value and we used it for tuning.
 
 Note that this file is capable of performing the general tuning without acknowledging the type of server workload.
-For the specific tuning based on workload, please refer to the `s_tune_workload`.py. The tuning is inspired which is
+For the specific tuning based on workload, please refer to the `stune`.py. The tuning is inspired which is
 not limited to other types of database such as SQL Server
 
 References for SYSCTL tuning:

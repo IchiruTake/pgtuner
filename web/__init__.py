@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import random
-import re
 from contextlib import asynccontextmanager
 import os
 import gzip
@@ -26,10 +25,10 @@ from starlette.staticfiles import StaticFiles
 from src import pgtuner
 from src.static.c_timezone import GetTimezone
 from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
-    SECOND, DAY, K10
+    SECOND, K10
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
-from src.utils.env import OsGetEnvBool
+from web.env import OsGetEnvBool
 from web.middlewares.compressor import CompressMiddleware
 from web.middlewares.middlewares import HeaderManageMiddleware, RateLimitMiddleware
 from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
