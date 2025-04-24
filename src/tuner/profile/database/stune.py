@@ -591,7 +591,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # The dependency here is related to workload (amount of transaction), disk strength (to run wrap-around), the
     # largest table size (the amount of data to be vacuumed), and especially if the user can predict correctly
     _log_pool.append('Start tuning the autovacuum of the PostgreSQL database server based on the database workload. '
-                     '\nImpacted Attributes: *_freeze_min_age, *_failsafe_age, *_table_age ')
+                     '\nImpacted Attributes: *_freeze_min_age, *_failsafe_age, *_table_age, ')
 
     # Use-case: We extracted the TXID use-case from the GitLab PostgreSQL database, which has the TXID of 55M per day
     # or 2.3M per hour, at some point, it has 1.4K/s on weekday (5M/h) and 600/s (2M/h) on weekend.

@@ -208,7 +208,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         real_autovacuum_work_mem = managed_cache['autovacuum_work_mem']
         if real_autovacuum_work_mem == -1:
             real_autovacuum_work_mem = managed_cache['maintenance_work_mem']
-        if options.versioning()[0] < 17:
+        if options.pgsql_version < 17:
             # The VACUUM use adaptive radix tree which performs better and not being silently capped at 1 GiB
             # since PostgreSQL 17+
             # https://www.postgresql.org/docs/17/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM
@@ -226,7 +226,7 @@ class PG_TUNE_RESPONSE(BaseModel):
             effective_cache_size=effective_cache_size,
             data_disk_iops=PG_DISK_PERF.throughput_to_iops(
                 0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(data_iops), data_tput, level=-2.5)
-            )
+            )   # The merge between sequential IOPS and random IOPS with weighted average of -2.5 and 70% efficiency
         )
         ckpt05 = checkpoint_time_partial(shared_buffers_ratio=0.05)
         ckpt30 = checkpoint_time_partial(shared_buffers_ratio=0.30)
