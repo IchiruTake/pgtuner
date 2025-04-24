@@ -52,7 +52,7 @@ if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepMerge(DB14_CONFIG_PROFILE[key][1], value[1], inlineSource=true, inlineTarget=true );
+            deepMerge(DB14_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
         }
     }
     rewrite_items(DB14_CONFIG_PROFILE);
