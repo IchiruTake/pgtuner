@@ -11,8 +11,8 @@ from pydantic import ValidationError
 from src.static.vars import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, \
     SECOND, WEB_MODE, THROUGHPUT, M10, Ki, HOUR
 from src.tuner.data.disks import PG_DISK_PERF
-from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_BACKUP_TOOL
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.options import PG_TUNE_USR_OPTIONS
+from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.sizing import PG_DISK_SIZING, PG_SIZING
 from src.tuner.data.workload import PG_WORKLOAD
@@ -378,7 +378,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
 
         if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san', interval='strong'):
             after_checkpoint_flush_after = 512 * Ki
-            after_bgwriter_flush_after = 512 * Mi
+            after_bgwriter_flush_after = 512 * Ki
         elif PG_DISK_SIZING.match_disk_series_in_range(data_iops, RANDOM_IOPS, 'ssd', 'nvme'):
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
@@ -391,6 +391,8 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         if (PG_DISK_SIZING.match_disk_series(wal_tput, THROUGHPUT, 'san', interval='strong') or
                 PG_DISK_SIZING.match_disk_series_in_range(wal_tput, THROUGHPUT, 'ssd', 'nvme')):
             after_wal_writer_flush_after = 2 * Mi
+        if request.options.workload_profile >= PG_SIZING.LARGE:
+            after_wal_writer_flush_after *= 2
         _item_tuning(key='wal_writer_flush_after', after=after_wal_writer_flush_after,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_log_pool)
 

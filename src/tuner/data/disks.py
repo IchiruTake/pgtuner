@@ -1,5 +1,5 @@
 import logging
-from functools import partial, cached_property
+from functools import cached_property
 from typing import Any
 
 from pydantic import BaseModel, Field, ByteSize, PositiveFloat, PositiveInt

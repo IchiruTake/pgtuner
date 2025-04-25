@@ -1,6 +1,7 @@
 from enum import Enum
+from functools import total_ordering
 
-__all__ = ["PG_PROFILE_OPTMODE"]
+__all__ = ["PG_PROFILE_OPTMODE", "PG_BACKUP_TOOL"]
 
 
 # =============================================================================
@@ -43,3 +44,33 @@ class PG_PROFILE_OPTMODE(str, Enum):
     def profile_ordering() -> tuple[str, ...]:
         return (PG_PROFILE_OPTMODE.NONE, PG_PROFILE_OPTMODE.SPIDEY, PG_PROFILE_OPTMODE.OPTIMUS_PRIME,
                 PG_PROFILE_OPTMODE.PRIMORDIAL)
+
+# =============================================================================
+@total_ordering
+class PG_BACKUP_TOOL(Enum):
+    DISK_SNAPSHOT = 'Backup by Disk Snapshot'
+    PG_DUMP = 'pg_dump/pg_dumpall: Textual backup'
+    PG_BASEBACKUP = 'pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup'
+    PG_LOGICAL = 'pg_logical and alike: Logical replication'
+
+    @classmethod
+    def __missing__(cls, key):
+        if isinstance(key, str):
+            k = key.strip().lower()
+            match k:
+                case 'disk_snapshot':
+                    return PG_BACKUP_TOOL.DISK_SNAPSHOT
+                case 'pg_dump':
+                    return PG_BACKUP_TOOL.PG_DUMP
+                case 'pg_basebackup':
+                    return PG_BACKUP_TOOL.PG_BASEBACKUP
+                case 'pg_logical':
+                    return PG_BACKUP_TOOL.PG_LOGICAL
+                case _:
+                    raise ValueError(f'Unknown backup tool: {key}')
+        elif isinstance(key, int):
+            if key < 0 or key >= len(cls):
+                raise ValueError(f'Unknown backup tool: {key}')
+            return list(cls)[key]
+        return super()._missing_(key)
+
