@@ -51,6 +51,7 @@ def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_se
         'msg': _msg
     }
 
+
 def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target,
                     shared_buffers: int, shared_buffers_ratio: float, effective_cache_size: int,
                     max_wal_size: int, data_disk_iops: int) -> dict:
@@ -58,7 +59,7 @@ def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
     checkpoint_duration = ceil(checkpoint_timeout_second * checkpoint_completion_target)  # Measured in seconds
-    data_tran_tput = PG_DISK_PERF.iops_to_throughput(data_disk_iops) # Measured in MiB/s
+    data_tran_tput = PG_DISK_PERF.iops_to_throughput(data_disk_iops)  # Measured in MiB/s
     data_max_mib_written = data_tran_tput * checkpoint_duration
 
     data_amount = int(shared_buffers * shared_buffers_ratio)  # Measured in bytes
@@ -126,6 +127,7 @@ def vacuum_time(hit_cost: int, miss_cost: int, dirty_cost: int, delay_ms: int, c
         '1:1:1_data': _111data,
         'msg': _msg
     }
+
 
 def vacuum_scale(threshold: int, scale_factor: float) -> dict:
     _logger.debug('Estimate the number of changed or dead tuples to trigger normal vacuum')

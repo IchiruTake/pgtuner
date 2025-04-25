@@ -37,9 +37,6 @@ def _string_disk_to_performance(value: str | int | ByteSize, mode: str) -> int |
     _logger.warning(f'The performance value is not found specification list of PG_DISK_SIZING. ')
     return PG_DISK_SIZING.SANv1.iops() if mode == RANDOM_IOPS else PG_DISK_SIZING.SANv1.throughput()
 
-_string_disk_to_iops = partial(_string_disk_to_performance, mode=RANDOM_IOPS)
-_string_disk_to_throughput = partial(_string_disk_to_performance, mode=THROUGHPUT)
-
 
 class PG_DISK_PERF(BaseModel):
     random_iops_spec: _SIZING | str = (
@@ -113,9 +110,9 @@ class PG_DISK_PERF(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if isinstance(self.random_iops_spec, str):
-            self.random_iops_spec = _string_disk_to_iops(self.random_iops_spec)
+            self.random_iops_spec = _string_disk_to_performance(self.random_iops_spec, mode=RANDOM_IOPS)
         if isinstance(self.throughput_spec, str):
-            self.throughput_spec = _string_disk_to_throughput(self.throughput_spec)
+            self.throughput_spec = _string_disk_to_performance(self.throughput_spec, mode=THROUGHPUT)
         pass
 
     @cached_property

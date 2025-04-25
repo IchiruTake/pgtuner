@@ -75,6 +75,10 @@ tune for commit_delay and commit_siblings
 [38] https://postgrespro.com/list/thread-id/1898949
 [39] https://www.bytebase.com/blog/postgres-timeout/
 [40] https://www.enterprisedb.com/blog/managing-freezing-postgresql
+[41] https://portavita.github.io/2019-06-14-blog_PostgreSQL_wal_log_hints_benchmarked/
+[42] https://portavita.github.io/2019-05-13-blog_about_wal_compression/
+[43] https://www.cybertec-postgresql.com/en/postgresql-underused-features-wal-compression/
+
 
 Questions:
 

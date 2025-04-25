@@ -1,8 +1,8 @@
 import logging
-from functools import cached_property, partial
+from functools import cached_property, partial, total_ordering
 from math import ceil
 from typing import Any, Annotated, Literal
-
+from enum import Enum
 from pydantic import BaseModel, Field, ByteSize, AfterValidator
 from pydantic.types import PositiveInt
 
@@ -11,48 +11,43 @@ from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE
 from src.tuner.data.sizing import PG_SIZING, SIZE_PROFILES
-from src.tuner.data.utils import FactoryForPydanticWithUserFn as PydanticFact
 from src.tuner.data.workload import PG_WORKLOAD
 from src.utils.pydantic_utils import bytesize_to_hr
 
-__all__ = ['PG_TUNE_USR_OPTIONS', 'backup_description']
+__all__ = ['PG_TUNE_USR_OPTIONS', 'PG_BACKUP_TOOL']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 
 # =============================================================================
 # Ask user which tuning options they choose for
-def backup_description() -> dict[str, tuple[str, int]]:
-    return {
-        'disk_snapshot': ('Backup by Disk Snapshot', 0),
-        'pg_dump': ('pg_dump/pg_dumpall: Textual backup', 1),
-        'pg_basebackup': ('pg_basebackup [--incremental] or streaming replication '
-                          '(byte-capture change): Byte-level backup', 2),
-        'pg_logical': ('pg_logical and alike: Logical replication', 3),
-    }
+@total_ordering
+class PG_BACKUP_TOOL(Enum):
+    DISK_SNAPSHOT = 'Backup by Disk Snapshot'
+    PG_DUMP = 'pg_dump/pg_dumpall: Textual backup'
+    PG_BASEBACKUP = 'pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup'
+    PG_LOGICAL = 'pg_logical and alike: Logical replication'
 
-
-def _backup_translation(value: str) -> str:
-    if value.strip() not in backup_description():
-        raise ValueError(f'The backup tool {value} is not in the supported list.')
-    return value.strip()
-
-
-# =============================================================================
-# Ask user which tuning options they choose for
-def _allowed_values(v, values: list[str] | tuple[str, ...]):
-    # https://stackoverflow.com/questions/61238502/how-to-require-predefined-string-values-in-python-pydantic-basemodels
-    # Since Literal does not support dynamic values, we have to use this method
-    assert v in values, f'Invalid value {v} for the tuning options. The allowed values are {values}'
-    return v
-
-_backup_items = list(backup_description().keys())
-_PG_OS_KEYS = ['linux', 'windows', 'macos', 'containerd', 'PaaS']
-
-
-_allowed_backup_tool = partial(_allowed_values, values=list(backup_description().keys()))
-
+    @classmethod
+    def __missing__(cls, key):
+        if isinstance(key, str):
+            k = key.strip().lower()
+            match k:
+                case 'disk_snapshot':
+                    return PG_BACKUP_TOOL.DISK_SNAPSHOT
+                case 'pg_dump':
+                    return PG_BACKUP_TOOL.PG_DUMP
+                case 'pg_basebackup':
+                    return PG_BACKUP_TOOL.PG_BASEBACKUP
+                case 'pg_logical':
+                    return PG_BACKUP_TOOL.PG_LOGICAL
+        return super()._missing_(key)
 
 # =============================================================================
+# The collection of advanced tuning options
+
+
+
+
 class PG_TUNE_USR_OPTIONS(BaseModel):
     # The basic profile for the system tuning for profile-guided tuning
     workload_profile: PG_SIZING = Field(
@@ -70,16 +65,12 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     wal_spec: PG_DISK_PERF = Field(..., description='The disk specification for the WAL partition.')
 
     # Data Integrity, Transaction, Crash Recovery, and Replication
-    max_backup_replication_tool: Annotated[
-        str, AfterValidator(_allowed_backup_tool),
-        Field(default_factory=PydanticFact(f'Enter the backup tool {_backup_items}: ',
-                                           user_fn=str, default_value='pg_basebackup'),
-              description=f'The backup tool to be used for the PostgreSQL server (3 modes are supported). Default '
-                          f'is pg_basebackup. This argument is also helps to set the wal_level variable. The level of '
-                          f'wal_level can be determined by maximum of achieved replication tool and number of replicas '
-                          f'but would not impact on the data/transaction integrity choice.',
-              )
-    ]
+    max_backup_replication_tool: PG_BACKUP_TOOL = Field(
+        default=PG_BACKUP_TOOL.PG_BASEBACKUP,
+        description='The backup tool level to be used for the PostgreSQL server. Default is pg_basebackup. This '
+                    'argument is also helps to set WAL-related configuration, including the replication tool, number '
+                    'of replicas, data-transaction integrity choice.'
+    )
     opt_transaction_lost: PG_PROFILE_OPTMODE = Field(
         default=PG_PROFILE_OPTMODE.NONE,
         description='The PostgreSQL mode for allow the transaction loss to tune the transaction loss recovery '
@@ -163,6 +154,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                     'its busy workload and idle workload. It is best to collect your real-world data pattern before '
                     'using this value.'
     )   # https://www.postgresql.org/docs/13/functions-info.html -> pg_current_xact_id_if_assigned
+
     # ========================================================================
     # This is used for analyzing the memory available.
     operating_system: Literal['linux', 'windows', 'macos', 'containerd', 'PaaS'] = Field(
@@ -225,7 +217,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     )
     align_index: Literal[0, 1] = Field(
         default=0, ge=0, le=1,
-        description='This is the index used to pick the value during number alignment. Default is 0.'
+        description='This is the index used to pick the value during number alignment. Default is 0 meant a lower '
+                    'value is preferred. Set to 1 would prefer a higher value. '
     )
 
     # ========================================================================
@@ -306,12 +299,6 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                               f'-> Fall back to overall profile.')
 
         return self.workload_profile
-
-    def versioning(self, delimiter: str = '.') -> tuple[int, ...]:
-        result = [int(x) for x in self.pgsql_version.split(delimiter)]
-        if len(result) < 3:
-            result.extend([0] * (3 - len(result)))
-        return tuple(result)
 
     # ========================================================================
     # Some VM Snapshot Function

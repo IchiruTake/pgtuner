@@ -490,7 +490,6 @@ _DB_WAL_PROFILE = {
     },
     'wal_log_hints': {
         'default': 'on',
-
     },
     // See Ref [16-19] for tuning the wal_writer_delay and commit_delay
     'wal_writer_delay': {

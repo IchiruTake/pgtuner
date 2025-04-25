@@ -24,7 +24,7 @@ from math import ceil
 from pydantic import ByteSize
 
 from src.static.vars import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
-    SECOND, PG_LOG_DIR, BASE_WAL_SEGMENT_SIZE, M10
+    SECOND, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
@@ -67,7 +67,8 @@ def __get_num_connections(
         total_connections: int = managed_cache['max_connections']
         reserved_connections = managed_cache['reserved_connections'] + managed_cache['superuser_reserved_connections']
     except (IndexError, ValueError, KeyError) as e:
-        _logger.error(f"This function required the connection must be triggered and placed in the managed cache: See error \n{e}.")
+        _logger.error(
+            f"This function required the connection must be triggered and placed in the managed cache: See error \n{e}.")
         return -1
     if not use_reserved_connection:
         total_connections -= reserved_connections
@@ -152,7 +153,7 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     pgmem_available = int(options.usable_ram) - group_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
-    if 'wal_buffers' in global_cache:   # I don't know if this make significant impact?
+    if 'wal_buffers' in global_cache:  # I don't know if this make significant impact?
         pgmem_available -= global_cache['wal_buffers']
 
     max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio
@@ -231,7 +232,7 @@ def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIO
     # memory (RAM - shared_buffers): https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/server-parameters-table-query-tuning-planner-cost-constants?pivots=postgresql-17#effective_cache_size
     # and https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
     # Default is half of physical RAM memory on most tuning guideline
-    pgmem_available = int(options.usable_ram)    # Make a copy
+    pgmem_available = int(options.usable_ram)  # Make a copy
     pgmem_available -= global_cache['shared_buffers']
     _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
@@ -263,11 +264,11 @@ _DB_CONN_PROFILE = {
     'superuser_reserved_connections': {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 3, superuser_mode=True,
-                                       base_reserved_connection=1),
+            __reserved_connections(options, 0, 3, superuser_mode=True,
+                                   base_reserved_connection=1),
             'medium': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 5, superuser_mode=True,
-                                       base_reserved_connection=2),
+            __reserved_connections(options, 0, 5, superuser_mode=True,
+                                   base_reserved_connection=2),
         },
         'tune_op': lambda group_cache, global_cache, options, response:
         __reserved_connections(options, 0, 10, superuser_mode=True),
@@ -277,14 +278,14 @@ _DB_CONN_PROFILE = {
     'reserved_connections': {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 3, superuser_mode=False,
-                                       base_reserved_connection=1),
+            __reserved_connections(options, 0, 3, superuser_mode=False,
+                                   base_reserved_connection=1),
             'medium': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 5, superuser_mode=False,
-                                       base_reserved_connection=2),
+            __reserved_connections(options, 0, 5, superuser_mode=False,
+                                   base_reserved_connection=2),
         },
         'tune_op': lambda group_cache, global_cache, options, response:
-            __reserved_connections(options, 0, 10, superuser_mode=False),
+        __reserved_connections(options, 0, 10, superuser_mode=False),
         'default': __BASE_RESERVED_DB_CONNECTION,
         'comment': f"Sets the number of connections reserved for users."
     },
@@ -401,7 +402,7 @@ _DB_VACUUM_PROFILE = {
     },
     'autovacuum_naptime': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
+        SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
         'default': 1 * MINUTE,
         'comment': "Specifies the minimum delay between autovacuum runs on any given database. In each round the "
                    "daemon examines the database and issues VACUUM and ANALYZE commands as needed for tables in that "
@@ -549,8 +550,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.85),
-                          page_size=250 * K10)[options.align_index],
+        realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.85),
+                      page_size=250 * K10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relfrozenxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits every "
@@ -574,8 +575,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_multixact_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85),
-                          page_size=250 * K10)[options.align_index],
+        realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85),
+                      page_size=250 * K10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relminmxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits "
@@ -819,7 +820,7 @@ _DB_WAL_PROFILE = {
         'default': 'pglz',
         'comment': 'This parameter enables compression of WAL using the specified compression method. When enabled, '
                    'the PostgreSQL server compresses full page images written to WAL when full_page_writes is on or '
-                   'during a base backup. A compressed page image will be decompressed during WAL replay.'
+                   'during a base backup. A compressed page image will be decompressed during WAL replay (pg_rewind).'
     },
     'wal_init_zero': {
         'default': 'on',
@@ -835,14 +836,15 @@ _DB_WAL_PROFILE = {
                    'the need to create new ones. On COW file systems, it may be faster to create new ones, '
                    'so the option is given to disable this behavior.'
     },
-
     'wal_log_hints': {
         'default': 'on',
         'comment': "When this parameter is on, the PostgreSQL server writes the entire content of each disk page to "
                    "WAL during the first modification of that page after a checkpoint, even for non-critical "
                    "modifications of so-called hint bits. If data checksums are enabled, hint bit updates are always "
                    "WAL-logged and this setting is ignored. You can use this setting to test how much extra WAL-logging "
-                   "would occur if your database had data checksums enabled."
+                   "would occur if your database had data checksums enabled, and the use of pg_rewind. Enable this "
+                   "would increase the number of generated WAL files, resulting in more I/O, CPU usage and network "
+                   "transfer for replication and recovery; so it is best to set :arg:`wal_compression=on`."
     },
     # See Ref [16-19] for tuning the wal_writer_delay and commit_delay
     'wal_writer_delay': {
@@ -996,10 +998,9 @@ exit 0
     'archive_timeout': {
         'instructions': {
             'mini_default': 1 * HOUR,
-            'mall_default': 30 * MINUTE,
-            'bigt_default': 30 * MINUTE,
+            'medium_default': 45 * MINUTE,
         },
-        'default': 45 * MINUTE,
+        'default': 30 * MINUTE,
         'hardware_scope': 'overall',  # But based on data rate
         'comment': 'The :var:`archive_command` or :var:`archive_library` is only invoked for completed WAL segments. '
                    'Hence, if your server generates little WAL traffic, there could be a long delay between the '
@@ -1011,7 +1012,7 @@ exit 0
                    'database activity). Note that archived files that are closed early due to a forced switch are '
                    'still the same length as completely full files. Therefore, it is unwise to use a very short '
                    ':var:`archive_timeout` — it will bloat your archive storage. In general this parameter is used for '
-                   'safety and long PITR and want to revert back to a far time in the past. Default to 15 minutes on '
+                   'safety and long PITR and want to revert back to a far time in the past. Default to 30 minutes on '
                    'general system and up to 1 hour on smaller scale.',
         'partial_func': lambda value: f"{value}s",
     },
@@ -1139,7 +1140,8 @@ _DB_REPLICATION_PROFILE = {
     # Generic
     'logical_decoding_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi), page_size=DB_PAGE_SIZE)[options.align_index],
+        realign_value(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi), page_size=DB_PAGE_SIZE)[
+            options.align_index],
         'default': 64 * Mi,
         'comment': "Specifies the maximum amount of memory to be used by logical decoding, before some of the decoded "
                    "changes are written to local disk. This limits the amount of memory used by logical streaming "
@@ -1317,7 +1319,7 @@ _DB_LOG_PROFILE = {
                    ':var:`logging_collector` is also enabled.'
     },
     'log_directory': {
-        'default': 'log', # PG_LOG_DIR,
+        'default': 'log',  # PG_LOG_DIR,
         'comment': 'When :var:`logging_collector` is enabled, this parameter determines the directory in which log '
                    'files will be created. It can be specified as an absolute path, or relative to the cluster data '
                    'directory. '
@@ -1551,7 +1553,8 @@ _DB_TIMEOUT_PROFILE = {
 # Library (You don't need to tune these variable as they are not directly related to the database performance)
 _DB_LIB_PROFILE = {
     'shared_preload_libraries': {
-        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_visibility',   # pg_repack, Not pg_squeeze
+        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_visibility',
+        # pg_repack, Not pg_squeeze
         'comment': 'A comma-separated list of shared libraries to load into the server. The list of libraries must be '
                    'specified by name, not with file name or path. The libraries are loaded into the server during '
                    'startup. If a library is not found when the server is started, the server will fail to start. '
