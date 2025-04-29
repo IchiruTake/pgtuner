@@ -1,8 +1,8 @@
 /**
  * This project is a direct conversion of the original Python project :app:`pgtuner` to JavaScript.
- * Only the backend are converted to JavaScript, while the frontend remains in Python, and maintained
+ * Only the backend is converted to JavaScript, while the frontend remains in Python, and maintained
  * as a separate project. 
- * Logging and Pydantic are removed, but maintained the same functionality. All variable names, 
+ * Logging and Pydantic are removed but maintained the same functionality. All variable names,
  * attributes, and methods are kept the same as the original Python project (including the name).
  * 
  */
@@ -21,7 +21,7 @@ const __VERSION__ = __version__;
 const __AUTHOR__ = 'Ichiru Take';
 
 const APP_NAME = 'PGTUNER_DBA'; // This name is used on log.toml,
-const SUPPORTED_POSTGRES_VERSIONS = ['13', '14', '15', '16', '17', '18'];
+const SUPPORTED_POSTGRES_VERSIONS = [13, 14, 15, 16, 17, 18];
 const APP_NAME_LOWER = APP_NAME.toLowerCase();
 const APP_NAME_UPPER = APP_NAME.toUpperCase();
 
