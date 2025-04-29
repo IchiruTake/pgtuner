@@ -1,16 +1,15 @@
 import logging
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
 from src.utils.static import K10, Ki, Gi, Mi, APP_NAME_UPPER, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.disks import PG_DISK_PERF
-from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.sizing import PG_SIZING, PG_DISK_SIZING
 from src.tuner.data.workload import PG_WORKLOAD
-from src.tuner.data.options import PG_TUNE_USR_OPTIONS
+from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST
 
 
@@ -113,23 +112,17 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
 
     # The basic profile for the system tuning for profile-guided tuning
     workload_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    # cpu_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    # mem_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    # disk_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    # net_profile: PG_SIZING = Field(default=PG_SIZING.LARGE)
-    pgsql_version: str = Field(default='17')
+    pgsql_version: PositiveInt = Field(default=17, ge=13, le=17,)
 
     # Disk options for data partitions
-    # os_db_spec: PG_DISK_PERF        # This is not used
     data_index_spec: _PG_WEB_DISK_PERF_INT = Field(default=_PG_WEB_DISK_PERF_INT())
     wal_spec: _PG_WEB_DISK_PERF_INT = Field(default=_PG_WEB_DISK_PERF_INT())
-    # db_log_spec: PG_DISK_PERF       # This is not used
 
     # Data Integrity, Transaction, Crash Recovery, and Replication
-    max_backup_replication_tool: str = Field(default='pg_basebackup')
+    max_backup_replication_tool: PG_BACKUP_TOOL = Field(default=PG_BACKUP_TOOL.PG_BASEBACKUP)
     opt_transaction_lost: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.NONE)
     opt_wal_buffers: PG_PROFILE_OPTMODE = Field(default=PG_PROFILE_OPTMODE.SPIDEY)
-    max_time_transaction_loss_allow_in_millisecond: PositiveInt = Field(default=650, ge=1, le=10000)
+    max_time_transaction_loss_allow_in_millisecond: PositiveInt = Field(default=650, ge=100, le=10000)
     max_num_stream_replicas_on_primary: int = Field(default=0, ge=0, le=32)
     max_num_logical_replicas_on_primary: int = Field(default=0, ge=0, le=32)
     offshore_replication: bool = False
@@ -147,11 +140,11 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
 
     # ========================================================================
     # This is used for analyzing the memory available.
-    operating_system: str = Field(default='linux')
+    operating_system: Literal['linux', 'windows', 'macos', 'containerd', 'PaaS'] = Field(default='linux')
     logical_cpu: PositiveInt = Field(default=4, ge=1)
     total_ram_in_gib: ByteSize | PositiveFloat = Field(default=16, ge=2, multiple_of=0.25)
-    base_kernel_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=8 * Ki)]
-    base_monitoring_memory_usage_in_mib: Annotated[ByteSize | int, Field(default=-1, ge=-1, le=4 * Ki)]
+    base_kernel_memory_usage_in_mib: ByteSize | int = Field(default=-1, ge=-1, le=8 * Ki)
+    base_monitoring_memory_usage_in_mib: ByteSize | int = Field(default=-1, ge=-1, le=4 * Ki)
 
     # ========================================================================
     enable_database_general_tuning: bool = True
@@ -170,16 +163,10 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
         return PG_TUNE_USR_OPTIONS(
             # The basic profile for the system tuning for profile-guided tuning
             workload_profile=self.workload_profile,
-            cpu_profile=self.workload_profile,
-            mem_profile=self.workload_profile,
-            net_profile=self.workload_profile,
-            disk_profile=self.workload_profile,
             pgsql_version=self.pgsql_version,
             # Disk partitions
-            os_db_spec=None,
             data_index_spec=self.data_index_spec.to_backend(),
             wal_spec=self.wal_spec.to_backend(),
-            db_log_spec=None,
             # Data Integrity, Transaction, Crash Recovery, and Replication
             max_backup_replication_tool=self.max_backup_replication_tool,
             opt_transaction_lost=self.opt_transaction_lost,
@@ -220,6 +207,6 @@ class PG_WEB_TUNE_REQUEST(BaseModel):
 
     def to_backend(self) -> PG_TUNE_REQUEST:
         custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'
-        backend_request = PG_TUNE_REQUEST(options=self.user_options.to_backend(), output_if_difference_only=False,
+        backend_request = PG_TUNE_REQUEST(options=self.user_options.to_backend(),
                                           include_comment=False, custom_style=custom_style)
         return backend_request

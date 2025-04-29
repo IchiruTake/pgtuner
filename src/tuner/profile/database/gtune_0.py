@@ -1219,7 +1219,26 @@ _DB_QUERY_PROFILE = {
                    "1% error probability. For very small/simple databases, decrease to 10 or 50. Data warehousing "
                    "applications generally need to use 500 to 1000.",
     },
-
+    # Join and Parallelism (TODO) -> These are just there to let user notice
+    'join_collapse_limit': {
+        'instructions': {
+            'large_default': 12,
+            'mall_default': 16,
+            'bigt_default': 20,
+        },
+        'default': 8,
+    },
+    'from_collapse_limit': {
+        'instructions': {
+            'large_default': 12,
+            'mall_default': 16,
+            'bigt_default': 20,
+        },
+        'default': 8,
+    },
+    'plan_cache_mode': {
+        'default': 'auto',
+    },
     # Parallelism
     'parallel_setup_cost': {
         'instructions': {

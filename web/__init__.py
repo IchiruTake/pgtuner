@@ -22,9 +22,8 @@ from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
 
 from src import pgtuner
-from src.static.c_timezone import GetTimezone
 from src.utils.static import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
-    SECOND, K10
+    SECOND, K10, TIMEZONE
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from web.env import OsGetEnvBool
@@ -313,10 +312,10 @@ Allow: /
 
 # ----------------------------------------------------------------------------------------------
 # Health Check API
-_SERVICE_START_TIME = datetime.now(tz=GetTimezone()[0])
+_SERVICE_START_TIME = datetime.now(tz=TIMEZONE)
 @app.get('/_health', status_code=status.HTTP_200_OK)
 async def health():
-    _service_uptime: timedelta = datetime.now(tz=GetTimezone()[0]) - _SERVICE_START_TIME
+    _service_uptime: timedelta = datetime.now(tz=TIMEZONE) - _SERVICE_START_TIME
     return ORJSONResponse(
         content={
             'status': 'HEALTHY',

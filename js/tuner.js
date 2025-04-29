@@ -64,7 +64,7 @@ const MONTH_TIME = Math.round(30.5 * DAY);
 const YEAR_TIME = Math.round(365.25 * DAY);
 
 function getJSVersion() {
-    var version = undefined;
+    let version = undefined;
     if (String.prototype.trim) {
         version = 5;
         if (Array.prototype.map) {
@@ -186,7 +186,7 @@ const cap_value = (value, min_value, max_value, redirectNumber = null) => {
     if (redirectNumber && redirectNumber.length === 2 && value === redirectNumber[0]) {
         value = redirectNumber[1];
     }
-    return min(max(value, min_value), max_value);
+    return Math.min(Math.max(value, min_value), max_value);
 };
 
 // =================================================================================
@@ -201,35 +201,24 @@ const cap_value = (value, min_value, max_value, redirectNumber = null) => {
  * If level = 1, it will be the same as the normal average.
  * Ref: https://en.wikipedia.org/wiki/Generalized_mean
  *
- * @param  {...number} args - The numbers to average, followed by an options object.
- * @param {Object} args[args.length - 1] - The options object containing the level and round_ndigits.
- * @returns {number} The generalized mean rounded to the specified number of digits.
+ * Parameters
+ * ----------
+ * @param {number[]} x - The series of numbers to be averaged.
+ * @param {number} x2 - The second number.
+ * @param {number} level - The level of the generalized mean.
+ * @param {number} round_ndigits - The number of digits to round to.
  *
  * Example
  * -------
  * generalized_mean(1, 2, 3, { level: 1, round_ndigits: 4 })  // returns 2.0000
  */
-function generalized_mean(...args) {
-    if (args.length === 0) {
-        throw new Error("At least one numeric argument and an options object with property 'level' are required.");
-    }
-    // Assume the last argument is the options object with property "level"
-    const opts = args[args.length - 1];
-    if (typeof opts !== 'object' || opts === null || !('level' in opts)) {
-        throw new Error("The last argument must be an options object containing the property 'level'.");
-    }
-    const levelInput = opts.level;
-    const round_ndigits = ('round_ndigits' in opts) ? opts.round_ndigits : 4;
-    // Remaining arguments are values to average
-    const values = args.slice(0, -1);
-    let level = levelInput;
+function generalized_mean(x, level, round_ndigits) {
     if (level === 0) {
         level = 1e-6; // Small value to prevent division by zero
     }
-    // Note: In JavaScript, -0 is equivalent to 0.
-    const n = values.length;
-    const sumPower = values.reduce((acc, val) => acc + (Math.pow(val, level) / n), 0);
-    const result = Math.pow(sumPower, 1 / level);
+    const n = x.length;
+    const sumPower = x.reduce((acc, val) => acc + Math.pow(val, level), 0);
+    const result = Math.pow(sumPower / n, 1 / level);
 
     // Rounding the number to the specified number of digits
     if (round_ndigits !== null) {
@@ -304,7 +293,7 @@ function _depth_count(a) {
     return 0;
 }
 
-// Compute total number of items recursively in an object.
+// Compute the total number of items recursively in an object.
 function _item_total_count(a) {
     if (a !== null && typeof a === "object") {
         let count = Array.isArray(a) ? a.length : Object.keys(a).length;
@@ -725,12 +714,8 @@ class PG_SIZING {
         return _str_to_num(this.value);
     }
 
-    lt(other) {
-        return this.num() < other.num();
-    }
-
-    eq(other) {
-        return this.num() === other.num();
+    valueOf() {
+        return this.value;
     }
 }
 // Define the PG_SIZING enum members
@@ -1451,8 +1436,6 @@ class PG_TUNE_USR_OPTIONS {
         this.base_kernel_memory_usage = options.base_kernel_memory_usage ?? -1;
         this.base_monitoring_memory_usage = options.base_monitoring_memory_usage ?? -1;
         // System tuning flags
-        this.enable_sysctl_general_tuning = options.enable_sysctl_general_tuning ?? false;
-        this.enable_sysctl_correction_tuning = options.enable_sysctl_correction_tuning ?? false;
         this.enable_database_general_tuning = options.enable_database_general_tuning ?? true;
         this.enable_database_correction_tuning = options.enable_database_correction_tuning ?? true;
         this.align_index = options.align_index ?? 0;
@@ -1466,9 +1449,6 @@ class PG_TUNE_USR_OPTIONS {
      */
     model_post_init() {
         // Disable correction tuning if general tuning is off.
-        if (!this.enable_sysctl_general_tuning) {
-            this.enable_sysctl_correction_tuning = false;
-        }
         if (!this.enable_database_general_tuning) {
             this.enable_database_correction_tuning = false;
         }
@@ -1633,7 +1613,7 @@ class PG_TUNE_ITEM {
         if (this.partial_func && typeof this.partial_func === 'function') {
             value = this.partial_func(value);
         } else if (typeof value === 'number') {
-            // Rounding and converting to fixed point string
+            // Rounding and converting to a fixed point string
             value = value.toFixed(_FLOAT_PRECISION);
             // Remove trailing zeros and possible trailing dot
             value = value.replace(/(\.\d*?[1-9])0+$/,'$1').replace(/\.0+$/,'').replace(/\.$/, '.0');
@@ -1870,14 +1850,14 @@ function _CalcWalBuffers(group_cache, global_cache, options, response, minimum, 
     It is only benefit when you use COPY instead of SELECT. For other thing, the spawning of
     WAL buffers is not necessary. We don't care the large of one single WAL file 
     */
-    shared_buffers = global_cache['shared_buffers'];
+    let shared_buffers = global_cache['shared_buffers'];
     usable_ram_noswap = options.usable_ram;
     function fn(x) {
         return 1024 * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
     } 
     oldstyle_wal_buffers = min(floor(shared_buffers / 32), options.tuning_kwargs.wal_segment_size);  // Measured in bytes
     wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki);
-    return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), page_size=DB_PAGE_SIZE)[options.align_index];
+    return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), DB_PAGE_SIZE)[options.align_index];
 }
 
 // ----------------------------------------------------------------------------------------------------------------
@@ -1885,18 +1865,18 @@ _DB_CONN_PROFILE = {
     // Connections
     'superuser_reserved_connections': {
         'instructions': {
-            'mini': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 3, superuser_mode=true, base_reserved_connection=1),
-            'medium': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 5, superuser_mode=true, base_reserved_connection=2),
+            'mini': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 3, true, 1),
+            'medium': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 5, true, 2),
         },
-        'tune_op': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 10, superuser_mode=true),
+        'tune_op': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 10, true),
         'default': __BASE_RESERVED_DB_CONNECTION,
     },
     'reserved_connections': {
         'instructions': {
-            'mini': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 3, superuser_mode=false, base_reserved_connection=1),
-            'medium': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 5, superuser_mode=false, base_reserved_connection=2),
+            'mini': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 3, false, 1),
+            'medium': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 5, false, 2),
         },
-        'tune_op': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 10, superuser_mode=false),
+        'tune_op': (group_cache, global_cache, options, response) => _GetReservedConns(options, 0, 10, false),
         'default': __BASE_RESERVED_DB_CONNECTION,
     },
     'max_connections': {
@@ -1917,51 +1897,53 @@ _DB_RESOURCE_PROFILE = {
     'shared_buffers': {
         'tune_op': (group_cache, global_cache, options, response) => _CalcSharedBuffers(options),
         'default': 128 * Mi,
-        'partial_func': (value) => "${floor(value / Mi)}MB",
+        'partial_func': (value) => `${floor(value / Mi)}MB`,
     },
     'temp_buffers': {
         'tune_op': (group_cache, global_cache, options, response) => _CalcTempBuffers(group_cache, global_cache, options, response),
         'default': 8 * Mi,
-        'partial_func': (value) => "${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB",
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
     'work_mem': {
         'tune_op': (group_cache, global_cache, options, response) => _CalcWorkMem(group_cache, global_cache, options, response),
         'default': 4 * Mi,
-        'partial_func': (value) => "${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB",
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
     'hash_mem_multiplier': { 'default': 2.0, },
 }
 
 _DB_VACUUM_PROFILE = {
     // Memory and Worker
-    'autovacuum': {
-        'default': 'on',
-    },
+    'autovacuum': { 'default': 'on', },
     'autovacuum_max_workers': {
         'instructions': {
             'mini_default': 1,
             'medium_default': 2,
-            'large': (group_cache, global_cache, options, response) => cap_value(Math.floor(options.vcpu / 4) + 1, 2, 5),
-            'mall': (group_cache, global_cache, options, response) => cap_value(Math.floor(options.vcpu / 3.5) + 1, 3, 6),
-            'bigt': (group_cache, global_cache, options, response) => cap_value(Math.floor(options.vcpu / 3) + 1, 3, 8),
+            'large': (group_cache, global_cache, options, response) =>
+                cap_value(Math.floor(options.vcpu / 4) + 1, 2, 5),
+            'mall': (group_cache, global_cache, options, response) =>
+                cap_value(Math.floor(options.vcpu / 3.5) + 1, 3, 6),
+            'bigt': (group_cache, global_cache, options, response) =>
+                cap_value(Math.floor(options.vcpu / 3) + 1, 3, 8),
         },
         'default': 3,
         'hardware_scope': 'cpu',
     },
     'autovacuum_naptime': {
-        'tune_op': (group_cache, global_cache, options, response) => SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
+        'tune_op': (group_cache, global_cache, options, response) =>
+            SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
         'default': 1 * MINUTE,
-        'partial_func': (value) => "${Math.floor(value / SECOND)}s",
+        'partial_func': (value) => `${Math.floor(value / SECOND)}s`,
     },
     'maintenance_work_mem': {
-        'tune_op': (group_cache, global_cache, options, response) => _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response)[1],
+        'tune_op': (group_cache, global_cache, options, response) =>
+            _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response)[1],
         'default': 64 * Mi,
-        'post-condition-group': (value, cache, options) => value * cache['autovacuum_max_workers'] < Math.floor(options.usable_ram / 2),
-        'partial_func': (value) => "${Math.floor(value / Mi)}MB",
+        'post-condition-group': (value, cache, options) =>
+            value * cache['autovacuum_max_workers'] < Math.floor(options.usable_ram / 2),
+        'partial_func': (value) => `${Math.floor(value / Mi)}MB`,
     },
-    'autovacuum_work_mem': {
-        'default': -1,
-    },
+    'autovacuum_work_mem': { 'default': -1, },
     // Threshold and Scale Factor: For the information, I would use the [08] as the base optimization profile and could 
     // be applied on most scenarios, except that you are having an extremely large table where 0.1% is too large.
     'autovacuum_vacuum_threshold; autovacuum_vacuum_insert_threshold; autovacuum_analyze_threshold': {
@@ -1980,17 +1962,9 @@ _DB_VACUUM_PROFILE = {
         'hardware_scope': 'overall',
         'default': 0.005,
     },
-    'autovacuum_vacuum_cost_delay': {
-        'default': 2,
-        'partial_func': (value) => "${value}ms",
-    },
-    'autovacuum_vacuum_cost_limit': {
-        'default': -1,
-    },
-    'vacuum_cost_delay': {
-        'default': 0,
-        'partial_func': (value) => "${value}s",
-    },
+    'autovacuum_vacuum_cost_delay': { 'default': 2, 'partial_func': (value) => `${value}ms`, },
+    'autovacuum_vacuum_cost_limit': { 'default': -1,  },
+    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}s`, },
     'vacuum_cost_limit': {
         'instructions': {
             'large_default': 500,
@@ -1999,38 +1973,28 @@ _DB_VACUUM_PROFILE = {
         },
         'default': 200,
     },
-    'vacuum_cost_page_hit': {
-        'default': 1,
-    },
-    'vacuum_cost_page_miss': {
-        'default': 2,
-    },
-    'vacuum_cost_page_dirty': {
-        'default': 20,
-    },
+    'vacuum_cost_page_hit': { 'default': 1, },
+    'vacuum_cost_page_miss': { 'default': 2, },
+    'vacuum_cost_page_dirty': { 'default': 20, },
     // Transaction ID and MultiXact
     // See here: https://postgresqlco.nf/doc/en/param/autovacuum_freeze_max_age/
     // and https://www.youtube.com/watch?v=vtjjaEVPAb8 at (30:02)
-    'autovacuum_freeze_max_age': {
-        'default': 500 * M10,
-    },
+    'autovacuum_freeze_max_age': { 'default': 500 * M10, },
     'vacuum_freeze_table_age': {
-        'tune_op': (group_cache, global_cache, options, response) => realign_value(Math.ceil(group_cache['autovacuum_freeze_max_age'] * 0.85), page_size=250 * K10)[options.align_index],
+        'tune_op': (group_cache, global_cache, options, response) =>
+            realign_value(Math.ceil(group_cache['autovacuum_freeze_max_age'] * 0.85),
+                250 * K10)[options.align_index],
         'default': 150 * M10,
     },
-    'vacuum_freeze_min_age': {
-        'default': 50 * M10,
-    },
-    'autovacuum_multixact_freeze_max_age': {
-        'default': 850 * M10,
-    },
+    'vacuum_freeze_min_age': { 'default': 50 * M10, },
+    'autovacuum_multixact_freeze_max_age': { 'default': 850 * M10, },
     'vacuum_multixact_freeze_table_age': {
-        'tune_op': (group_cache, global_cache, options, response) => realign_value(Math.ceil(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85), page_size=250 * K10)[options.align_index],
+        'tune_op': (group_cache, global_cache, options, response) =>
+            realign_value(Math.ceil(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85),
+                250 * K10)[options.align_index],
         'default': 150 * M10,
     },
-    'vacuum_multixact_freeze_min_age': {
-        'default': 5 * M10,
-    },
+    'vacuum_multixact_freeze_min_age': { 'default': 5 * M10, },
 }
 
 _DB_BGWRITER_PROFILE = {
@@ -2039,7 +2003,7 @@ _DB_BGWRITER_PROFILE = {
     'bgwriter_delay': {
         'default': 300,
         'hardware_scope': 'overall',
-        'partial_func': (value) => "${value}ms",
+        'partial_func': (value) => `${value}ms`,
     },
     'bgwriter_lru_maxpages': {
         'instructions': {
@@ -2049,42 +2013,38 @@ _DB_BGWRITER_PROFILE = {
         },
         'default': 300,
     },
-    'bgwriter_lru_multiplier': {
-        'default': 2.0,
-    },
+    'bgwriter_lru_multiplier': { 'default': 2.0, },
     'bgwriter_flush_after': {
         'default': 512 * Ki,
-        'partial_func': (value) => "${Math.floor(value / Ki)}kB",
+        'partial_func': (value) => `${Math.floor(value / Ki)}kB`,
     },
 }
 
 _DB_ASYNC_DISK_PROFILE = {
-    'effective_io_concurrency': {
-        'default': 16,
-    },
-    'maintenance_io_concurrency': {
-        'default': 10,
-    },
-    'backend_flush_after': {
-        'default': 0,
-    },
+    'effective_io_concurrency': { 'default': 16, },
+    'maintenance_io_concurrency': { 'default': 10, },
+    'backend_flush_after': { 'default': 0, },
 }
 
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
-        'tune_op': (group_cache, global_cache, options, response) => cap_value(Math.ceil(options.vcpu * 1.5) + 2, 4, 512),
+        'tune_op': (group_cache, global_cache, options, response) =>
+            cap_value(Math.ceil(options.vcpu * 1.5) + 2, 4, 512),
         'default': 8,
     },
     'max_parallel_workers': {
-        'tune_op': (group_cache, global_cache, options, response) => min(cap_value(Math.ceil(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
+        'tune_op': (group_cache, global_cache, options, response) =>
+            Math.min(cap_value(Math.ceil(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
-        'tune_op': (group_cache, global_cache, options, response) => min(cap_value(Math.ceil(options.vcpu / 3), 2, 32), group_cache['max_parallel_workers']),
+        'tune_op': (group_cache, global_cache, options, response) =>
+            Math.min(cap_value(Math.ceil(options.vcpu / 3), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
     },
     'max_parallel_maintenance_workers': {
-        'tune_op': (group_cache, global_cache, options, response) => min(cap_value(Math.ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+        'tune_op': (group_cache, global_cache, options, response) =>
+            Math.min(cap_value(Math.ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
     },
     'min_parallel_table_scan_size': {
@@ -2095,53 +2055,34 @@ _DB_ASYNC_CPU_PROFILE = {
             'bigt_default': 32 * Mi,
         },
         'default': 8 * Mi,
-        'partial_func': (value) => '${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB',
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
     'min_parallel_index_scan_size': {
         'tune_op': (group_cache, global_cache, options, response) => max(group_cache['min_parallel_table_scan_size'] / 16, 512 * Ki),
         'default': 512 * Ki,
-        'partial_func': (value) => '${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB',
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
 }
 
 _DB_WAL_PROFILE = {
     // For these settings, please refer to the [13] and [14] for more information
-    'wal_level': {
-        'default': 'replica',
-    },
-    'synchronous_commit': {
-        'default': 'on',
-    },
-    'full_page_writes': {
-        'default': 'on',
-    },
-    'fsync': {
-        'default': 'on',
-    },
-    'wal_compression': {
-        'default': 'pglz',
-    },
-    'wal_init_zero': {
-        'default': 'on',
-    },
-    'wal_recycle': {
-        'default': 'on',
-    },
-    'wal_log_hints': {
-        'default': 'on',
-    },
+    'wal_level': { 'default': 'replica', },
+    'synchronous_commit': { 'default': 'on', },
+    'full_page_writes': { 'default': 'on', },
+    'fsync': { 'default': 'on', },
+    'wal_compression': { 'default': 'pglz', },
+    'wal_init_zero': { 'default': 'on', },
+    'wal_recycle': { 'default': 'on', },
+    'wal_log_hints': { 'default': 'on', },
     // See Ref [16-19] for tuning the wal_writer_delay and commit_delay
     'wal_writer_delay': {
         'instructions': {
             "mini_default": K10,
         },
         'default': 200,
-        'partial_func': (value) => "${value}ms",
+        'partial_func': (value) => `${value}ms`,
     },
-    'wal_writer_flush_after': {
-        'default': 1 * Mi,
-        'partial_func': (value) => "${Math.floor(value / Mi)}MB",
-    },
+    'wal_writer_flush_after': { 'default': 1 * Mi, 'partial_func': (value) => `${Math.floor(value / Mi)}MB`, },
     // This setting means that when you have at least 5 transactions in pending, the delay (interval by commit_delay)
     // would be triggered (assuming maybe more transactions are coming from the client or application level)
     // ============================== CHECKPOINT ==============================
@@ -2155,24 +2096,16 @@ _DB_WAL_PROFILE = {
         },
         'default': 15 * MINUTE,
         'hardware_scope': 'overall',
-        'partial_func': (value) => '${Math.floor(value / MINUTE)}min',
+        'partial_func': (value) => `${Math.floor(value / MINUTE)}min`,
     },
-    'checkpoint_flush_after': {
-        'default': 256 * Ki,
-        'partial_func': (value) => '${Math.floor(value / Ki)}kB',
-    },
-    'checkpoint_completion_target': {
-        'default': 0.9,
-    },
-    'checkpoint_warning': {
-        'default': 30,
-        'partial_func': (value) => "${value}s",
-    },
+    'checkpoint_flush_after': { 'default': 256 * Ki, 'partial_func': (value) => `${Math.floor(value / Ki)}kB`, },
+    'checkpoint_completion_target': { 'default': 0.9, },
+    'checkpoint_warning': { 'default': 30, 'partial_func': (value) => `${value}s`, },
     // ============================== WAL SIZE ==============================
     'min_wal_size': {
         'tune_op': (group_cache, global_cache, options, response) => 10 * options.tuning_kwargs.wal_segment_size,
         'default': 10 * BASE_WAL_SEGMENT_SIZE,
-        'partial_func': (value) => '${Math.floor(value / Mi)}MB',
+        'partial_func': (value) => `${Math.floor(value / Mi)}MB`,
     },
     'max_wal_size': {
         'instructions': {
@@ -2183,19 +2116,17 @@ _DB_WAL_PROFILE = {
             'bigt_default': 32 * Gi,
         },
         'default': 8 * Gi,
-        'partial_func': (value) => '${Math.floor(value / Mi)}MB',
+        'partial_func': (value) => `${Math.floor(value / Mi)}MB`,
     },
     'wal_buffers': {
         'tune_op': (group_cache, global_cache, options, response) => 
-            _CalcWalBuffers(group_cache, global_cache, options, response, minimum=Math.floor(BASE_WAL_SEGMENT_SIZE / 2), 
-                            maximum=BASE_WAL_SEGMENT_SIZE * 16),
+            _CalcWalBuffers(group_cache, global_cache, options, response, Math.floor(BASE_WAL_SEGMENT_SIZE / 2),
+                            BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
     },
     // ============================== ARCHIVE && RECOVERY ==============================
-    'archive_mode': {
-        'default': 'on',
-    },
+    'archive_mode': { 'default': 'on', },
     'archive_timeout': {
         'instructions': {
             'mini_default': 1 * HOUR,
@@ -2204,35 +2135,25 @@ _DB_WAL_PROFILE = {
         },
         'default': 45 * MINUTE,
         'hardware_scope': 'overall',
-        'partial_func': (value) => '${value}s',
+        'partial_func': (value) => `${value}s`,
     },
 }
 
 _DB_RECOVERY_PROFILE = {
-    'recovery_end_command': {
-        'default': 'pg_ctl stop -D $PGDATA',
-    },
+    'recovery_end_command': { 'default': 'pg_ctl stop -D $PGDATA', },
 }
 
 _DB_REPLICATION_PROFILE = {
     // Sending Servers
-    'max_wal_senders': {
-        'default': 3,
-        'hardware_scope': 'net',
-    },
-    'max_replication_slots': {
-        'default': 3,
-        'hardware_scope': 'net',
-    },
+    'max_wal_senders': { 'default': 3, 'hardware_scope': 'net', },
+    'max_replication_slots': { 'default': 3, 'hardware_scope': 'net', },
     'wal_keep_size': {
         // Don't worry since if you use replication_slots, its default is -1 (keep all WAL); but if replication
         // for disaster recovery (not for offload READ queries or high-availability)
         'default': 25 * BASE_WAL_SEGMENT_SIZE,
-        'partial_func': (value) => '${Math.floor(value / Mi)}MB',
+        'partial_func': (value) => `${Math.floor(value / Mi)}MB`,
     },
-    'max_slot_wal_keep_size': {
-        'default': -1,
-    },
+    'max_slot_wal_keep_size': { 'default': -1, },
     'wal_sender_timeout': {
         'instructions': {
             'mall_default': 2 * MINUTE,
@@ -2240,40 +2161,28 @@ _DB_REPLICATION_PROFILE = {
         },
         'default': MINUTE,
         'hardware_scope': 'net',
-        'partial_func': (value) => '${value}s',
+        'partial_func': (value) => `${value}s`,
     },
-    'track_commit_timestamp': {
-        'default': 'on',
-    },
+    'track_commit_timestamp': { 'default': 'on', },
     'logical_decoding_work_mem': {
         'tune_op': (group_cache, global_cache, options, response) => 
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 8), 32 * Mi, 2 * Gi), 
-        page_size=DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 8), 32 * Mi, 2 * Gi),
+                DB_PAGE_SIZE)[options.align_index],
         'default': 64 * Mi,
     },
 }
 
 _DB_QUERY_PROFILE = {
     // Query tuning
-    'seq_page_cost': {
-        'default': 1.0,
-    },
-    'random_page_cost': {
-        'default': 2.60,
-    },
-    'cpu_tuple_cost': {
-        'default': 0.03,
-    },
-    'cpu_index_tuple_cost': {
-        'default': 0.005,
-    },
-    'cpu_operator_cost': {
-        'default': 0.001,
-    },
+    'seq_page_cost': { 'default': 1.0, },
+    'random_page_cost': { 'default': 2.60, },
+    'cpu_tuple_cost': { 'default': 0.03, },
+    'cpu_index_tuple_cost': { 'default': 0.005, },
+    'cpu_operator_cost': { 'default': 0.001, },
     'effective_cache_size': {
         'tune_op': _CalcEffectiveCacheSize,
         'default': 4 * Gi,
-        'partial_func': (value) => "${Math.floor(value / Mi)}MB",
+        'partial_func': (value) => `${Math.floor(value / Mi)}MB`,
     },
     'default_statistics_target': {
         'instructions': {
@@ -2303,37 +2212,6 @@ _DB_QUERY_PROFILE = {
     'plan_cache_mode': {
         'default': 'auto',
     },
-    'geqo': {
-        'default': 'on',
-    },
-    'geqo_threshold': {
-        'instructions': {
-            'large_default': 12,
-            'mall_default': 16,
-            'bigt_default': 20,
-        },
-        'default': 8,
-    },
-    'geqo_effort': {
-        'instructions': {
-            'large_default': 4,
-            'mall_default': 5,
-            'bigt_default': 6,
-        },
-        'default': 3,
-    },
-    'geqo_pool_size': {
-        'default': 0,
-    },
-    'geqo_generations': {
-        'default': 0,
-    },
-    'geqo_selection_bias': {
-        'default': 2.0,
-    },
-    'geqo_seed': {
-        'default': 0,
-    },
     // Parallelism
     'parallel_setup_cost': {
         'instructions': {
@@ -2344,9 +2222,9 @@ _DB_QUERY_PROFILE = {
     },
     'parallel_tuple_cost': {
         'instructions': {
-            'large': (group_cache, global_cache, options, response) => min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-            'mall': (group_cache, global_cache, options, response) => min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-            'bigt': (group_cache, global_cache, options, response) => min(group_cache['cpu_tuple_cost'] * 10, 0.1),
+            'large': (group_cache, global_cache, options, response) => Math.min(group_cache['cpu_tuple_cost'] * 10, 0.1),
+            'mall': (group_cache, global_cache, options, response) => Math.min(group_cache['cpu_tuple_cost'] * 10, 0.1),
+            'bigt': (group_cache, global_cache, options, response) => Math.min(group_cache['cpu_tuple_cost'] * 10, 0.1),
         },
         'default': 0.1,
     },
@@ -2370,33 +2248,17 @@ _DB_QUERY_PROFILE = {
         'hardware_scope': 'overall',
     },
     // Statistics
-    'track_activity_query_size': {
-        'default': 2 * Ki,
-        'partial_func': (value) => '${value}B',
-    },
-    'track_counts': {
-        'default': 'on',
-    },
-    'track_io_timing': {
-        'default': 'on',
-        'hardware_scope': 'cpu',
-    },
+    'track_activity_query_size': { 'default': 2 * Ki, 'partial_func': (value) => `${value}B`, },
+    'track_counts': { 'default': 'on', },
+    'track_io_timing': { 'default': 'on', 'hardware_scope': 'cpu', },
 }
 
 _DB_LOG_PROFILE = {
     // Where to Log
-    'logging_collector': {
-        'default': 'on',
-    },
-    'log_destination': {
-        'default': 'stderr',
-    },
-    'log_directory': {
-        'default': 'log',
-    },
-    'log_filename': {
-        'default': 'postgresql-%Y-%m-%d_%H%M.log',
-    },
+    'logging_collector': { 'default': 'on', },
+    'log_destination': { 'default': 'stderr', },
+    'log_directory': { 'default': 'log', },
+    'log_filename': { 'default': 'postgresql-%Y-%m-%d_%H%M.log', },
     'log_rotation_age': {
         // For best-case it is good to make the log rotation happens by time-based rather than size-based
         'instructions': {
@@ -2405,7 +2267,7 @@ _DB_LOG_PROFILE = {
             'bigt_default': 4 * HOUR,
         },
         'default': 1 * DAY,
-        'partial_func': (value) => "${Math.floor(value / HOUR)}h",
+        'partial_func': (value) => `${Math.floor(value / HOUR)}h`,
     },
     'log_rotation_size': {
         'instructions': {
@@ -2413,62 +2275,32 @@ _DB_LOG_PROFILE = {
             'medium_default': 64 * Mi,
         },
         'default': 256 * Mi,
-        'partial_func': (value) => "${Math.floor(value / Mi)}MB",
+        'partial_func': (value) => `${Math.floor(value / Mi)}MB`,
     },
-    'log_truncate_on_rotation': {
-        'default': 'on',
-    },
+    'log_truncate_on_rotation': { 'default': 'on', },
     // What to log
-    'log_autovacuum_min_duration': {
-        'default': 300 * K10,
-        'partial_func': (value) => "${Math.floor(value / K10)}s",
-    },
-    'log_checkpoints': {
-        'default': 'on',
-    },
-    'log_connections': {
-        'default': 'on',
-    },
-    'log_disconnections': {
-        'default': 'on',
-    },
-    'log_duration': {
-        'default': 'on',
-    },
-    'log_error_verbosity': {
-        'default': 'VERBOSE',
-    },
-    'log_line_prefix': {
-        'default': '%m [%p] %quser=%u@%r@%a_db=%d,backend=%b,xid=%x %v,log=%l',
-    },
-    'log_lock_waits': {
-        'default': 'on',
-    },
-    'log_recovery_conflict_waits': {
-        'default': 'on',
-    },
-    'log_statement': {
-        'default': 'mod',
-    },
-    'log_replication_commands': {
-        'default': 'on',
-    },
-    'log_min_duration_statement': {
-        'default': 2 * K10,
-        'partial_func': (value) => "{value}ms",
-    },
-    'log_min_error_statement': {
-        'default': 'ERROR',
-    },
+    'log_autovacuum_min_duration': { 'default': 300 * K10, 'partial_func': (value) => `${Math.floor(value / K10)}s`, },
+    'log_checkpoints': { 'default': 'on', },
+    'log_connections': { 'default': 'on', },
+    'log_disconnections': { 'default': 'on', },
+    'log_duration': { 'default': 'on', },
+    'log_error_verbosity': { 'default': 'VERBOSE', },
+    'log_line_prefix': { 'default': '%m [%p] %quser=%u@%r@%a_db=%d,backend=%b,xid=%x %v,log=%l', },
+    'log_lock_waits': { 'default': 'on', },
+    'log_recovery_conflict_waits': { 'default': 'on', },
+    'log_statement': { 'default': 'mod', },
+    'log_replication_commands': { 'default': 'on', },
+    'log_min_duration_statement': { 'default': 2 * K10, 'partial_func': (value) => `{value}ms`, },
+    'log_min_error_statement': { 'default': 'ERROR', },
     'log_parameter_max_length': {
         'tune_op': (group_cache, global_cache, options, response) => global_cache['track_activity_query_size'],
         'default': -1,
-        'partial_func': (value) => "${value}B",
+        'partial_func': (value) => `${value}B`,
     },
     'log_parameter_max_length_on_error': {
         'tune_op': (group_cache, global_cache, options, response) => global_cache['track_activity_query_size'],
         'default': -1,
-        'partial_func': (value) => "${value}B",
+        'partial_func': (value) => `${value}B`,
     },
 }
 
@@ -2476,25 +2308,13 @@ _DB_TIMEOUT_PROFILE = {
     // Transaction Timeout should not be moved away from default, but we can customize the statement_timeout and
     // lock_timeout
     // Add +1 seconds to avoid checkpoint_timeout happens at same time as idle_in_transaction_session_timeout
-    'idle_in_transaction_session_timeout': {
-        'default': 5 * MINUTE + 1,
-        'partial_func': (value) => "${value}s",
-    },
-    'statement_timeout': {
-        'default': 0,
-        'partial_func': (value) => "${value}s",
-    },
-    'lock_timeout': {
-        'default': 0,
-        'partial_func': (value) => "${value}s",
-    },
-    'deadlock_timeout': {
-        'default': 1 * SECOND,
-        'partial_func': (value) => "${value}s",
-    },
+    'idle_in_transaction_session_timeout': { 'default': 5 * MINUTE + 1, 'partial_func': (value) => `${value}s`, },
+    'statement_timeout': { 'default': 0, 'partial_func': (value) => `${value}s`, },
+    'lock_timeout': { 'default': 0, 'partial_func': (value) => `${value}s`, },
+    'deadlock_timeout': { 'default': 1 * SECOND, 'partial_func': (value) => `${value}s`, },
 }
 
-// Library (You don't need to tune these variable as they are not directly related to the database performance)
+// Library (You don't need to tune these variables as they are not directly related to the database performance)
 _DB_LIB_PROFILE = {
     'shared_preload_libraries': {
         'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_visibility',   // pg_repack, Not pg_squeeze
@@ -2502,43 +2322,21 @@ _DB_LIB_PROFILE = {
     // Auto Explain
     'auto_explain.log_min_duration': {
         'tune_op': (group_cache, global_cache, options, response) => 
-            realign_value(int(global_cache['log_min_duration_statement'] * 1.5), page_size=20)[options.align_index],
+            realign_value(Math.floor(global_cache['log_min_duration_statement'] * 3 / 2), 20)[options.align_index],
         'default': -1,
-        'partial_func': (value) => "${value}ms",
+        'partial_func': (value) => `${value}ms`,
     },
-    'auto_explain.log_analyze': {
-        'default': 'off',
-    },
-    'auto_explain.log_buffers': {
-        'default': 'on',
-    },
-    'auto_explain.log_wal': {
-        'default': 'on',
-    },
-    'auto_explain.log_settings': {
-        'default': 'off',
-    },
-    'auto_explain.log_triggers': {
-        'default': 'off',
-    },
-    'auto_explain.log_verbose': {
-        'default': 'on',
-    },
-    'auto_explain.log_format': {
-        'default': 'text',
-    },
-    'auto_explain.log_level': {
-        'default': 'LOG',
-    },
-    'auto_explain.log_timing': {
-        'default': 'on',
-    },
-    'auto_explain.log_nested_statements': {
-        'default': 'off',
-    },
-    'auto_explain.sample_rate': {
-        'default': 1.0,
-    },
+    'auto_explain.log_analyze': { 'default': 'off', },
+    'auto_explain.log_buffers': { 'default': 'on', },
+    'auto_explain.log_wal': { 'default': 'on', },
+    'auto_explain.log_settings': { 'default': 'off', },
+    'auto_explain.log_triggers': { 'default': 'off', },
+    'auto_explain.log_verbose': { 'default': 'on', },
+    'auto_explain.log_format': { 'default': 'text', },
+    'auto_explain.log_level': { 'default': 'LOG', },
+    'auto_explain.log_timing': { 'default': 'on', },
+    'auto_explain.log_nested_statements': { 'default': 'off', },
+    'auto_explain.sample_rate': { 'default': 1.0, },
     // PG_STAT_STATEMENTS
     'pg_stat_statements.max': {
         'instructions': {
@@ -2548,18 +2346,10 @@ _DB_LIB_PROFILE = {
         },
         'default': 5 * K10,
     },
-    'pg_stat_statements.track': {
-        'default': 'all',
-    },
-    'pg_stat_statements.track_utility': {
-        'default': 'on',
-    },
-    'pg_stat_statements.track_planning': {
-        'default': 'off',
-    },
-    'pg_stat_statements.save': {
-        'default': 'on',
-    },
+    'pg_stat_statements.track': { 'default': 'all', },
+    'pg_stat_statements.track_utility': { 'default': 'on', },
+    'pg_stat_statements.track_planning': { 'default': 'off', },
+    'pg_stat_statements.save': { 'default': 'on', },
 }
 
 // Validate and remove the invalid library configuration
@@ -2602,25 +2392,16 @@ console.debug(`DB13_CONFIG_PROFILE: ${JSON.stringify(DB13_CONFIG_PROFILE)}`);
 
 // Timeout profile
 const _DB14_TIMEOUT_PROFILE = {
-    "idle_session_timeout": {
-        "default": 0,
-        "partial_func": value => `${value}s`,
-    },
+    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
 };
 // Query profile
 const _DB14_QUERY_PROFILE = {
-    "track_wal_io_timing": {
-        "default": 'on',
-    },
+    "track_wal_io_timing": { "default": 'on', },
 };
 // Vacuum profile
 const _DB14_VACUUM_PROFILE = {
-    "vacuum_failsafe_age": {
-        "default": 1600000000,
-    },
-    "vacuum_multixact_failsafe_age": {
-        "default": 1600000000,
-    }
+    "vacuum_failsafe_age": { "default": 1600000000, },
+    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
 };
 
 // Merge mapping: use tuples as arrays
@@ -2650,32 +2431,20 @@ console.debug(`DB14_CONFIG_PROFILE: ${JSON.stringify(DB14_CONFIG_PROFILE)}`);
 
 // Log profile
 const _DB15_LOG_PROFILE = {
-    "log_startup_progress_interval": {
-        "default": K10,
-        "partial_func": value => `${value}s`,
-    },
+    "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
 // Timeout profile
 const _DB15_TIMEOUT_PROFILE = {
-    "idle_session_timeout": {
-        "default": 0,
-        "partial_func": value => `${value}s`,
-    },
+    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
 };
 // Query profile
 const _DB15_QUERY_PROFILE = {
-    "track_wal_io_timing": {
-        "default": 'on',
-    },
+    "track_wal_io_timing": { "default": 'on', },
 };
 // Vacuum profile
 const _DB15_VACUUM_PROFILE = {
-    "vacuum_failsafe_age": {
-        "default": 1600000000,
-    },
-    "vacuum_multixact_failsafe_age": {
-        "default": 1600000000,
-    }
+    "vacuum_failsafe_age": { "default": 1600000000, },
+    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
 };
 
 // Merge mapping: use tuples as arrays
@@ -2705,10 +2474,7 @@ console.debug(`DB15_CONFIG_PROFILE: ${JSON.stringify(DB15_CONFIG_PROFILE)}`);
  */
 // Log profile
 const _DB16_LOG_PROFILE = {
-	"log_startup_progress_interval": {}
-		"default": K10,
-		"partial_func": value => `${value}s`,
-	},
+	"log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
 // Vacuum profile
 const _DB16_VACUUM_PROFILE = {
@@ -2720,31 +2486,20 @@ const _DB16_VACUUM_PROFILE = {
 		"hardware_scope": "mem",
 		"partial_func": value => `${Math.floor(value / Mi)}MB`,
 	},
-	"vacuum_failsafe_age": {
-		"default": 1600000000,
-	},
-	"vacuum_multixact_failsafe_age": {
-		"default": 1600000000,
-	}
+    "vacuum_failsafe_age": { "default": 1600000000, },
+    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
 };
 // WAL profile
 const _DB16_WAL_PROFILE = {
-	"wal_compression": {
-		"default": "zstd",
-	},
+	"wal_compression": { "default": "zstd", },
 };
 // Timeout profile
 const _DB16_TIMEOUT_PROFILE = {
-    "idle_session_timeout": {
-        "default": 0,
-        "partial_func": value => `${value}s`,
-    },
+    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
 };
 // Query profile
 const _DB16_QUERY_PROFILE = {
-    "track_wal_io_timing": {
-        "default": 'on',
-    },
+    "track_wal_io_timing": { "default": 'on', },
 };
 
 
@@ -2776,36 +2531,28 @@ console.debug(`DB16_CONFIG_PROFILE: ${JSON.stringify(DB16_CONFIG_PROFILE)}`);
  */
 // Log profile
 const _DB17_LOG_PROFILE = {
-	"log_startup_progress_interval": {}
+	"log_startup_progress_interval": {
 		"default": K10,
 		"partial_func": value => `${value}s`,
 	}
 };
 // Vacuum profile
 const _DB17_VACUUM_PROFILE = {
-	"vacuum_buffer_usage_limit": {
-		"tune_op": (group_cache, global_cache, options, response) =>
-			realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi),
-			page_size=DB_PAGE_SIZE)[options.align_index],
-		"default": 2 * Mi,
-		"hardware_scope": "mem",
-		"partial_func": value => `${Math.floor(value / Mi)}MB`,
-	},
-	"vacuum_failsafe_age": {
-		"default": 1600000000,
-	},
-	"vacuum_multixact_failsafe_age": {
-		"default": 1600000000,
-	}
+    "vacuum_buffer_usage_limit": {
+        "tune_op": (group_cache, global_cache, options, response) =>
+            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi),
+                page_size = DB_PAGE_SIZE)[options.align_index],
+        "default": 2 * Mi,
+        "hardware_scope": "mem",
+        "partial_func": value => `${Math.floor(value / Mi)}MB`,
+    },
+    "vacuum_failsafe_age": { "default": 1600000000, },
+    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
 };
 // WAL profile
 const _DB17_WAL_PROFILE = {
-	"wal_compression": {
-		"default": "zstd",
-	},
-	"summarize_wal": {
-		"default": "on",
-	},
+	"wal_compression": { "default": "zstd", },
+	"summarize_wal": { "default": "on", },
 	"wal_summary_keep_time": {
 		"default": Math.floor(30 * DAY / MINUTE),
 		"partial_func": value => `${Math.floor(value / MINUTE)}min`,
@@ -2813,16 +2560,11 @@ const _DB17_WAL_PROFILE = {
 };
 // Timeout profile
 const _DB17_TIMEOUT_PROFILE = {
-    "idle_session_timeout": {
-        "default": 0,
-        "partial_func": value => `${value}s`,
-    },
+    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
 };
 // Query profile
 const _DB17_QUERY_PROFILE = {
-    "track_wal_io_timing": {
-        "default": 'on',
-    },
+    "track_wal_io_timing": { "default": 'on', },
 };
 
 // Merge mapping: use tuples as arrays
