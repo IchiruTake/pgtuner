@@ -3,7 +3,7 @@ from functools import lru_cache, total_ordering
 from math import floor, ceil
 from typing import Literal
 
-from src.static.vars import K10, THROUGHPUT
+from src.utils.static import K10, THROUGHPUT
 
 __all__ = ['PG_SIZING', 'PG_DISK_SIZING', 'SIZE_PROFILES']
 

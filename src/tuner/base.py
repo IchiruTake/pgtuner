@@ -3,7 +3,7 @@ from typing import Any, Callable
 
 from pydantic import Field, BaseModel, model_validator
 
-from src.static.vars import APP_NAME_UPPER, MULTI_ITEMS_SPLIT, WEB_MODE
+from src.utils.static import APP_NAME_UPPER, MULTI_ITEMS_SPLIT, WEB_MODE
 from src.tuner.data.items import PG_TUNE_ITEM
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE

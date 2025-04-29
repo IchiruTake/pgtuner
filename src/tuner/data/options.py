@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
-from src.static.vars import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS, K10, M10, Ki, BASE_WAL_SEGMENT_SIZE
+from src.utils.static import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS, K10, M10, Ki, BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.sizing import PG_SIZING, SIZE_PROFILES
@@ -268,7 +268,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                     'Otherwise, this would be enforced to SPIDEY.',
     )
     # Don't set this too high or too low as they don't guarantee stability and consistency
-    max_time_transaction_loss_allow_in_second: PositiveInt = Field(
+    max_time_transaction_loss_allow_in_millisecond: PositiveInt = Field(
         default=650, ge=100, le=10000, frozen=True,
         description='The maximum time (in milli-second) that user allow for transaction loss, to flush the page '
                     'in memory to WAL partition by WAL writer. The supported range is [100, 10000] and default '
@@ -277,13 +277,13 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
                     'is designed to favor writing whole pages at a time during busy periods. The wal_writer_delay '
                     'can only be impacted when wal_level is set to replica and higher.',
     )
-    max_num_stream_replicas_on_standby: int = Field(
+    max_num_stream_replicas_on_primary: int = Field(
         default=0, ge=0, le=32, frozen=True,
         description='The maximum number of streaming replicas for the PostgreSQL primary server. The supported '
                     'range is [0, 32], default is 0. If you are deployed on replica or receiving server, set '
                     'this number as low. ',
     )
-    max_num_logical_replicas_on_standby: int = Field(
+    max_num_logical_replicas_on_primary: int = Field(
         default=0, ge=0, le=32, frozen=True,
         description='The maximum number of logical replicas for the PostgreSQL primary server. The supported '
                     'range is [0, 32], default is 0. If you are deployed on replica or receiving server, set '
@@ -401,6 +401,9 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     # ========================================================================
     # Revert some invalid options as described in :attr:`is_os_user_managed`
     def model_post_init(self, __context: Any) -> None:
+        if self.operating_system != 'linux':
+            self.enable_sysctl_general_tuning = False   # Not supported for other OS
+
         if not self.enable_sysctl_general_tuning:
             self.enable_sysctl_correction_tuning = False
         if not self.enable_database_general_tuning:

@@ -5,6 +5,7 @@ a base configuration for the log system, application name, ...
 """
 import os
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 # ==================================================================================================
 # Application Information
@@ -16,6 +17,8 @@ APP_NAME = 'PGTUNER_DBA'  # This name is used on log.toml,
 SUPPORTED_POSTGRES_VERSIONS = ('13', '14', '15', '16', '17')
 APP_NAME_LOWER: str = APP_NAME.lower()
 APP_NAME_UPPER: str = APP_NAME.upper()
+_TIMEZONE = os.getenv('timezone', 'UTC')  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'
+TIMEZONE = ZoneInfo(_TIMEZONE)
 
 DEBUG_MODE: bool = os.getenv(f'{APP_NAME_UPPER}_DEBUG') is not None  # If this flag available regardless of the value
 WEB_MODE: bool = os.getenv(f'{APP_NAME_UPPER}_WEB') is not None  # If this flag available regardless of the value

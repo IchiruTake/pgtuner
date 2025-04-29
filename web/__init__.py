@@ -12,19 +12,18 @@ from typing import Annotated, Mapping
 from fastapi import FastAPI, Header, Request
 from fastapi import status
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import ORJSONResponse, RedirectResponse, Response
-from fastapi.exceptions import RequestValidationError, HTTPException as FastapiHttpException
+from fastapi.responses import ORJSONResponse, Response
 
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pydantic import ValidationError
-from starlette.responses import PlainTextResponse, HTMLResponse
+from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
 
 from src import pgtuner
 from src.static.c_timezone import GetTimezone
-from src.static.vars import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
+from src.utils.static import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
     SECOND, K10
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE

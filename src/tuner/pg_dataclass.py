@@ -6,7 +6,7 @@ from functools import partial
 
 from pydantic import BaseModel, Field
 
-from src.static.vars import APP_NAME_UPPER, Gi, Mi, Ki, K10
+from src.utils.static import APP_NAME_UPPER, Gi, K10
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.items import PG_TUNE_ITEM
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS

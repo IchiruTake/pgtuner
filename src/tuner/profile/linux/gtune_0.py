@@ -20,7 +20,7 @@ _<Scope>_<Description>_PROFILE = {
 }
 
 """
-from src.static.vars import Ki, K10, Mi
+from src.utils.static import Ki, K10, Mi
 from src.tuner.data.scope import PG_SCOPE
 
 __all__ = ["KERNEL_SYSCTL_PROFILE"]

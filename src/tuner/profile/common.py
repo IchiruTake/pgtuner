@@ -9,7 +9,7 @@ modification of the profile data. The functions are:
 import logging
 from typing import Callable
 
-from src.static.vars import MULTI_ITEMS_SPLIT, APP_NAME_UPPER
+from src.utils.static import MULTI_ITEMS_SPLIT, APP_NAME_UPPER
 from src.tuner.data.scope import PG_SCOPE
 
 __all__ = ['merge_extra_info_to_profile', 'type_validation', 'rewrite_items']

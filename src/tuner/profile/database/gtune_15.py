@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from pydantic import ByteSize
 
-from src.static.vars import K10, APP_NAME_UPPER
+from src.utils.static import K10, APP_NAME_UPPER
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation, rewrite_items
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE

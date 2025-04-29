@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
-from src.static.vars import K10, Ki, Gi, Mi, APP_NAME_UPPER, BASE_WAL_SEGMENT_SIZE, M10
+from src.utils.static import K10, Ki, Gi, Mi, APP_NAME_UPPER, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE

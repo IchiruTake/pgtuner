@@ -7,7 +7,7 @@ from math import floor, ceil
 
 from pydantic import ByteSize
 
-from src.static.vars import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
+from src.utils.static import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
 from src.tuner.data.disks import PG_DISK_PERF
 from src.utils.pydantic_utils import bytesize_to_hr
 

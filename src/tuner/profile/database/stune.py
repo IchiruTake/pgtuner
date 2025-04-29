@@ -8,7 +8,7 @@ from typing import Callable, Any
 
 from pydantic import ValidationError
 
-from src.static.vars import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, \
+from src.utils.static import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, \
     SECOND, WEB_MODE, THROUGHPUT, M10, Ki, HOUR
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS

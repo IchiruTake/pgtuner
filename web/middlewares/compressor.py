@@ -47,7 +47,7 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Send, Receive, Message, Scope as StarletteScope
 from zstandard import ZstdCompressor, ZstdCompressionWriter, FLUSH_FRAME, FLUSH_BLOCK
 
-from src.static.vars import APP_NAME_UPPER, Ki
+from src.utils.static import APP_NAME_UPPER, Ki
 from web.middlewares.middlewares import BaseMiddleware
 
 # ==============================================================================

@@ -38,18 +38,16 @@ This work may not be there without these great projects:
 
 """
 import os
-from pprint import pprint
 from zoneinfo import ZoneInfo
-import logging
-import logging.handlers
-from typing import Annotated, Literal
+from typing import Literal
 from datetime import datetime
 
-from src.static.vars import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR
+from src.utils.static import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR
 from src.tuner.data.scope import PGTUNER_SCOPE
 
 from src import pgtuner
-from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
+from src.tuner.pg_dataclass import PG_TUNE_REQUEST
+
 
 # ==================================================================================================
 # Metadata

@@ -1,6 +1,6 @@
 import os
 import glob
-from src.static.vars import SUGGESTION_ENTRY_READER_DIR
+from src.utils.static import SUGGESTION_ENTRY_READER_DIR
 
 
 def cleanup():

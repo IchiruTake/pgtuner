@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ByteSize, PositiveFloat, PositiveInt
 
-from src.static.vars import APP_NAME_UPPER, RANDOM_IOPS, THROUGHPUT, Gi, Mi, DB_PAGE_SIZE
+from src.utils.static import APP_NAME_UPPER, RANDOM_IOPS, THROUGHPUT, Gi, Mi, DB_PAGE_SIZE
 from src.tuner.data.sizing import PG_DISK_SIZING
 
 __all__ = ['PG_DISK_PERF']

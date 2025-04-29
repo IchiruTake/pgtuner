@@ -6,12 +6,11 @@ from typing import Literal
 
 from pydantic import ByteSize, PositiveFloat, PositiveInt
 
-from src.static.vars import (APP_NAME_UPPER, SUGGESTION_ENTRY_READER_DIR, Gi, K10, )
+from src.utils.static import (APP_NAME_UPPER, SUGGESTION_ENTRY_READER_DIR, Gi, K10, )
 from src.tuner.base import GeneralTuner
 from src.tuner.data.disks import PG_DISK_PERF
-from src.tuner.data.keywords import PG_TUNE_USR_KWARGS
-from src.tuner.data.options import PG_TUNE_USR_OPTIONS
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
+from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
@@ -32,17 +31,6 @@ _profiles = {
     16: DB16_CONFIG_PROFILE,
     17: DB17_CONFIG_PROFILE,
 }
-
-
-def get_postgresql_profile(version: int | str):
-    if isinstance(version, str):
-        try:
-            version = int(version.split('.')[0])
-        except ValueError:
-            version = int(version)
-    return _profiles.get(version, DB0_CONFIG_PROFILE)
-
-
 _logger = logging.getLogger(APP_NAME_UPPER)
 _SIZING = ByteSize | int | float
 __all__ = ['init', 'optimize', 'make_disk', 'make_tuning_keywords', 'make_tune_request']
@@ -91,7 +79,7 @@ def _tune_pgdb(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     if request.options.enable_database_general_tuning:
         _logger.info('=========================================================================================='
                      '\nStart general tuning on the PostgreSQL database settings.')
-        db_config_profile = get_postgresql_profile(request.options.pgsql_version)
+        db_config_profile = _profiles.get(request.options.pgsql_version, DB0_CONFIG_PROFILE)
         dbconf_tuner = GeneralTuner(target=PGTUNER_SCOPE.DATABASE_CONFIG, items=db_config_profile)
         dbconf_tuner.optimize(request=request, response=response)
         found_tuning = True
@@ -202,14 +190,11 @@ def make_tune_request(
         enable_database_correction_tuning=enable_database_correction_tuning,
         ## User-Tuning Profiles
         workload_profile=workload_profile,
-        cpu_profile=cpu_profile,
-        mem_profile=mem_profile,
-        net_profile=net_profile,
-        disk_profile=disk_profile,
+
         pgsql_version=pgsql_version,
         ## Disk Performance
-        os_db_spec=os_db_disk or disk_template, data_index_spec=data_index_disk or disk_template,
-        wal_spec=wal_disk or disk_template, db_log_spec=db_log_disk or disk_template,
+        data_index_spec=data_index_disk or disk_template,
+        wal_spec=wal_disk or disk_template,
         ## PostgreSQL Tuning Configuration
         workload_type=workload_type, operating_system=operating_system,
         base_kernel_memory_usage=base_kernel_memory_usage, base_monitoring_memory_usage=base_monitoring_memory_usage,
@@ -218,11 +203,10 @@ def make_tune_request(
 
         ## PostgreSQL Data Integrity
         opt_transaction_lost=opt_transaction_lost, opt_wal_buffers=opt_wal_buffers,
-        repurpose_wal_buffers=repurpose_wal_buffers,
         max_time_transaction_loss_allow_in_millisecond=max_time_transaction_loss_allow_in_millisecond,
         max_num_stream_replicas_on_primary=max_num_stream_replicas_on_primary,
         max_num_logical_replicas_on_primary=max_num_logical_replicas_on_primary,
-        max_backup_replication_tool=max_backup_replication_tool,
+        max_backup_replication_tool=PG_BACKUP_TOOL(max_backup_replication_tool),
         offshore_replication=offshore_replication,
     )
     return PG_TUNE_REQUEST(options=options, output_if_difference_only=output_if_difference_only,
