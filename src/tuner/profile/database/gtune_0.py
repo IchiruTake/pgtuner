@@ -23,14 +23,14 @@ from math import ceil
 
 from pydantic import ByteSize
 
-from src.utils.static import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
-    SECOND, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
 from src.utils.pydantic_utils import (bytesize_to_hr, realign_value, cap_value, )
+from src.utils.static import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
+    SECOND, BASE_WAL_SEGMENT_SIZE, M10
 
 __all__ = ['DB0_CONFIG_PROFILE', ]
 

@@ -7,9 +7,9 @@ from math import floor, ceil
 
 from pydantic import ByteSize
 
-from src.utils.static import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
 from src.tuner.data.disks import PG_DISK_PERF
 from src.utils.pydantic_utils import bytesize_to_hr
+from src.utils.static import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
 
 __all__ = ['wal_time', 'checkpoint_time', 'vacuum_time', 'vacuum_scale']
 _logger = logging.getLogger(APP_NAME_UPPER)

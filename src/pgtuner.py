@@ -147,7 +147,7 @@ def make_tune_request(
 
         ## User-Tuning Profiles
         workload_profile: str = 'large', cpu_profile: str = 'large', mem_profile: str = 'large',
-        net_profile: str = 'large', disk_profile: str = 'large', pgsql_version: str = '17',
+        net_profile: str = 'large', disk_profile: str = 'large', pgsql_version: str = 17 ,
 
         ## Disk Performance
         disk_template: PG_DISK_PERF = make_disk(_DATA_INDEX_DISK_STRING_CODE, _DATA_INDEX_DISK_STRING_CODE),
@@ -169,7 +169,6 @@ def make_tune_request(
         ## PostgreSQL Data Integrity
         opt_transaction_lost: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.NONE,
         opt_wal_buffers: PG_PROFILE_OPTMODE = PG_PROFILE_OPTMODE.SPIDEY,
-        repurpose_wal_buffers: bool = True,
         max_time_transaction_loss_allow_in_millisecond: PositiveInt = 650,
         max_num_stream_replicas_on_primary: PositiveInt = 0,
         max_num_logical_replicas_on_primary: PositiveInt = 0,

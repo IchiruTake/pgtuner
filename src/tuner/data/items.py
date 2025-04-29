@@ -33,10 +33,7 @@ class PG_TUNE_ITEM(BaseModel):
                           "its associated level (mini, medium, large, mall, bigt, ...)")
     )
 
-    def out(self, output_if_difference_only: bool = False, include_comment: bool = False,
-            custom_style: str | None = None) -> str:
-        if output_if_difference_only and self.before == self.after:
-            return ''
+    def out(self, include_comment: bool = False, custom_style: str | None = None) -> str:
         texts = []
         if include_comment:
             comment = str(pformat(self.comment)).replace('\n', '\n# ')

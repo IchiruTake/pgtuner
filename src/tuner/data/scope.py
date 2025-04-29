@@ -1,8 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from src.static.c_timezone import GetTimezone
-from src.utils.static import __VERSION__, APP_NAME_UPPER
+from src.utils.static import __VERSION__, APP_NAME_UPPER, TIMEZONE
 
 __all__ = ['PG_SCOPE', 'PGTUNER_SCOPE']
 
@@ -29,7 +28,7 @@ class PGTUNER_SCOPE(Enum):
     DATABASE_CONFIG = 'database_config'
 
     def disclaimer(self) -> str:
-        dt = datetime.now(GetTimezone()[0])
+        dt = datetime.now(TIMEZONE)
         if self == PGTUNER_SCOPE.KERNEL_SYSCTL:
             return f"""# Read this disclaimer before applying the tuning result
 # ============================================================

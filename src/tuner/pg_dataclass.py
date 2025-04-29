@@ -27,7 +27,6 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 class PG_TUNE_REQUEST(BaseModel):
     """ The PostgreSQL tuning request, initiated by the user's request for tuning up """
     options: PG_TUNE_USR_OPTIONS
-    output_if_difference_only: bool = False
     include_comment: bool = False
     custom_style: str | None = None
 
@@ -62,20 +61,6 @@ class PG_TUNE_RESPONSE(BaseModel):
     def get_managed_cache(self, target: PGTUNER_SCOPE) -> dict[str, Any]:
         return self.outcome_cache[target]
 
-    def get_managed_items_and_cache(self, target: PGTUNER_SCOPE, scope: PG_SCOPE) -> tuple[
-        dict[str, PG_TUNE_ITEM], dict[str, Any]]:
-        return self.get_managed_items(target, scope), self.get_managed_cache(target)
-
-    def sync_cache_from_items(self, target: PGTUNER_SCOPE) -> dict:
-        divergent = {}
-        managed_cache = self.get_managed_cache(target)
-        for scope, items in self.outcome[target].items():
-            for item_name, item in items.items():
-                current = managed_cache.get(item_name)
-                if current != item.after:
-                    divergent[item_name] = item.after
-                    managed_cache = item.after
-        return divergent
 
     def _generate_content_as_file(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST, backup_settings: bool = True,
                                   exclude_names: list[str] | set[str] = None) -> str:
@@ -86,8 +71,7 @@ class PG_TUNE_RESPONSE(BaseModel):
             content.append(f'## ===== SCOPE: {scope} ===== \n')
             for item_name, item in items.items():
                 if exclude_names is None or item_name not in exclude_names:
-                    content.append(item.out(request.output_if_difference_only, request.include_comment,
-                                            request.custom_style))
+                    content.append(item.out(request.include_comment, request.custom_style))
                     content.append('\n' * (2 if request.include_comment else 1))
             # Separate for better view
             if request.include_comment:
@@ -123,8 +107,8 @@ class PG_TUNE_RESPONSE(BaseModel):
         raise ValueError(msg)
 
     # @time_decorator
-    def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
-                 ignore_report: bool = True) -> tuple[str, int | float]:
+    def report(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
+               ignore_report: bool = True) -> tuple[str, int | float]:
         # Cache result first
         _kwargs = options.tuning_kwargs
         usable_ram_noswap = options.usable_ram

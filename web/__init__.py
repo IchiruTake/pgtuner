@@ -373,8 +373,8 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
         exclude_names=set(exclude_names),
         backup_settings=False, # request.backup_settings,
     )
-    mem_report = response.mem_test(backend_request.options, request.analyze_with_full_connection_use,
-                                   ignore_report=False)[0]
+    mem_report = response.report(backend_request.options, request.analyze_with_full_connection_use,
+                                 ignore_report=False)[0]
 
     return ORJSONResponse(
         content={'mem_report': mem_report, 'config': content},

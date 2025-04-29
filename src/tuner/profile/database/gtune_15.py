@@ -3,11 +3,11 @@ from copy import deepcopy
 
 from pydantic import ByteSize
 
-from src.utils.static import K10, APP_NAME_UPPER
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation, rewrite_items
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
 from src.utils.dict_deepmerge import deepmerge
+from src.utils.static import K10, APP_NAME_UPPER
 
 __all__ = ["DB15_CONFIG_PROFILE"]
 _SIZING = ByteSize | int | float

@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # optimize(rq, output_format='file')
 
     logical_cpu: int = 4
-    rq = pgtuner.make_tune_request(logical_cpu=logical_cpu, ram_sample=int(logical_cpu * ram_cpu_ratio * Gi))
+    rq = pgtuner.make_tune_request(logical_cpu=logical_cpu, total_ram=int(logical_cpu * ram_cpu_ratio * Gi))
     # backup(rq, pgtuner_env_file=None)
     optimize(rq, output_format='file')
     pass

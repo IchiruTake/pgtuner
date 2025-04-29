@@ -46,7 +46,6 @@ class PG_PROFILE_OPTMODE(str, Enum):
                 PG_PROFILE_OPTMODE.PRIMORDIAL)
 
 # =============================================================================
-@total_ordering
 class PG_BACKUP_TOOL(Enum):
     DISK_SNAPSHOT = 'Backup by Disk Snapshot'
     PG_DUMP = 'pg_dump/pg_dumpall: Textual backup'
@@ -54,7 +53,7 @@ class PG_BACKUP_TOOL(Enum):
     PG_LOGICAL = 'pg_logical and alike: Logical replication'
 
     @classmethod
-    def __missing__(cls, key):
+    def _missing_(cls, key):
         if isinstance(key, str):
             k = key.strip().lower()
             match k:
@@ -73,4 +72,6 @@ class PG_BACKUP_TOOL(Enum):
                 raise ValueError(f'Unknown backup tool: {key}')
             return list(cls)[key]
         return super()._missing_(key)
+
+
 

@@ -8,8 +8,6 @@ from typing import Callable, Any
 
 from pydantic import ValidationError
 
-from src.utils.static import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, \
-    SECOND, WEB_MODE, THROUGHPUT, M10, Ki, HOUR
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
@@ -21,6 +19,8 @@ from src.tuner.profile.database.shared import wal_time
 from src.utils.mean import generalized_mean
 from src.utils.pydantic_utils import bytesize_to_hr
 from src.utils.pydantic_utils import realign_value, cap_value
+from src.utils.static import APP_NAME_UPPER, Mi, RANDOM_IOPS, K10, MINUTE, Gi, DB_PAGE_SIZE, BASE_WAL_SEGMENT_SIZE, \
+    SECOND, WEB_MODE, THROUGHPUT, M10, Ki, HOUR
 from src.utils.timing import time_decorator
 
 __all__ = ['correction_tune']
@@ -29,7 +29,8 @@ _MIN_USER_CONN_FOR_ANALYTICS = 4
 _MAX_USER_CONN_FOR_ANALYTICS = 25
 _DEFAULT_WAL_SENDERS: tuple[int, int, int] = (3, 5, 7)
 _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
-_CHANGE_CACHE = set()       # The collection of tuning items
+_CHANGE_CACHE = set()  # The collection of tuning items
+
 
 def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE,
                     _log_pool: list[str] | None) -> None:
@@ -56,7 +57,8 @@ def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQU
 def _item_tuning(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPONSE,
                  _log_pool: list[str] | None, suffix_text: str = '') -> None:
     _CHANGE_CACHE.add(key)
-    items, cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=scope)
+    items = response.get_managed_items(_TARGET_SCOPE, scope=scope)
+    cache = response.get_managed_cache(_TARGET_SCOPE)
 
     # Versioning should NOT be acknowledged here by this function
     if key not in items or key not in cache:
@@ -116,7 +118,7 @@ def _conn_cache_query_timeout_tune(
     # Optimize the max_connections
     if _kwargs.user_max_connections > 0:
         _log_pool.append('The user has overridden the max_connections -> Skip the maximum tuning')
-    elif request.options.workload_type in (PG_WORKLOAD.OLAP, ):
+    elif request.options.workload_type in (PG_WORKLOAD.OLAP,):
         _log_pool.append('The workload type is primarily managed by the application such as full-based analytics or '
                          'logging/blob storage workload. ')
 
@@ -184,7 +186,7 @@ def _conn_cache_query_timeout_tune(
 
     # Tune the default_statistics_target
     default_statistics_target = 'default_statistics_target'
-    managed_items, managed_cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
+    managed_items = response.get_managed_items(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
     after_default_statistics_target = managed_cache[default_statistics_target]
     default_statistics_target_hw_scope = managed_items[default_statistics_target].hardware_scope[1]
     if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP):
@@ -808,7 +810,7 @@ def _wal_integrity_buffer_size_tune(
         # Streaming replication (medium level)
         # The condition of num_replicas > 0 is to ensure that the user has set the replication slots
         after_wal_level = 'replica'
-    elif replication_level <= PG_BACKUP_TOOL.PG_DUMP and num_replicas == 0:
+    elif replication_level in (PG_BACKUP_TOOL.PG_DUMP, PG_BACKUP_TOOL.DISK_SNAPSHOT) and num_replicas == 0:
         after_wal_level = 'minimal'
     _item_tuning(key=wal_level, after=after_wal_level, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_log_pool)
@@ -895,7 +897,6 @@ def _wal_integrity_buffer_size_tune(
     _wal_disk_size = request.options.wal_spec.disk_usable_size
     _kwargs = request.options.tuning_kwargs
     _scope = PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE
-    managed_items, managed_cache = response.get_managed_items_and_cache(_TARGET_SCOPE, scope=_scope)
 
     # Tune the max_wal_size (This is easy to tune as it is based on the maximum WAL disk total size) to trigger
     # the CHECKPOINT process. It is usually used to handle spikes in WAL usage (when the interval between two
@@ -1050,10 +1051,10 @@ def _wal_integrity_buffer_size_tune(
 # Tune the memory usage based on specific workload
 def _get_wrk_mem_func():
     def _func_v1(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
-        return response.mem_test(options, use_full_connection=True, ignore_report=True)[1]
+        return response.report(options, use_full_connection=True, ignore_report=True)[1]
 
     def _func_v2(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
-        return response.mem_test(options, use_full_connection=False, ignore_report=True)[1]
+        return response.report(options, use_full_connection=False, ignore_report=True)[1]
 
     def _func_v3(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
         return (_func_v1(options, response) + _func_v2(options, response)) // 2
@@ -1194,7 +1195,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     active_connection_ratio = {
         PG_PROFILE_OPTMODE.SPIDEY: 1.0 / _kwargs.effective_connection_ratio,
         PG_PROFILE_OPTMODE.OPTIMUS_PRIME: (1.0 + _kwargs.effective_connection_ratio) / (
-                    2 * _kwargs.effective_connection_ratio),
+                2 * _kwargs.effective_connection_ratio),
         PG_PROFILE_OPTMODE.PRIMORDIAL: 1.0,
     }
     hash_mem = generalized_mean(1, managed_cache['hash_mem_multiplier'], level=_kwargs.hash_mem_usage_level)
@@ -1350,7 +1351,7 @@ def _analyze(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     _logger.info('\n================================================================================================= '
                  '\n ### Memory Usage Estimation ###')
     # response.mem_test(options=request.options, use_full_connection=True, ignore_report=False)
-    response.mem_test(options=request.options, use_full_connection=False, ignore_report=False)
+    response.report(options=request.options, use_full_connection=False, ignore_report=False)
     _logger.info('\n================================================================================================= ')
     return None
 
