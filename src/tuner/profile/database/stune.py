@@ -4,6 +4,7 @@ This module is to perform specific tuning on the PostgreSQL database server.
 """
 import logging
 from math import ceil, sqrt, floor, log2
+from pprint import pprint
 from typing import Callable, Any
 
 from pydantic import ValidationError
@@ -1172,6 +1173,8 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
         for scope, key_itm_list in keys.items():
             m_items = response.get_managed_items(_TARGET_SCOPE, scope=scope)
             for key_itm in key_itm_list:
+                if key_itm not in m_items:
+                    continue
                 texts.append(f'\n\t - {m_items[key_itm].transform_keyname()}: {m_items[key_itm].out_display()} (in '
                              f'postgresql.conf) or detailed: {m_items[key_itm].after} (in bytes).')
         _log_pool.append(''.join(texts))

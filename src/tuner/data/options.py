@@ -430,13 +430,6 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             _logger.debug(f"Set the kernel memory usage to "
                           f"{self.base_kernel_memory_usage.human_readable(separator=' ')}")
 
-        # Check the database version is in the supported version
-        if self.pgsql_version not in SUPPORTED_POSTGRES_VERSIONS:
-            _logger.warning(f'The PostgreSQL version {self.pgsql_version} is not in the supported version list. '
-                            f'Please ensure that the version is correct and the tuning may not be accurate. '
-                            f'Forcing the version to the latest version.')
-            self.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[-1]
-
         # Check minimal RAM usage
         if self.usable_ram < 4 * Gi:
             _sign = '+' if self.usable_ram >= 0 else '-'

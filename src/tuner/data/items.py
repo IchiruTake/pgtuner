@@ -73,3 +73,7 @@ class PG_TUNE_ITEM(BaseModel):
     def transform_keyname(self) -> str:
         # Text Transformation: Remove underscores to whitespace and capitalize the first character of each letter
         return ' '.join([x.capitalize() for x in self.key.split('_')])
+
+    def __repr__(self):
+        return (f"PG_TUNE_ITEM(key={self.key}, before={self.before}, style={self.style}, trigger={self.trigger}, "
+                f"after={self.after}, partial_func={self.partial_func}, hardware_scope={self.hardware_scope})")

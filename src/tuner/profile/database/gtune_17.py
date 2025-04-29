@@ -143,8 +143,7 @@ DB17_CONFIG_MAPPING = {
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING)
 type_validation(DB17_CONFIG_MAPPING)
 DB17_CONFIG_PROFILE = deepcopy(DB0_CONFIG_PROFILE)
-if DB17_CONFIG_MAPPING:
-    for k, v in DB17_CONFIG_MAPPING.items():
-        if k in DB17_CONFIG_PROFILE:
-            deepmerge(DB17_CONFIG_PROFILE[k][1], v[1], inline_source=True, inline_target=True)
-    rewrite_items(DB17_CONFIG_PROFILE)
+for k, v in DB17_CONFIG_MAPPING.items():
+    if k in DB17_CONFIG_PROFILE:
+        deepmerge(DB17_CONFIG_PROFILE[k][1], v[1], inline_source=True, inline_target=True)
+rewrite_items(DB17_CONFIG_PROFILE)

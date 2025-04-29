@@ -683,6 +683,7 @@ _DB_ASYNC_DISK_PROFILE = {
                    'cache, where performance might degrade. This setting may have no effect on some platforms. The '
                    'valid range is between 0, which disables forced writeback, and 2MB. The default is 0, i.e., no '
                    'forced writeback. ',
+        'partial_func': lambda value : f"{value // Ki}kB",
     },
 }
 

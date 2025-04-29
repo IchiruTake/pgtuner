@@ -14,7 +14,6 @@ from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
-from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_13 import DB13_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_14 import DB14_CONFIG_PROFILE
 from src.tuner.profile.database.gtune_15 import DB15_CONFIG_PROFILE
@@ -24,7 +23,6 @@ from src.tuner.profile.database.stune import correction_tune
 from src.utils.timing import time_decorator
 
 _profiles = {
-    0: DB0_CONFIG_PROFILE,
     13: DB13_CONFIG_PROFILE,
     14: DB14_CONFIG_PROFILE,
     15: DB15_CONFIG_PROFILE,
@@ -79,7 +77,7 @@ def _tune_pgdb(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     if request.options.enable_database_general_tuning:
         _logger.info('=========================================================================================='
                      '\nStart general tuning on the PostgreSQL database settings.')
-        db_config_profile = _profiles.get(request.options.pgsql_version, DB0_CONFIG_PROFILE)
+        db_config_profile = _profiles.get(request.options.pgsql_version, DB13_CONFIG_PROFILE)
         dbconf_tuner = GeneralTuner(target=PGTUNER_SCOPE.DATABASE_CONFIG, items=db_config_profile)
         dbconf_tuner.optimize(request=request, response=response)
         found_tuning = True
