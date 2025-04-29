@@ -5,28 +5,6 @@
  * Logging and Pydantic are removed, but maintained the same functionality. All variable names, 
  * attributes, and methods are kept the same as the original Python project (including the name).
  * 
- * LICENSE
- * MIT License
- * Copyright (c) 2024-2025 Ichiru Take
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
- * OR OTHER DEALINGS IN THE SOFTWARE.
- * 
  */
 
 // ================================================================================
@@ -141,7 +119,6 @@ console.log(`JavaScript version: ${javascript_version}`); // Expected ES6 or hig
  * @param {number} bytesize - The byte size to convert.
  * @param {boolean} [decimal=false] - If true, use decimal units (e.g. 1000 bytes per KB). If false, use binary units (e.g. 1024 bytes per KiB).
  * @param {string} [separator=' '] - A string used to split the value and unit. Defaults to an empty whitespace string (' ').
- * 
  * @returns {string} - A human-readable string representation of the byte size.
  */
 const bytesize_to_hr = (bytesize, decimal = false, separator = ' ') => {
@@ -205,7 +182,6 @@ const realign_value = (value, page_size = DB_PAGE_SIZE) => {
  * value is equal to the first number, it will be replaced by the second number.
  * @returns {number} - The capped value.
  */
-
 const cap_value = (value, min_value, max_value, redirectNumber = null) => {
     if (redirectNumber && redirectNumber.length === 2 && value === redirectNumber[0]) {
         value = redirectNumber[1];
@@ -216,9 +192,7 @@ const cap_value = (value, min_value, max_value, redirectNumber = null) => {
 // =================================================================================
 /**
  * Original Source File: ./src/utils/mean.py
- * 
- * This function is used to calculate the generalized mean 
- * 
+ *
  */
 
 /**
@@ -270,7 +244,6 @@ function generalized_mean(...args) {
 // =================================================================================
 /**
  * Original Source File: ./src/utils/dict_deepmerge.py
- * 
  * This file contains functions for deep merging dictionaries and handling various data types.    
  */
 
@@ -698,7 +671,6 @@ const type_validation = (profiles) => {
     }
     return profiles;
 };
-
 const rewrite_items = (profiles) => {
     /** Drop the deprecated items from the profile data. */
     for (const [unused_1, [unused_2, items, unused_3]] of Object.entries(profiles)) {
@@ -1159,7 +1131,7 @@ class PG_DISK_PERF {
 
 // =================================================================================
 /**
- * Original Source File: ./src/tuner/data/scope.js
+ * Original Source File: ./src/tuner/data/scope.py
  */
 
 // PG_SCOPE: The applied scope for each of the tuning items.
@@ -1197,7 +1169,7 @@ class PGTUNER_SCOPE {
 # applied directly to the system. Please consult with your database administrator, system
 # administrator, or software/system delivery manager before applying the tuning result.
 # HOWTO: It is recommended to apply the tuning result by copying the file and pasting it 
-# as the final configuration under the /etc/sysctl.d/* directory rather than overwrite 
+# as the final configuration under the /etc/sysctl.d/ directory rather than overwrite
 # previous configuration. Please DO NOT apply the tuning result directly to the system 
 # by any means, and ensure that the system is capable of rolling back the changes if the
 # system is not working as expected.
@@ -1213,8 +1185,8 @@ class PGTUNER_SCOPE {
 # the best for your system, for every tables, indexes, workload, and queries. Please 
 # consult with your database administrator or software/system delivery manager before
 # applying the tuning result.
-# HOWTO: It is recommended to apply the tuning result under the /etc/postgresql/* directory 
-# or inside the $PGDATA/conf/* or $PGDATA/* directory depending on how you start your
+# HOWTO: It is recommended to apply the tuning result under the /etc/postgresql/ directory
+# or inside the $PGDATA/conf/ or $PGDATA/ directory depending on how you start your
 # PostgreSQL server. Please double check the system from the SQL interactive sessions to 
 # ensure things are working as expected. Whilst it is possible to start the PostgreSQL 
 # server with the new configuration, it could result in lost of configuration (such as new 
@@ -1238,8 +1210,8 @@ PGTUNER_SCOPE.DATABASE_CONFIG = new PGTUNER_SCOPE('database_config');
 // =================================================================================
 /**
  * Original Source File: ./src/tuner/data/optmode.py
- * 
  */
+
 /**
  * The PostgreSQL optimization mode during workload, maintenance, logging experience for DEV/DBA,
  * and possibly other options. Note that this tuning profile should not be relied on as a single source
@@ -1283,7 +1255,6 @@ class PG_PROFILE_OPTMODE {
 
 /**
  * Enumeration of PostgreSQL backup tools.
- *
  * Available values:
  *  - DISK_SNAPSHOT: 'Backup by Disk Snapshot'
  *  - PG_DUMP: 'pg_dump/pg_dumpall: Textual backup'
@@ -1338,6 +1309,7 @@ class PG_BACKUP_TOOL {
 /**
  * Original Source File: ./src/tuner/data/workload.py
  */
+
 /**
 This enum represents some typical workloads or usage patterns that can be used to tune the database.
 Options:
@@ -1937,9 +1909,7 @@ _DB_CONN_PROFILE = {
         },
         'default': 30,
     },
-    'listen_addresses': {
-        'default': '*',
-    }
+    'listen_addresses': { 'default': '*', }
 }
 
 _DB_RESOURCE_PROFILE = {
@@ -1959,9 +1929,7 @@ _DB_RESOURCE_PROFILE = {
         'default': 4 * Mi,
         'partial_func': (value) => "${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB",
     },
-    'hash_mem_multiplier': {
-        'default': 2.0,
-    },
+    'hash_mem_multiplier': { 'default': 2.0, },
 }
 
 _DB_VACUUM_PROFILE = {
@@ -2624,14 +2592,7 @@ type_validation(DB0_CONFIG_PROFILE);
  * Original Source File: ./src/tuner/profile/database/gtune_13.py
  */
 
-// DB13_CONFIG_MAPPING is an empty object currently
-const DB13_CONFIG_MAPPING = {};
-
-// If DB13_CONFIG_MAPPING is non-empty, make a shallow copy of DB0_CONFIG_PROFILE;
-// otherwise, use DB0_CONFIG_PROFILE directly.
-const DB13_CONFIG_PROFILE = Object.keys(DB13_CONFIG_MAPPING).length > 0
-    ? { ...DB0_CONFIG_PROFILE }
-    : DB0_CONFIG_PROFILE;
+const DB13_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE };
 console.debug(`DB13_CONFIG_PROFILE: ${JSON.stringify(DB13_CONFIG_PROFILE)}`);
 
 // ==================================================================================
@@ -2646,14 +2607,12 @@ const _DB14_TIMEOUT_PROFILE = {
         "partial_func": value => `${value}s`,
     },
 };
-
 // Query profile
 const _DB14_QUERY_PROFILE = {
     "track_wal_io_timing": {
         "default": 'on',
     },
 };
-
 // Vacuum profile
 const _DB14_VACUUM_PROFILE = {
     "vacuum_failsafe_age": {
@@ -2664,23 +2623,15 @@ const _DB14_VACUUM_PROFILE = {
     }
 };
 
-// -------------------------------------------------------------------
 // Merge mapping: use tuples as arrays
 const DB14_CONFIG_MAPPING = {
     timeout: [PG_SCOPE.OTHERS, _DB14_TIMEOUT_PROFILE, { hardware_scope: 'overall' }],
     query: [PG_SCOPE.QUERY_TUNING, _DB14_QUERY_PROFILE, { hardware_scope: 'overall' }],
     maintenance: [PG_SCOPE.MAINTENANCE, _DB14_VACUUM_PROFILE, { hardware_scope: 'overall' }],
 };
-
-// Merge extra info and validate types
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-
-// Deep copy DB0_CONFIG_PROFILE.
-// Here we use JSON methods for simplicity; adjust if your objects contain non-serializable values.
-let DB14_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
-
-// If there is a configuration mapping, merge the corresponding parts using deepMerge.
+let DB14_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE};
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
@@ -2727,7 +2678,6 @@ const _DB15_VACUUM_PROFILE = {
     }
 };
 
-// -------------------------------------------------------------------
 // Merge mapping: use tuples as arrays
 const DB15_CONFIG_MAPPING = {
     log: [PG_SCOPE.LOGGING, _DB15_LOG_PROFILE, { hardware_scope: 'disk' }],
@@ -2735,16 +2685,9 @@ const DB15_CONFIG_MAPPING = {
     query: [PG_SCOPE.QUERY_TUNING, _DB15_QUERY_PROFILE, { hardware_scope: 'overall' }],
     maintenance: [PG_SCOPE.MAINTENANCE, _DB15_VACUUM_PROFILE, { hardware_scope: 'overall' }],
 };
-
-// Merge extra info and validate types
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-
-// Deep copy DB0_CONFIG_PROFILE.
-// Here we use JSON methods for simplicity; adjust if your objects contain non-serializable values.
-let DB15_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
-
-// If there is a configuration mapping, merge the corresponding parts using deepMerge.
+let DB15_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE};
 if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
@@ -2767,7 +2710,6 @@ const _DB16_LOG_PROFILE = {
 		"partial_func": value => `${value}s`,
 	},
 };
-
 // Vacuum profile
 const _DB16_VACUUM_PROFILE = {
 	"vacuum_buffer_usage_limit": {
@@ -2785,14 +2727,12 @@ const _DB16_VACUUM_PROFILE = {
 		"default": 1600000000,
 	}
 };
-
 // WAL profile
 const _DB16_WAL_PROFILE = {
 	"wal_compression": {
 		"default": "zstd",
 	},
 };
-
 // Timeout profile
 const _DB16_TIMEOUT_PROFILE = {
     "idle_session_timeout": {
@@ -2807,7 +2747,7 @@ const _DB16_QUERY_PROFILE = {
     },
 };
 
-// -------------------------------------------------------------------
+
 // Merge mapping: use tuples as arrays
 const DB16_CONFIG_MAPPING = {
 	log: [PG_SCOPE.LOGGING, _DB16_LOG_PROFILE, { hardware_scope: 'disk' }],
@@ -2816,13 +2756,9 @@ const DB16_CONFIG_MAPPING = {
 	maintenance: [PG_SCOPE.MAINTENANCE, _DB16_VACUUM_PROFILE, { hardware_scope: 'overall' }],
 	wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB16_WAL_PROFILE, { hardware_scope: 'disk' }],
 };
-// Merge extra info and validate types
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-// Deep copy DB0_CONFIG_PROFILE.
-// Here we use JSON methods for simplicity; adjust if your objects contain non-serializable values.
 let DB16_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
-// If there is a configuration mapping, merge the corresponding parts using deepMerge.
 if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
 	for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
 		if (key in DB16_CONFIG_PROFILE) {
@@ -2843,9 +2779,8 @@ const _DB17_LOG_PROFILE = {
 	"log_startup_progress_interval": {}
 		"default": K10,
 		"partial_func": value => `${value}s`,
-	},
+	}
 };
-
 // Vacuum profile
 const _DB17_VACUUM_PROFILE = {
 	"vacuum_buffer_usage_limit": {
@@ -2863,7 +2798,6 @@ const _DB17_VACUUM_PROFILE = {
 		"default": 1600000000,
 	}
 };
-
 // WAL profile
 const _DB17_WAL_PROFILE = {
 	"wal_compression": {
@@ -2877,7 +2811,6 @@ const _DB17_WAL_PROFILE = {
 		"partial_func": value => `${Math.floor(value / MINUTE)}min`,
 	},
 };
-
 // Timeout profile
 const _DB17_TIMEOUT_PROFILE = {
     "idle_session_timeout": {
@@ -2892,7 +2825,6 @@ const _DB17_QUERY_PROFILE = {
     },
 };
 
-// -------------------------------------------------------------------
 // Merge mapping: use tuples as arrays
 const DB17_CONFIG_MAPPING = {
 	log: [PG_SCOPE.LOGGING, _DB17_LOG_PROFILE, { hardware_scope: 'disk' }],
@@ -2901,16 +2833,9 @@ const DB17_CONFIG_MAPPING = {
 	maintenance: [PG_SCOPE.MAINTENANCE, _DB17_VACUUM_PROFILE, { hardware_scope: 'overall' }],
 	wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB17_WAL_PROFILE, { hardware_scope: 'disk' }],
 };
-
-// Merge extra info and validate types
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-
-// Deep copy DB0_CONFIG_PROFILE.
-// Here we use JSON methods for simplicity; adjust if your objects contain non-serializable values.
 let DB17_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
-
-// If there is a configuration mapping, merge the corresponding parts using deepMerge.
 if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
 	for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
 		if (key in DB17_CONFIG_PROFILE) {
