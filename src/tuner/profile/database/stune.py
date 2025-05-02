@@ -884,7 +884,7 @@ def _wal_integrity_buffer_size_tune(
             full_page_writes = 'full_page_writes'
             _item_tuning(key=full_page_writes, after='off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                          response=response, _log_pool=_log_pool)
-            if request.options.opt_transaction_lost in _profile_optmode_level[3:]:
+            if request.options.opt_transaction_lost in _profile_optmode_level[3:] and request.options.operating_system == 'linux':
                 fsync = 'fsync'
                 _item_tuning(key=fsync, after='off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response,
                              _log_pool=_log_pool)
@@ -1122,32 +1122,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # Additional workload for specific workload
     _log_pool = ['\n ===== Memory Usage Tuning =====']
     _hash_mem_adjust(request, response)  # Ensure the hash_mem adjustment is there before the tuning.
-    if request.options.workload_type in (PG_WORKLOAD.TSR_IOT,):
-        # Disable the additional memory tuning as these workload does not make benefits when increase the memory
-        request.options.opt_mem_pool = PG_PROFILE_OPTMODE.NONE
-        _log_pool.append('WARNING: The memory precision tuning is disabled as these workload does not bring benefit '
-                         'when increase the shared_buffers due to high amount of INSERT with less SELECT. For these '
-                         'workload, the shared_buffers is forced to be capped at 8 GiB for LOG workload and 16 GiB '
-                         'for SOLTP and TSR_IOT workload. temp_buffers and work_mem are not subjected to be changed; '
-                         'Only the vacuum_buffer_usage_limit and effective_cache_size are tuned.')
-        shared_buffers = 'shared_buffers'
-        managed_cache = response.get_managed_cache(_TARGET_SCOPE)
-        after_shared_buffers = min(managed_cache[shared_buffers], 32 * Gi)
-
-        if after_shared_buffers != managed_cache[shared_buffers]:
-            _log_pool.append(f'NOTICE: The shared_buffers is capped at {bytesize_to_hr(after_shared_buffers)} by '
-                             f'workload: {request.options.workload_type}')
-            _item_tuning(key=shared_buffers, after=after_shared_buffers, scope=PG_SCOPE.MEMORY, response=response,
-                         _log_pool=_log_pool, suffix_text=f'by workload: {request.options.workload_type}')
-            _trigger_tuning({
-                PG_SCOPE.MEMORY: ('temp_buffers', 'work_mem'),
-                PG_SCOPE.QUERY_TUNING: ('effective_cache_size',),
-                PG_SCOPE.MAINTENANCE: ('vacuum_buffer_usage_limit',),
-            }, request, response, _log_pool)
-            _hash_mem_adjust(request, response)
-
-        return None
-    elif request.options.opt_mem_pool == PG_PROFILE_OPTMODE.NONE:
+    if request.options.opt_mem_pool == PG_PROFILE_OPTMODE.NONE:
         _log_pool.append('WARNING: The memory pool tuning is disabled by the user -> Skip the extra tuning')
         return None
 

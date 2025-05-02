@@ -3902,6 +3902,536 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     return null;
 }
 
+// Write-Ahead Logging (WAL)
+function wal_integrity_buffer_size_tune(request, response) {
+    console.info(`===== Data Integrity and Write-Ahead Log Tuning =====`)
+    console.info(`Start tuning the WAL of the PostgreSQL database server based on the data integrity and HA requirements.`)
+    console.info(`Impacted Attributes: wal_level, max_wal_senders, max_replication_slots, wal_sender_timeout,
+        log_replication_commands, synchronous_commit, full_page_writes, fsync, logical_decoding_work_mem`)
+    const replication_level = request.options.max_backup_replication_tool
+    const num_replicas = request.options.max_num_logical_replicas_on_primary +
+        request.options.max_num_stream_replicas_on_primary
+    const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+
+    // --------------------------------------------------------------------------
+    // Tune the wal_level
+    const wal_level = 'wal_level'
+    let after_wal_level = managed_cache[wal_level]
+    if (replication_level === PG_BACKUP_TOOL.PG_LOGICAL || request.options.max_num_logical_replicas_on_primary > 0) {
+        // Logical replication (highest)
+        after_wal_level = 'logical'
+    } else if (replication_level === PG_BACKUP_TOOL.PG_BASEBACKUP ||
+        request.options.max_num_stream_replicas_on_primary > 0 || num_replicas > 0) {
+        // Streaming replication (medium level)
+        // The condition of num_replicas > 0 is to ensure that the user has set the replication slots
+        after_wal_level = 'replica'
+    } else if (replication_level in [PG_BACKUP_TOOL.PG_DUMP, PG_BACKUP_TOOL.DISK_SNAPSHOT] && num_replicas === 0) {
+        after_wal_level = 'minimal'
+    }
+    _item_tuning(wal_level, after_wal_level, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    // Disable since it is not used
+    _item_tuning('log_replication_commands', after_wal_level !== 'minimal' ? 'on' : 'off', PG_SCOPE.LOGGING, response)
+
+    // --------------------------------------------------------------------------
+    // Tune the max_wal_senders, max_replication_slots, and wal_sender_timeout
+    // We can use request.options.max_num_logical_replicas_on_primary for max_replication_slots, but the user could
+    // forget to update this value so it is best to update it to be identical. Also, this value meant differently on
+    // sending servers and subscriber, so it is best to keep it identical.
+    // At PostgreSQL 11 or previously, the max_wal_senders is counted in max_connections
+    const max_wal_senders = 'max_wal_senders'
+    let reserved_wal_senders = _DEFAULT_WAL_SENDERS[0]
+    if (managed_cache[wal_level] !== 'minimal') {
+        if (num_replicas >= 8) {
+            reserved_wal_senders = _DEFAULT_WAL_SENDERS[1]
+        } else if (num_replicas >= 16) {
+            reserved_wal_senders = _DEFAULT_WAL_SENDERS[2]
+        }
+    }
+    let after_max_wal_senders = reserved_wal_senders + (managed_cache[wal_level] !== 'minimal' ? num_replicas : 0)
+    _item_tuning(max_wal_senders, after_max_wal_senders, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _item_tuning('max_replication_slots', after_max_wal_senders, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+
+    // Tune the wal_sender_timeout
+    if (request.options.offshore_replication && managed_cache[wal_level] !== 'minimal') {
+        const after_wal_sender_timeout = Math.max(10 * MINUTE, Math.ceil(MINUTE * (2 + (num_replicas / 4))))
+        _item_tuning('wal_sender_timeout', after_wal_sender_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    }
+    // Tune the logical_decoding_work_mem
+    if (managed_cache[wal_level] !== 'logical') {
+        _item_tuning('logical_decoding_work_mem', 64 * Mi, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    }
+
+    // Tune the synchronous_commit, full_page_writes, fsync
+    const _profile_optmode_level = PG_PROFILE_OPTMODE.profile_ordering()
+    const synchronous_commit = 'synchronous_commit'
+    if (request.options.opt_transaction_lost in _profile_optmode_level.slice(1)) {
+        let after_synchronous_commit = managed_cache[synchronous_commit]
+        if (managed_cache[wal_level] === 'minimal') {
+            after_synchronous_commit = 'off'
+            console.warn(`
+                WARNING: The synchronous_commit is off -> If data integrity is less important to you than response times
+                (for example, if you are running a social networking application or processing logs) you can turn this off,
+                making your transaction logs asynchronous. This can result in up to wal_buffers or wal_writer_delay * 2
+                (3 times on worst case) worth of data in an unexpected shutdown, but your database will not be corrupted.
+                Note that you can also set this on a per-session basis, allowing you to mix “lossy” and “safe” transactions,
+                which is a better approach for most applications. It is recommended to set it to local or remote_write if
+                you do not prefer lossy transactions.
+            `)
+        } else if (num_replicas === 0) {
+            after_synchronous_commit = 'local'
+        } else {
+            // We don't reach to 'on' here: See https://postgresqlco.nf/doc/en/param/synchronous_commit/
+            after_synchronous_commit = 'remote_write'
+        }
+        console.warn(`
+                WARNING: User allows the lost transaction during crash but with ${managed_cache[wal_level]} wal_level at
+                profile ${request.options.opt_transaction_lost} but data loss could be there. Only enable this during
+                testing only.
+            `)
+        _item_tuning(synchronous_commit, after_synchronous_commit, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        if (request.options.opt_transaction_lost in _profile_optmode_level.slice(2)) {
+            _item_tuning('full_page_writes', 'off', PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+            if (request.options.opt_transaction_lost in _profile_optmode_level.slice(3) && request.options.operating_system === 'linux') {
+                _item_tuning('fsync', 'off', PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    console.info(`Start tuning the WAL size of the PostgreSQL database server based on the WAL disk sizing`)
+    console.info(`Impacted Attributes: min_wal_size, max_wal_size, wal_keep_size, archive_timeout,
+        checkpoint_timeout, checkpoint_warning`)
+
+    const _wal_disk_size = request.options.wal_spec.disk_usable_size
+    const _kwargs = request.options.tuning_kwargs
+    const _scope = PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE
+
+    // Tune the max_wal_size (This is easy to tune as it is based on the maximum WAL disk total size) to trigger
+    // the CHECKPOINT process. It is usually used to handle spikes in WAL usage (when the interval between two
+    // checkpoints is not met soon, and data integrity is highly preferred).
+    // Ref: https://www.cybertec-postgresql.com/en/checkpoint-distance-and-amount-of-wal/
+    // Two strategies:
+    // 1) Tune by ratio of WAL disk size
+    // 2) Tune by number of WAL files
+    // Also, see the https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/11070 for the
+    // tuning of max WAL size, the impact of wal_log_hints and wal_compression at
+    // https://portavita.github.io/2019-06-14-blog_PostgreSQL_wal_log_hints_benchmarked/
+    // https://portavita.github.io/2019-05-13-blog_about_wal_compression/
+    // Whilst the benchmark is in PG9.5, it still brings some thinking into the table
+    // including at large system with lower replication lag
+    // https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/11070
+    let after_max_wal_size = cap_value(
+        Math.floor(_wal_disk_size * _kwargs.max_wal_size_ratio),
+        Math.min(64 * _kwargs.wal_segment_size, 4 * Gi),
+        64 * Gi
+    )
+    after_max_wal_size = realign_value(after_max_wal_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
+    _item_tuning('max_wal_size', after_max_wal_size, _scope, response)
+
+    // Tune the min_wal_size as these are not specifically related to the max_wal_size. This is the top limit of the
+    // WAL partition so that if the disk usage beyond the threshold (disk capacity - min_wal_size), the WAL file
+    // is removed. Otherwise, the WAL file is being recycled. This is to prevent the disk full issue, but allow
+    // at least a small portion to handle burst large data WRITE job(s) between CHECKPOINT interval and other unusual
+    // circumstances.
+    let after_min_wal_size = cap_value(
+        Math.floor(_wal_disk_size * _kwargs.min_wal_size_ratio),
+        Math.min(32 * _kwargs.wal_segment_size, 2 * Gi),
+        Math.floor(1.05 * after_max_wal_size)
+    )
+    after_min_wal_size = realign_value(after_min_wal_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
+    _item_tuning('min_wal_size', after_min_wal_size, _scope, response)
+
+    // 95% here to ensure you don't make mistake from your tuning guideline
+    // 2x here is for SYNC phase during checkpoint, or in archive recovery or standby mode
+    // See here: https://www.postgresql.org/docs/current/wal-configuration.html
+
+    // Tune the wal_keep_size. This parameter is there to prevent the WAL file from being removed by pg_archivecleanup
+    // before the replica (for DR server, not HA server or offload READ queries purpose as it used replication slots
+    // by max_slot_wal_keep_size) to catch up the data during DR server downtime, network intermittent, or other issues.
+    // or proper production standard, this setup required you have a proper DBA with reliable monitoring tools to keep
+    // track DR server lag time.
+    // Also, keeping this value too high can cause disk to be easily full and unable to run any user transaction; and
+    // if you use the DR server, this is the worst indicator
+    let after_wal_keep_size = cap_value(
+        Math.floor(_wal_disk_size * _kwargs.wal_keep_size_ratio),
+        Math.min(32 * _kwargs.wal_segment_size, 2 * Gi),
+        64 * Gi
+    )
+    after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
+    _item_tuning('wal_keep_size', after_wal_keep_size, _scope, response)
+
+    // -------------------------------------------------------------------------
+    // Tune the archive_timeout based on the WAL segment size. This is easy because we want to flush the WAL
+    // segment to make it have better database health. We increased it when we have larger WAL segment, but decrease
+    // when we have more replicas, but capping between 30 minutes and 2 hours.
+    // archive_timeout: Force a switch to next WAL file after the timeout is reached. On the READ replicas
+    // or during idle time, the LSN or XID don't increase so no WAL file is switched unless manually forced
+    // See CheckArchiveTimeout() at line 679 of postgres/src/backend/postmaster/checkpoint.c
+    // For the tuning guideline, it is recommended to have a large enough value, but not too large to
+    // force the streaming replication (copying **ready** WAL files)
+    // In general, this is more on the DBA and business strategies. So I think the general tuning phase is good enough
+    const _wal_scale_factor = Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE))
+    const after_archive_timeout = realign_value(
+        cap_value(managed_cache['archive_timeout'] + Math.floor(MINUTE * (_wal_scale_factor * 10 - num_replicas / 2 * 5)),
+                  30 * MINUTE, 2 * HOUR), Math.floor(MINUTE / 4)
+    )[request.options.align_index]
+    _item_tuning('archive_timeout', after_archive_timeout, _scope, response)
+
+    // -------------------------------------------------------------------------
+    console.info(`Start tuning the WAL integrity of the PostgreSQL database server based on the data integrity 
+    and provided allowed time of data transaction loss.`)
+    console.info(`Impacted Attributes: wal_buffers, wal_writer_delay`)
+
+    // Apply tune the wal_writer_delay here regardless of the synchronous_commit so that we can ensure
+    // no mixed of lossy and safe transactions
+    const after_wal_writer_delay = Math.floor(request.options.max_time_transaction_loss_allow_in_millisecond / 3.25)
+    _item_tuning('wal_writer_delay', after_wal_writer_delay, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+
+    // -------------------------------------------------------------------------
+    // Now we need to estimate how much time required to flush the full WAL buffers to disk (assuming we
+    // have no write after the flush or wal_writer_delay is being waken up or 2x of wal_buffers are synced)
+    // No low scale factor because the WAL disk is always active with one purpose only (sequential write)
+    // Force enable the WAL buffers adjustment minimally to SPIDEY when the WAL disk throughput is too weak and
+    // non-critical workload.
+    if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.NONE) {
+        request.options.opt_wal_buffers = PG_PROFILE_OPTMODE.SPIDEY
+        console.warn(`WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.`)
+    }
+    const wal_tput = request.options.wal_spec.perf()[0]
+
+    // Just some useful information
+    const best_wal_time = wal_time(Math.floor(managed_cache['wal_buffers']), 1.0, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['total_time']
+    const worst_wal_time = wal_time(Math.floor(managed_cache['wal_buffers']), 2.0, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['total_time']
+    console.info(`The WAL buffer (at full) flush time is estimated to be ${best_wal_time.toFixed(2)} ms and 
+        ${worst_wal_time.toFixed(2)} ms between cycle.`)
+    if (best_wal_time > after_wal_writer_delay ||
+        worst_wal_time > request.options.max_time_transaction_loss_allow_in_millisecond) {
+        console.warn(`WARNING: The WAL buffers flush time is greater than the wal_writer_delay or the maximum time of 
+            transaction loss allowed. It is better to reduce the WAL buffers or increase your WAL file size (to optimize 
+            clean throughput).`)
+    }
+
+    let data_amount_ratio_input = 1
+    let transaction_loss_ratio = 2 / 3.25  // Not 2x of delay at 1 full WAL buffers
+    if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.OPTIMUS_PRIME) {
+        data_amount_ratio_input = 1.5
+        transaction_loss_ratio = 3 / 3.25
+    } else if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.PRIMORDIAL) {
+        data_amount_ratio_input = 2
+        transaction_loss_ratio = 3 / 3.25
+    }
+
+    const decay_rate = 16 * DB_PAGE_SIZE
+    let current_wal_buffers = realign_value(
+        managed_cache['wal_buffers'],
+        Math.min(_kwargs.wal_segment_size, 64 * Mi)
+    )[1]  // Bump to higher WAL buffers
+    let transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
+    while (transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
+                                            after_wal_writer_delay, wal_tput)['total_time']) {
+        current_wal_buffers -= decay_rate
+    }
+
+    _item_tuning('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
+    console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} flush time is estimated to be ${wal_time_report} ms.`)
+    return null
+}
+
+// ----------------------------------------------------------------------------
+// Tune the memory usage based on specific workload
+function _get_wrk_mem_func() {
+    let result = {
+        [PG_PROFILE_OPTMODE.SPIDEY]: (options, response) => response.report(options, true, true)[1],
+        [PG_PROFILE_OPTMODE.OPTIMUS_PRIME]: (options, response) => response.report(options, false, true)[1]
+    }
+    result[PG_PROFILE_OPTMODE.PRIMORDIAL] = (options, response) => {
+        return (result[PG_PROFILE_OPTMODE.SPIDEY](options, response) + result[PG_PROFILE_OPTMODE.OPTIMUS_PRIME](options, response)) / 2
+    }
+    return result
+}
+
+function _get_wrk_mem(optmode, options, response) {
+    return _get_wrk_mem_func()[optmode](options, response)
+}
+
+function _hash_mem_adjust(request, response) {
+    // -------------------------------------------------------------------------
+    // Tune the hash_mem_multiplier to use more memory when work_mem become large enough. Integrate between the
+    // iterative tuning.
+    const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    const current_work_mem = managed_cache['work_mem']
+    let after_hash_mem_multiplier = 2.0
+    if (request.options.workload_type in [PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.VECTOR]) {
+        after_hash_mem_multiplier = Math.min(2.0 + 0.125 * (current_work_mem / (40 * Mi)), 3.0)
+    } else if (request.options.workload_type in [PG_WORKLOAD.OLAP]) {
+        after_hash_mem_multiplier = Math.min(2.0 + 0.150 * (current_work_mem / (40 * Mi)), 3.0)
+    }
+    _item_tuning('hash_mem_multiplier', after_hash_mem_multiplier, PG_SCOPE.MEMORY, response,
+        `by workload: ${request.options.workload_type} and working memory ${current_work_mem}`)
+    return null;
+}
+
+function _wrk_mem_tune_oneshot(request, response, shared_buffers_ratio_increment, max_work_buffer_ratio_increment,
+                               tuning_items) {
+    // Trigger the increment / decrement
+    const _kwargs = request.options.tuning_kwargs
+    let sbuf_ok = false
+    let wbuf_ok = false
+    if (_kwargs.shared_buffers_ratio + shared_buffers_ratio_increment <= 1.0) {
+        _kwargs.shared_buffers_ratio += shared_buffers_ratio_increment
+        sbuf_ok = true
+    }
+    if (_kwargs.max_work_buffer_ratio + max_work_buffer_ratio_increment <= 1.0) {
+        _kwargs.max_work_buffer_ratio += max_work_buffer_ratio_increment
+        wbuf_ok = true
+    }
+    if (!sbuf_ok && !wbuf_ok) {
+        console.warn(`WARNING: The shared_buffers and work_mem are not increased as the condition is met 
+            or being unchanged, or converged -> Stop ...`)
+    }
+    _trigger_tuning(tuning_items, request, response)
+    _hash_mem_adjust(request, response)
+    return sbuf_ok, wbuf_ok
+}
+
+function _wrk_mem_tune(request, response) {
+    // Tune the shared_buffers and work_mem by boost the scale factor (we don't change heuristic connection
+    // as it represented their real-world workload). Similarly, with the ratio between temp_buffers and work_mem
+    // Enable extra tuning to increase the memory usage if not meet the expectation.
+    // Note that at this phase, we don't trigger auto-tuning from other function
+
+    // Additional workload for specific workload
+    console.info(`===== Memory Usage Tuning =====`)
+    _hash_mem_adjust(request, response)
+    if (request.options.opt_mem_pool === PG_PROFILE_OPTMODE.NONE ) {
+        // Disable the additional memory tuning as these workload does not make benefits when increase the memory
+        console.warn(`WARNING: The memory pool tuning is disabled by the user -> Skip the extra tuning.`)
+        return null;
+    }
+    console.info(`Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: 
+        shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size`)
+    const _kwargs = request.options.tuning_kwargs
+    let ram = request.options.usable_ram
+    let srv_mem_str = bytesize_to_hr(ram)
+
+    let stop_point = _kwargs.max_normal_memory_usage
+    let rollback_point = Math.min(stop_point + 0.0075, 1.0)  // Small epsilon to rollback
+    let boost_ratio = 1 / 560  // Any small arbitrary number is OK (< 0.005), but not too small or too large
+    const keys = {
+        [PG_SCOPE.MEMORY]: ['shared_buffers', 'temp_buffers', 'work_mem'],
+        [PG_SCOPE.QUERY_TUNING]: ['effective_cache_size',],
+        [PG_SCOPE.MAINTENANCE]: ['vacuum_buffer_usage_limit',]
+    }
+
+    function _show_tuning_result(first_text) {
+        console.info(first_text);
+        for (const [scope, key_itm_list] of Object.entries(keys)) {
+            let m_items = response.get_managed_items(_TARGET_SCOPE, scope)
+            for (const key_itm of key_itm_list) {
+                if (!(key_itm in m_items)) {
+                    continue
+                }
+                console.info(`\n\t - ${m_items[key_itm].transform_keyname()}: ${m_items[key_itm].out_display()} 
+                    (in postgresql.conf) or detailed: ${m_items[key_itm].after} (in bytes).`)
+            }
+        }
+    }
+
+    _show_tuning_result('Result (before): ')
+    let _mem_check_string = Object.entries(_get_wrk_mem_func())
+        .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
+        .join('; ');
+    console.info(`The working memory usage based on memory profile is ${_mem_check_string} before tuning. 
+        NOTICE: Expected maximum memory usage in normal condition: ${(stop_point * 100).toFixed(2)} (%) of
+        ${srv_mem_str} or ${bytesize_to_hr(Math.floor(ram * stop_point))}.`)
+
+    // Trigger the tuning
+    const shared_buffers_ratio_increment = boost_ratio * 2.0 * _kwargs.mem_pool_tuning_ratio
+    const max_work_buffer_ratio_increment = boost_ratio * 2.0 * (1 - _kwargs.mem_pool_tuning_ratio)
+
+    // Use ceil to gain higher bound
+    let managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    let num_conn = managed_cache['max_connections'] - managed_cache['superuser_reserved_connections'] - managed_cache['reserved_connections']
+    let mem_conn = num_conn * _kwargs.single_memory_connection_overhead * _kwargs.memory_connection_to_dedicated_os_ratio / ram
+    let active_connection_ratio = {
+        [PG_PROFILE_OPTMODE.SPIDEY]: 1.0 / _kwargs.effective_connection_ratio,
+        [PG_PROFILE_OPTMODE.OPTIMUS_PRIME]: (1.0 + _kwargs.effective_connection_ratio) / (2 * _kwargs.effective_connection_ratio),
+        [PG_PROFILE_OPTMODE.PRIMORDIAL]: 1.0
+    }
+
+    let hash_mem = generalized_mean(1, managed_cache['hash_mem_multiplier'], _kwargs.hash_mem_usage_level)
+    let work_mem_single = (1 - _kwargs.temp_buffers_ratio) * hash_mem
+    let TBk = _kwargs.temp_buffers_ratio + work_mem_single
+    if (_kwargs.mem_pool_parallel_estimate) {
+        let parallel_scale_nonfull = response.calc_worker_in_parallel(
+            request.options,
+           Math.ceil(_kwargs.effective_connection_ratio * num_conn)
+        )['work_mem_parallel_scale']
+        let parallel_scale_full = response.calc_worker_in_parallel(request.options, num_conn)['work_mem_parallel_scale']
+        if (request.options.opt_mem_pool === PG_PROFILE_OPTMODE.SPIDEY) {
+            TBk = _kwargs.temp_buffers_ratio + work_mem_single * parallel_scale_full
+        } else if (request.options.opt_mem_pool === PG_PROFILE_OPTMODE.OPTIMUS_PRIME) {
+            TBk = _kwargs.temp_buffers_ratio + work_mem_single * (parallel_scale_full + parallel_scale_nonfull) / 2
+        } else {
+            TBk = _kwargs.temp_buffers_ratio + work_mem_single * parallel_scale_nonfull
+        }
+    }
+    TBk *= active_connection_ratio[request.options.opt_mem_pool]
+
+    // Interpret as below:
+    const A = _kwargs.shared_buffers_ratio * ram  // The original shared_buffers value
+    const B = shared_buffers_ratio_increment * ram  // The increment of shared_buffers
+    const C = max_work_buffer_ratio_increment  // The increment of max_work_buffer_ratio
+    const D = _kwargs.max_work_buffer_ratio  // The original max_work_buffer_ratio
+    const E = ram - mem_conn - A  // The current memory usage (without memory connection and original shared_buffers)
+    const F = TBk  // The average working memory usage per connection
+    const LIMIT = stop_point * ram - mem_conn  // The limit of memory usage without static memory usage
+
+    // Transform as quadratic function we have:
+    const a = C * F * (0 - B)
+    const b = B + F * C * E - B * D * F
+    const c = A + F * E * D - LIMIT
+    const x = ((-b + Math.sqrt(b ** 2 - 4 * a * c)) / (2 * a))
+    _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment * x,
+                          max_work_buffer_ratio_increment * x, keys)
+    let working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
+    _mem_check_string = Object.entries(_get_wrk_mem_func())
+        .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
+        .join('; ');
+    console.debug(
+        `DEBUG: The working memory usage based on memory profile increased to ${bytesize_to_hr(working_memory)} 
+        or ${(working_memory / ram * 100).toFixed(2)} (%) of ${srv_mem_str} after ${x.toFixed(2)} steps. This 
+        results in memory usage of all profiles are ${_mem_check_string} `
+    );
+
+    // Now we trigger our one-step decay until we find the optimal point.
+    let bump_step = 0
+    while (working_memory < stop_point * ram) {
+        _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment,
+            max_work_buffer_ratio_increment, tuning_items=keys)
+        working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
+        bump_step += 1
+    }
+    let decay_step = 0
+    while (working_memory >= rollback_point * ram) {
+        _wrk_mem_tune_oneshot(request, response, _log_pool, 0 - shared_buffers_ratio_increment,
+            0 - max_work_buffer_ratio_increment, tuning_items = keys)
+        working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
+        decay_step += 1
+    }
+
+    // Now we have the optimal point
+    console.debug(`DEBUG: The optimal point is found after ${bump_step} bump steps and ${decay_step} decay steps`)
+    if (bump_step + decay_step >= 3) {
+        console.debug(`DEBUG: The memory pool tuning algorithm is incorrect. Revise algorithm to be more accurate`)
+    }
+    console.info(`The shared_buffers_ratio is now ${_kwargs.shared_buffers_ratio.toFixed(5)}.`)
+    console.info(`The max_work_buffer_ratio is now ${_kwargs.max_work_buffer_ratio.toFixed(5)}.`)
+    _show_tuning_result('Result (after): ')
+    _mem_check_string = Object.entries(_get_wrk_mem_func())
+        .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
+        .join('; ');
+    console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
+
+    // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
+    // and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
+    // the time of reading 64 WAL files sequentially by 30% and writing those data randomly by 30%
+    // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
+    // method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
+    // buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
+    // Also, I decide to increase checkpoint time by due to this thread: https://postgrespro.com/list/thread-id/2342450
+    // The minimum data amount is under normal condition of working (not initial bulk load)
+    const _data_tput = request.options.data_index_spec.perf()[0]
+    const _data_iops = request.options.data_index_spec.perf()[1]
+    const _data_trans_tput = 0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput, -2.5)
+    let _shared_buffers_ratio = 0.30    // Don't used for tuning, just an estimate of how checkpoint data writes
+    if (request.options.workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR]) {
+        _shared_buffers_ratio = 0.15
+    }
+
+    // max_wal_size is added for automatic checkpoint as threshold
+    // Technically the upper limit is at 1/2 of available RAM (since shared_buffers + effective_cache_size ~= RAM)
+    let _data_amount = Math.min(
+        Math.floor(managed_cache['shared_buffers'] * _shared_buffers_ratio / Mi),
+        Math.floor(managed_cache['effective_cache_size'] / Ki),
+        Math.floor(managed_cache['max_wal_size'] / Ki),
+    )  // Measured by MiB.
+    let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
+    console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation 
+        of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
+    const after_checkpoint_timeout = realign_value(
+        Math.max(managed_cache['checkpoint_timeout'] +
+            Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
+            min_ckpt_time / managed_cache['checkpoint_completion_target']), Math.floor(MINUTE / 2)
+    )[request.options.align_index]
+    _item_tuning('checkpoint_timeout', after_checkpoint_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _item_tuning('checkpoint_warning', Math.floor(after_checkpoint_timeout / 10), PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+
+    return null;
+}
+
+function _logger_tune(request, response) {
+    console.info('===== Logging and Query Statistics Tuning =====')
+    console.info(`Start tuning the logging and query statistics on the PostgreSQL database server based on the 
+        database workload and production guidelines. Impacted attributes: track_activity_query_size, 
+        log_parameter_max_length, log_parameter_max_length_on_error, log_min_duration_statement,
+        auto_explain.log_min_duration, track_counts, track_io_timing, track_wal_io_timing, `)
+    const _kwargs = request.options.tuning_kwargs;
+
+    // Configure the track_activity_query_size, log_parameter_max_length, log_parameter_max_error_length
+    const log_length = realign_value(_kwargs.max_query_length_in_bytes, 64)[request.options.align_index]
+    _item_tuning('track_activity_query_size', log_length, PG_SCOPE.QUERY_TUNING, response)
+    _item_tuning('log_parameter_max_length', log_length, PG_SCOPE.LOGGING, response)
+    _item_tuning('log_parameter_max_length_on_error', log_length, PG_SCOPE.LOGGING, response)
+
+    // Configure the log_min_duration_statement, auto_explain.log_min_duration
+    const log_min_duration = realign_value(_kwargs.max_runtime_ms_to_log_slow_query, 20)[request.options.align_index]
+    _item_tuning('log_min_duration_statement', log_min_duration, PG_SCOPE.LOGGING, response)
+    explain_min_duration = Math.floor(log_min_duration * _kwargs.max_runtime_ratio_to_explain_slow_query)
+    explain_min_duration = realign_value(explain_min_duration, 20)[request.options.align_index]
+    _item_tuning('auto_explain.log_min_duration', explain_min_duration, PG_SCOPE.EXTRA, response)
+
+    // Tune the IO timing
+    _item_tuning('track_counts', 'on', PG_SCOPE.QUERY_TUNING, response)
+    _item_tuning('track_io_timing', 'on', PG_SCOPE.QUERY_TUNING, response)
+    _item_tuning('track_wal_io_timing', 'on', PG_SCOPE.QUERY_TUNING, response)
+    _item_tuning('auto_explain.log_timing', 'on', PG_SCOPE.EXTRA, response)
+    return null;
+}
+
+function correction_tune(request, response) {
+    if (!request.options.enable_database_correction_tuning) {
+        console.warn('The database correction tuning is disabled by the user -> Skip the workload tuning')
+        return null;
+    }
+
+
+    // -------------------------------------------------------------------------
+    // Connection, Disk Cache, Query, and Timeout Tuning
+    _conn_cache_query_timeout_tune(request, response)
+
+    // -------------------------------------------------------------------------
+    // Disk-based (Performance) Tuning
+    _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
+
+    // -------------------------------------------------------------------------
+    // Write-Ahead Logging
+    _wal_integrity_buffer_size_tune(request, response)
+
+    // Logging Tuning
+    _logger_tune(request, response)
+
+    // -------------------------------------------------------------------------
+    // Working Memory Tuning
+    _wrk_mem_tune(request, response)
+    return null;
+}
+
+
+
+
+
 
 
 
