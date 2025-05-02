@@ -216,7 +216,7 @@ def _conn_cache_query_timeout_tune(
     # Don't worry about the async behaviour with as these commits are synchronous. Additional delay is added
     # synchronously with the application code is justified for batched commits.
     # The WRITE operation in WAL partition is sequential, but its read (when WAL content is not flushed to the
-    # datafiles) is random IOPS.  Especially during high-latency replication, unclean/unexpected shutdown, or
+    # datafiles) is random IOPS. Especially during high-latency replication, unclean/unexpected shutdown, or
     # high-transaction rate, the READ operation on WAL partition is used intensively. Thus, we use the minimum
     # IOPS between the data partition and WAL partition.
     # Now we can calculate the commit_delay (* K10 to convert to millisecond)
@@ -338,7 +338,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
                  response=response, _log_pool=_log_pool)
 
     # ----------------------------------------------------------------------------------------------
-    # Tune the checkpoint_flush_after and wal_writer_flush_after. For a strong disk, 256 KiB and 1 MiB
+    # Tune the *_flush_after. For a strong disk with change applied within neighboring pages, 256 KiB and 1 MiB
     # seems a bit small.
     # Follow this: https://www.cybertec-postgresql.com/en/the-mysterious-backend_flush_after-configuration-setting/
     if request.options.operating_system != 'windows':
@@ -579,7 +579,6 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # usually during idle or administrative tasks, the MISS:DIRTY ratio becomes 1.3:1 ~ 1:1.3 --> 1:1
     # For manual vacuum, the MISS:DIRTY ratio becomes 1.3:1 ~ 1:1.3 --> 1:1
     # Worst Case: The database is autovacuum without cache or cold start.
-
     # Worst Case: every page requires WRITE on DISK rather than fetch on disk or OS page cache
     miss, dirty = 12 - _kwargs.vacuum_safety_level, _kwargs.vacuum_safety_level
     vacuum_cost_model = (managed_cache['vacuum_cost_page_miss'] * miss +
@@ -761,7 +760,6 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     that rows are not frozen until they are unlikely to change anymore. We silently capped the value to be in 
     between of 20M and 1/4 of the maximum value.
     """
-
     xid_min_age = cap_value(_transaction_rate * 24, 20 * M10,
                             managed_cache['autovacuum_freeze_max_age'] * 0.25)
     xid_min_age = realign_value(xid_min_age, 250 * K10)[request.options.align_index]
@@ -772,7 +770,6 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # analytics/warehouse workload). But usually only one instance of WRITE connection is done gracefully (except
     # concurrent Kafka stream, etc are writing during incident). Usually, unless you need the row visibility on
     # long time for transaction, this could be low (5M of xmin/xmax vs 50M of xid by default).
-    # Tune the *_freeze_min_age
     multixact_min_age = cap_value(_transaction_rate * 18, 2 * M10,
                                   managed_cache['autovacuum_multixact_freeze_max_age'] * 0.25)
     multixact_min_age = realign_value(multixact_min_age, 250 * K10)[request.options.align_index]
