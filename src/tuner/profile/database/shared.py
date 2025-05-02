@@ -1,5 +1,5 @@
 """
-This module is to perform specific tuning on the PostgreSQL database server.
+This module is to perform specific tuning and calculation on the PostgreSQL database server.
 
 """
 import logging
@@ -105,7 +105,7 @@ def vacuum_time(hit_cost: int, miss_cost: int, dirty_cost: int, delay_ms: int, c
             f'\nMISS (page in disk cache): {max_num_miss_page} page -> Throughput: {max_miss_data:.2f} MiB/s '
             f'-> Safe to GO: {max_miss_data < 5 * K10} (< 5 GiB/s for low DDR3)'
             f'\nDIRTY (page in disk): {max_num_dirty_page} page -> Throughput: {max_dirty_data:.2f} MiB/s '
-            f'-> Safe to GO: {max_dirty_data < data_disk_iops} (< Data Disk IOPS)')
+            f'-> Safe to GO: {max_dirty_data < _disk_tput} (< Data Disk IOPS)')
 
     # Scenario: 5:5:1 (frequent vacuum) or 1:1:1 (rarely vacuum)
     _551page = budget_per_sec // (5 * hit_cost + 5 * miss_cost + dirty_cost)

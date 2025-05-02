@@ -331,7 +331,6 @@ Report Summary (others):
             -> Hit (page in shared_buffers): Maximum {vacuum_report['max_num_hit_page']} pages or RAM throughput {vacuum_report['max_hit_data']:.2f} MiB/s 
                 RAM Safety: {vacuum_report['max_hit_data'] < 10 * K10} (< 10 GiB/s for low DDR3)
             -> Miss (page in disk cache): Maximum {vacuum_report['max_num_miss_page']} pages or Disk throughput {vacuum_report['max_miss_data']:.2f} MiB/s
-                # NVME SSD with PCIe 3.0+ or USB 3.1
                 # See encoding here: https://en.wikipedia.org/wiki/64b/66b_encoding; NVME SSD with PCIe 3.0+ or USB 3.1
                 NVME10 Safety: {vacuum_report['max_miss_data'] < 10/8 * 64/66 * K10} (< 10 Gib/s, 64b/66b encoding)
                 SATA3 Safety: {vacuum_report['max_miss_data'] < 6/8 * 6/8 * K10} (< 6 Gib/s, 6b/8b encoding)
@@ -423,7 +422,6 @@ application's behavior.
 * Not every parameter can be covered or tuned, and not every parameter can be added as-is.
 As mentioned, consult with your developer, DBA, and system administrator to ensure the
 best performance and reliability of the database system.
-
 # ===============================================================
 '''
         return _report, (max_total_memory_used if not _kwargs.mem_pool_parallel_estimate else

@@ -163,7 +163,7 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
 
     # Minimum to 1 MiB and maximum is varied between workloads
     max_cap: int = int(1.5 * Gi)
-    if options.workload_type in (PG_WORKLOAD.TSR_IOT):
+    if options.workload_type in (PG_WORKLOAD.TSR_IOT, ):
         max_cap = 256 * Mi
     if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLAP):
         # I don't think I will make risk beyond this number
