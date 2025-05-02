@@ -3878,7 +3878,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     const updates = {
         [PG_SCOPE.MAINTENANCE]: ['vacuum_freeze_table_age', 'vacuum_multixact_freeze_table_age']
     }
-    _trigger_tuning(updates, request, response, _log_pool)
+    _trigger_tuning(updates, request, response)
 
     // ----------------------------------------------------------------------------------------------
     // Tune the *_freeze_min_age high enough so that it can be stable, and allowing some newer rows to remain unfrozen.
@@ -3903,7 +3903,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
 }
 
 // Write-Ahead Logging (WAL)
-function wal_integrity_buffer_size_tune(request, response) {
+function _wal_integrity_buffer_size_tune(request, response) {
     console.info(`===== Data Integrity and Write-Ahead Log Tuning =====`)
     console.info(`Start tuning the WAL of the PostgreSQL database server based on the data integrity and HA requirements.`)
     console.info(`Impacted Attributes: wal_level, max_wal_senders, max_replication_slots, wal_sender_timeout,
@@ -4192,7 +4192,7 @@ function _wrk_mem_tune_oneshot(request, response, shared_buffers_ratio_increment
     }
     _trigger_tuning(tuning_items, request, response)
     _hash_mem_adjust(request, response)
-    return sbuf_ok, wbuf_ok
+    return [sbuf_ok, wbuf_ok]
 }
 
 function _wrk_mem_tune(request, response) {
@@ -4293,7 +4293,7 @@ function _wrk_mem_tune(request, response) {
     const b = B + F * C * E - B * D * F
     const c = A + F * E * D - LIMIT
     const x = ((-b + Math.sqrt(b ** 2 - 4 * a * c)) / (2 * a))
-    _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment * x,
+    _wrk_mem_tune_oneshot(request, response, shared_buffers_ratio_increment * x,
                           max_work_buffer_ratio_increment * x, keys)
     let working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
     _mem_check_string = Object.entries(_get_wrk_mem_func())
@@ -4308,15 +4308,15 @@ function _wrk_mem_tune(request, response) {
     // Now we trigger our one-step decay until we find the optimal point.
     let bump_step = 0
     while (working_memory < stop_point * ram) {
-        _wrk_mem_tune_oneshot(request, response, _log_pool, shared_buffers_ratio_increment,
-            max_work_buffer_ratio_increment, tuning_items=keys)
+        _wrk_mem_tune_oneshot(request, response, shared_buffers_ratio_increment,
+            max_work_buffer_ratio_increment, keys)
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
         bump_step += 1
     }
     let decay_step = 0
     while (working_memory >= rollback_point * ram) {
-        _wrk_mem_tune_oneshot(request, response, _log_pool, 0 - shared_buffers_ratio_increment,
-            0 - max_work_buffer_ratio_increment, tuning_items = keys)
+        _wrk_mem_tune_oneshot(request, response,0 - shared_buffers_ratio_increment,
+            0 - max_work_buffer_ratio_increment, keys)
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
         decay_step += 1
     }
@@ -4388,7 +4388,7 @@ function _logger_tune(request, response) {
     // Configure the log_min_duration_statement, auto_explain.log_min_duration
     const log_min_duration = realign_value(_kwargs.max_runtime_ms_to_log_slow_query, 20)[request.options.align_index]
     _item_tuning('log_min_duration_statement', log_min_duration, PG_SCOPE.LOGGING, response)
-    explain_min_duration = Math.floor(log_min_duration * _kwargs.max_runtime_ratio_to_explain_slow_query)
+    let explain_min_duration = Math.floor(log_min_duration * _kwargs.max_runtime_ratio_to_explain_slow_query)
     explain_min_duration = realign_value(explain_min_duration, 20)[request.options.align_index]
     _item_tuning('auto_explain.log_min_duration', explain_min_duration, PG_SCOPE.EXTRA, response)
 
@@ -4405,7 +4405,6 @@ function correction_tune(request, response) {
         console.warn('The database correction tuning is disabled by the user -> Skip the workload tuning')
         return null;
     }
-
 
     // -------------------------------------------------------------------------
     // Connection, Disk Cache, Query, and Timeout Tuning
