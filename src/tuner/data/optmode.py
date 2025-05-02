@@ -1,12 +1,11 @@
-from enum import Enum
-from functools import total_ordering
+from enum import Enum, StrEnum
 
 __all__ = ["PG_PROFILE_OPTMODE", "PG_BACKUP_TOOL"]
 
 
 # =============================================================================
 # ENUM choices
-class PG_PROFILE_OPTMODE(str, Enum):
+class PG_PROFILE_OPTMODE(StrEnum):
     """
     The PostgreSQL optimization mode during workload, maintenance, logging experience for DEV/DBA, and probably other
     options. Note that please do not rely on this tuning profile to be a single source of truth, but ignoring other
@@ -47,31 +46,7 @@ class PG_PROFILE_OPTMODE(str, Enum):
 
 # =============================================================================
 class PG_BACKUP_TOOL(Enum):
-    DISK_SNAPSHOT = 'Backup by Disk Snapshot'
-    PG_DUMP = 'pg_dump/pg_dumpall: Textual backup'
-    PG_BASEBACKUP = 'pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup'
-    PG_LOGICAL = 'pg_logical and alike: Logical replication'
-
-    @classmethod
-    def _missing_(cls, key):
-        if isinstance(key, str):
-            k = key.strip().lower()
-            match k:
-                case 'disk_snapshot':
-                    return PG_BACKUP_TOOL.DISK_SNAPSHOT
-                case 'pg_dump':
-                    return PG_BACKUP_TOOL.PG_DUMP
-                case 'pg_basebackup':
-                    return PG_BACKUP_TOOL.PG_BASEBACKUP
-                case 'pg_logical':
-                    return PG_BACKUP_TOOL.PG_LOGICAL
-                case _:
-                    raise ValueError(f'Unknown backup tool: {key}')
-        elif isinstance(key, int):
-            if key < 0 or key >= len(cls):
-                raise ValueError(f'Unknown backup tool: {key}')
-            return list(cls)[key]
-        return super()._missing_(key)
-
-
-
+    DISK_SNAPSHOT = 'disk_snapshot' # 'Backup by Disk Snapshot'
+    PG_DUMP = 'pg_dump' # 'pg_dump/pg_dumpall: Textual backup'
+    PG_BASEBACKUP = 'pg_basebackup' # '[--incremental] or streaming replication (byte-capture change)'
+    PG_LOGICAL = 'pg_logical' # 'pg_logical and alike: Logical replication'

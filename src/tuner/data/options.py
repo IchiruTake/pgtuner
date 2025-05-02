@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ByteSize
 from pydantic.types import PositiveInt, PositiveFloat
 
-from src.utils.static import Gi, Mi, APP_NAME_UPPER, SUPPORTED_POSTGRES_VERSIONS, K10, M10, Ki, BASE_WAL_SEGMENT_SIZE
+from src.utils.static import Gi, Mi, APP_NAME_UPPER, K10, M10, Ki, BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.sizing import PG_SIZING, SIZE_PROFILES

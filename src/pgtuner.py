@@ -6,8 +6,8 @@ from typing import Literal
 
 from pydantic import ByteSize, PositiveFloat, PositiveInt
 
+from src.tuner.base import GeneralOptimize
 from src.utils.static import (APP_NAME_UPPER, SUGGESTION_ENTRY_READER_DIR, Gi, K10, )
-from src.tuner.base import GeneralTuner
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
 from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
@@ -53,8 +53,7 @@ def _tune_sysctl(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
         _logger.info('=========================================================================================='
                      '\nStart general tuning on the sysctl-based parameters.')
         from src.tuner.profile.linux.gtune_0 import KERNEL_SYSCTL_PROFILE
-        sysctl_tuner = GeneralTuner(target=PGTUNER_SCOPE.KERNEL_SYSCTL, items=KERNEL_SYSCTL_PROFILE)
-        sysctl_tuner.optimize(request=request, response=response)
+        GeneralOptimize(request, response, target=PGTUNER_SCOPE.KERNEL_SYSCTL, tuning_items=KERNEL_SYSCTL_PROFILE)
         found_tuning = True
 
     if request.options.enable_sysctl_correction_tuning:
@@ -78,8 +77,7 @@ def _tune_pgdb(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
         _logger.info('=========================================================================================='
                      '\nStart general tuning on the PostgreSQL database settings.')
         db_config_profile = _profiles.get(request.options.pgsql_version, DB13_CONFIG_PROFILE)
-        dbconf_tuner = GeneralTuner(target=PGTUNER_SCOPE.DATABASE_CONFIG, items=db_config_profile)
-        dbconf_tuner.optimize(request=request, response=response)
+        GeneralOptimize(request, response, target=PGTUNER_SCOPE.DATABASE_CONFIG, tuning_items=db_config_profile)
         found_tuning = True
 
     if request.options.enable_database_correction_tuning:

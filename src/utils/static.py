@@ -14,7 +14,6 @@ __VERSION__ = __version__
 __AUTHOR__ = 'Ichiru Take'
 
 APP_NAME = 'PGTUNER_DBA'  # This name is used on log.toml,
-SUPPORTED_POSTGRES_VERSIONS = [13, 14, 15, 16, 17]
 APP_NAME_LOWER: str = APP_NAME.lower()
 APP_NAME_UPPER: str = APP_NAME.upper()
 _TIMEZONE = os.getenv('timezone', 'UTC')  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'

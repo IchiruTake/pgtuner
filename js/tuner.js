@@ -196,7 +196,7 @@ const cap_value = (value, min_value, max_value, redirectNumber = null) => {
  */
 
 /**
- * Calculate the generalized mean of the given arguments, and rounding to the specified number of digits.
+ * Calculate the generalized mean of the given arguments and rounding to the specified number of digits.
  * This function is used to calculate the average of the given arguments using the power of the level.
  * If level = 1, it will be the same as the normal average.
  * Ref: https://en.wikipedia.org/wiki/Generalized_mean
@@ -713,7 +713,7 @@ class PG_SIZING {
     }
 
     valueOf() {
-        return this.value;
+        return this.num();
     }
 }
 // Define the PG_SIZING enum members
