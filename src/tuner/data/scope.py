@@ -1,6 +1,5 @@
 from datetime import datetime
-from enum import Enum
-
+from enum import Enum, StrEnum
 from src.utils.static import __VERSION__, APP_NAME_UPPER, TIMEZONE
 
 __all__ = ['PG_SCOPE', 'PGTUNER_SCOPE']
@@ -11,8 +10,6 @@ class PG_SCOPE(Enum):
     CONNECTION = 'conn'
     FILESYSTEM = 'fs'
     MEMORY = 'memory'
-    DISK_IOPS = 'iops'
-
     NETWORK = 'net'
     LOGGING = 'log'
     QUERY_TUNING = 'query'
@@ -22,9 +19,8 @@ class PG_SCOPE(Enum):
     OTHERS = 'others'
 
 # The internal managed scope for the tuning items
-class PGTUNER_SCOPE(Enum):
+class PGTUNER_SCOPE(StrEnum):
     KERNEL_SYSCTL = 'kernel_sysctl'
-    KERNEL_BOOT = 'kernel_boot'
     DATABASE_CONFIG = 'database_config'
 
     def disclaimer(self) -> str:
@@ -60,9 +56,9 @@ class PGTUNER_SCOPE(Enum):
 # ensure things are working as expected. Whilst it is possible to start the PostgreSQL 
 # server with the new configuration, it could result in lost of configuration (such as new 
 # version update, unknown configuration changes, extension or external configuration from 
-# 3rd-party tools, or no inherited configuration from the parent directory). It is not 
-# recommended to apply the tuning result directly to the system without a proper backup, 
-# and ensure the system is capable of rolling back the changes if the system is not working.
+# 3rd-party tools, or no inherited configuration from the parent directory). Please DO NOT 
+# apply the tuning result directly to the system by any means, and ensure that the system 
+# is capable of rolling back the changes if the system is not working as expected.
 # ============================================================
 """
         return ""

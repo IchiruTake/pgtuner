@@ -1,7 +1,7 @@
 import string
 from pprint import pformat
 from typing import Any, Callable
-from src.tuner.data.sizing import PG_SIZING
+from src.tuner.data.workload import PG_SIZING
 from pydantic import BaseModel, Field
 
 __all__ = ['PG_TUNE_ITEM']

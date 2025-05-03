@@ -12,10 +12,9 @@ from pydantic import ValidationError
 
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
-from src.tuner.data.sizing import PG_DISK_SIZING, PG_SIZING
-from src.tuner.data.workload import PG_WORKLOAD
+from src.tuner.data.sizing import PG_DISK_SIZING
+from src.tuner.data.workload import PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL, PG_SIZING
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE, PG_TUNE_REQUEST
 from src.tuner.profile.database.shared import wal_time
 from src.utils.mean import generalized_mean
@@ -259,7 +258,7 @@ def _conn_cache_query_timeout_tune(
         after_commit_delay = K10
     _item_tuning(key='commit_delay', after=int(after_commit_delay), scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_log_pool, suffix_text=_suffix_text)
-    _item_tuning(key='commit_siblings', after=5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
+    _item_tuning(key='commit_siblings', after=5 + 3 * managed_items['commit_siblings'].hardware_scope[1].value,
                  scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_log_pool, suffix_text=_suffix_text)
     return _flush_log_pool(_log_pool)
 
@@ -606,11 +605,11 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # its average is 1.4K/s on weekday, but with 2.3M/h, its average WRITE time is 10.9h per day, which is 45.4% of
     # of the day, seems valid compared to 8 hours of working time in human life.
     _transaction_rate = request.options.num_write_transaction_per_hour_on_workload
-    _transaction_coef = request.options.workload_profile.num()
+    _transaction_coef = request.options.workload_profile.value
 
     # This variable is used so that even when we have a suboptimal performance, the estimation could still handle
     # in worst case scenario
-    _future_data_scaler = 2.5 + (0.5 * request.options.workload_profile.num())
+    _future_data_scaler = 2.5 + (0.5 * request.options.workload_profile.value)
 
     """
     Tuning ideology for extreme anti-wraparound vacuum: Whilst the internal algorithm can have some optimization or 
@@ -809,7 +808,7 @@ def _wal_integrity_buffer_size_tune(
         # Streaming replication (medium level)
         # The condition of num_replicas > 0 is to ensure that the user has set the replication slots
         after_wal_level = 'replica'
-    elif replication_level in (PG_BACKUP_TOOL.PG_DUMP, PG_BACKUP_TOOL.DISK_SNAPSHOT) and num_replicas == 0:
+    elif replication_level <= PG_BACKUP_TOOL.PG_DUMP and num_replicas == 0:
         after_wal_level = 'minimal'
     _item_tuning(key=wal_level, after=after_wal_level, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_log_pool)
@@ -846,7 +845,7 @@ def _wal_integrity_buffer_size_tune(
     # Tune the wal_sender_timeout
     if request.options.offshore_replication and managed_cache[wal_level] != 'minimal':
         wal_sender_timeout = 'wal_sender_timeout'
-        after_wal_sender_timeout = max(10 * MINUTE, ceil(MINUTE * (2 + (num_replicas / 4))))
+        after_wal_sender_timeout = max(5 * MINUTE, ceil(MINUTE * (2 + (num_replicas / 4))))
         _item_tuning(key=wal_sender_timeout, after=after_wal_sender_timeout,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_log_pool)
 
@@ -857,9 +856,8 @@ def _wal_integrity_buffer_size_tune(
 
     # -------------------------------------------------------------------------
     # Tune the synchronous_commit, full_page_writes, fsync
-    _profile_optmode_level = PG_PROFILE_OPTMODE.profile_ordering()
     synchronous_commit = 'synchronous_commit'
-    if request.options.opt_transaction_lost in _profile_optmode_level[1:]:
+    if request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.SPIDEY:
         if managed_cache[wal_level] == 'minimal':
             after_synchronous_commit = 'off'
             _log_pool.append('WARNING: The synchronous_commit is off -> If data integrity is less important to you '
@@ -880,11 +878,12 @@ def _wal_integrity_buffer_size_tune(
                          f'Only enable this during testing only. ')
         _item_tuning(key=synchronous_commit, after=after_synchronous_commit,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_log_pool)
-        if request.options.opt_transaction_lost in _profile_optmode_level[2:]:
+        if request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.OPTIMUS_PRIME:
             full_page_writes = 'full_page_writes'
             _item_tuning(key=full_page_writes, after='off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                          response=response, _log_pool=_log_pool)
-            if request.options.opt_transaction_lost in _profile_optmode_level[3:] and request.options.operating_system == 'linux':
+            if (request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.PRIMORDIAL and
+                    request.options.operating_system == 'linux'):
                 fsync = 'fsync'
                 _item_tuning(key=fsync, after='off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response,
                              _log_pool=_log_pool)

@@ -10,7 +10,7 @@ from src.utils.static import APP_NAME_UPPER, Gi, K10
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.items import PG_TUNE_ITEM
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.workload import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.profile.database.shared import wal_time, checkpoint_time, vacuum_time, vacuum_scale
 from src.utils.mean import generalized_mean

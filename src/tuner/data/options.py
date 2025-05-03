@@ -7,9 +7,7 @@ from pydantic.types import PositiveInt, PositiveFloat
 
 from src.utils.static import Gi, Mi, APP_NAME_UPPER, K10, M10, Ki, BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.disks import PG_DISK_PERF
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
-from src.tuner.data.sizing import PG_SIZING, SIZE_PROFILES
-from src.tuner.data.workload import PG_WORKLOAD
+from src.tuner.data.workload import PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL, PG_SIZING
 from src.utils.pydantic_utils import bytesize_to_hr
 
 __all__ = ['PG_TUNE_USR_OPTIONS', 'PG_TUNE_USR_KWARGS']
@@ -229,8 +227,8 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     # The basic profile for the system tuning for profile-guided tuning
     workload_profile: PG_SIZING = Field(
         default=PG_SIZING.LARGE,
-        description=f'The workload profile to be used for tuning. Supported profiles are {SIZE_PROFILES}. The '
-                    f'associated value meant for the workload scale, amount of data in/out, ...'
+        description=f'The workload profile to be used for tuning. The associated value meant for the workload scale, '
+                    f'amount of data in/out, ...'
     )
     pgsql_version: PositiveInt = Field(
         default=17, ge=13, le=17,

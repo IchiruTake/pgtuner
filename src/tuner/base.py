@@ -5,7 +5,7 @@ from src.utils.static import APP_NAME_UPPER, MULTI_ITEMS_SPLIT, WEB_MODE
 from src.tuner.data.items import PG_TUNE_ITEM
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
-from src.tuner.data.sizing import PG_SIZING
+from src.tuner.data.workload import PG_SIZING
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST, PG_TUNE_RESPONSE
 
 __all__ = ['GeneralOptimize']

@@ -6,9 +6,8 @@ from pydantic.types import PositiveInt, PositiveFloat
 
 from src.utils.static import K10, Ki, Gi, Mi, APP_NAME_UPPER, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.disks import PG_DISK_PERF
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
-from src.tuner.data.sizing import PG_SIZING, PG_DISK_SIZING
-from src.tuner.data.workload import PG_WORKLOAD
+from src.tuner.data.sizing import PG_DISK_SIZING
+from src.tuner.data.workload import PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL, PG_SIZING
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST
 
