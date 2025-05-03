@@ -119,8 +119,12 @@ if __name__ == "__main__":
         enable_database_general_tuning=True, enable_database_correction_tuning=True,
         ## User-Tuning Profiles
         workload_profile=2, pgsql_version=17,
+        database_size_in_gib=0, # [0, 1000]. Default is 0 GiB for maximum of 60% of data disk
+        num_write_transaction_per_hour_on_workload=50 * K10, # [K10, 20 * M10]. Default is 50 * K10 (50K).
+        align_index=1, # [0, 1]. Default is 1. Choose the higher number during alignment
         ## Disk Performance
         data_index_spec=data_index_disk, wal_spec=wal_disk,
+
         ## PostgreSQL Tuning Configuration
         tuning_kwargs=kw, workload_type=PG_WORKLOAD.HTAP, operating_system='containerd',
         base_kernel_memory_usage=-1, base_monitoring_memory_usage=-1,   # To let pgtuner manage the memory usage

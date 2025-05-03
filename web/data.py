@@ -41,7 +41,6 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     # Memory Parameters
     effective_cache_size_available_ratio: PositiveFloat = Field(default=0.985, ge=0.95, le=1.0)
     shared_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.15, le=0.60)
-    shared_buffers_fill_ratio: PositiveFloat = Field(default=0.995, ge=0.95, le=1.0)
     max_work_buffer_ratio: PositiveFloat = Field(default=0.075, gt=0, le=0.50)
     effective_connection_ratio: PositiveFloat = Field(default=0.75, ge=0.25, le=1.0)
     temp_buffers_ratio: PositiveFloat = Field(default=0.25, ge=0.05, le=0.95)
@@ -50,7 +49,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     max_normal_memory_usage: PositiveFloat = Field(default=0.45, ge=0.35, le=0.80)
     mem_pool_tuning_ratio: float = Field(default=0.6, ge=0, le=1)
     mem_pool_parallel_estimate: bool = Field(default=True)
-    hash_mem_usage_level: int = Field(default=-6, ge=-60, le=60)
+    hash_mem_usage_level: int = Field(default=-6, ge=-50, le=50)
 
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size
     wal_segment_size_scale: int = Field(default=0, ge=0, le=3)  # Instead of 8
