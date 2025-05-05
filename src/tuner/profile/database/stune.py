@@ -1226,15 +1226,6 @@ def _logger_tune(
 
 
 # =============================================================================
-def _analyze(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
-    _logger.info('\n================================================================================================= '
-                 '\n ### Memory Usage Estimation ###')
-    # response.mem_test(options=request.options, use_full_connection=True, ignore_report=False)
-    response.report(options=request.options, use_full_connection=False, ignore_report=False)
-    _logger.info('\n================================================================================================= ')
-    return None
-
-
 @time_decorator
 def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     if not request.options.enable_database_correction_tuning:
@@ -1262,6 +1253,7 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
 
     # -------------------------------------------------------------------------
     if not WEB_MODE:
-        _analyze(request, response)
+        # response.mem_test(options=request.options, use_full_connection=True, ignore_report=False)
+        response.report(options=request.options, use_full_connection=False, ignore_report=False)
 
     return None
