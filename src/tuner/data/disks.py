@@ -82,7 +82,6 @@ class PG_DISK_PERF(BaseModel):
     def perf(self) -> tuple[_SIZING, _SIZING]:
         raid_scale_factor = self.raid_scale_factor
         s_tput, s_iops = self.single_perf
-        # Add fastpath when number of disk/raid_scale_factor == 1 ???
         return int(s_tput * raid_scale_factor), int(s_iops * raid_scale_factor)
 
     @staticmethod

@@ -192,7 +192,6 @@ const cap_value = (value, min_value, max_value, redirectNumber = null) => {
 // =================================================================================
 /**
  * Original Source File: ./src/utils/mean.py
- *
  */
 
 /**
@@ -209,9 +208,10 @@ const cap_value = (value, min_value, max_value, redirectNumber = null) => {
  *
  * Example
  * -------
- * generalized_mean(1, 2, 3, { level: 1, round_ndigits: 4 })  // returns 2.0000
+ * generalized_mean([1, 2], 1, 4)  // returns 1.5
+ * generalized_mean([1, 2], -6, 4)  // returns 1.1196
  */
-function generalized_mean(x, level, round_ndigits) {
+function generalized_mean(x, level, round_ndigits = 4) {
     if (level === 0) {
         level = 1e-6; // Small value to prevent division by zero
     }
@@ -221,13 +221,18 @@ function generalized_mean(x, level, round_ndigits) {
 
     // Rounding the number to the specified number of digits
     if (round_ndigits !== null) {
-        if (typeof round_ndigits !== 'number' || round_ndigits < 0) {
+        if (typeof round_ndigits !== 'number') {
+            throw new Error("The 'round_ndigits' property must be a number.");
+        }
+
+        if (round_ndigits < 0) {
             throw new Error("The 'round_ndigits' property must be a non-negative number.");
         }
     }
     const factor = Math.pow(10, round_ndigits);
     return Math.round(result * factor) / factor;
 }
+
 
 // =================================================================================
 /**
@@ -688,40 +693,63 @@ const rewrite_items = (profiles) => {
  */
 // --------------------------------------------------------------------------
 // ENUM choices
-const SIZE_PROFILE = ['mini', 'medium', 'large', 'mall', 'bigt'];
-const _ascending_specs = {
-    size: SIZE_PROFILE,
-    vcpu_min: [1, 2, 6, 12, 32],
-    vcpu_max: [4, 8, 16, 48, 128],
-    ram_gib_min: [2, 8, 24, 48, 128],
-    ram_gib_max: [16, 32, 64, 192, 512],
-    storage_gib_max: [50, 300, 1024, 5120, 32768],
-    network_mbps_max: [500, 1000, 5000, 12500, 30000],
-};
-function _str_to_num(value) {
-    return _ascending_specs.size.indexOf(value);
-}
+/**
+ * Enumeration of PostgreSQL workloads to having some typical workloads or usage patterns.
+ * Available values:
+ * - TSR_IOT: 'tst' (Time-Series Data / Streaming)
+ * - OLTP: 'oltp' (Online Transaction Processing)
+ * - HTAP: 'htap' (Hybrid Transactional/Analytical Processing)
+ * - OLAP: 'olap' (Online Analytical Processing)
+ * - VECTOR: 'vector' (Vector-based workloads such as SEARCH, INDEX, RAG, and GEOSPATIAL)
+ */
+const PG_WORKLOAD = Object.freeze({
+    TSR_IOT: "tst",
+    OLTP: "oltp",
+    HTAP: "htap",
+    OLAP: "olap",
+    VECTOR: "vector",
+});
 
 // PG_SIZING: Represents a PostgreSQL sizing profile
-class PG_SIZING {
-    constructor(value) {
-        this.value = value; // one of 'mini', 'medium', etc.
-    }
+const PG_SIZING = Object.freeze({
+    MINI: 0,
+    MEDIUM: 1,
+    LARGE: 2,
+    MALL: 3,
+    BIGT: 4,
+})
 
-    num() {
-        return _str_to_num(this.value);
-    }
+/**
+ * Enumeration of PostgreSQL backup tools.
+ * Available values:
+ *  - DISK_SNAPSHOT: 'Backup by Disk Snapshot'
+ *  - PG_DUMP: 'pg_dump/pg_dumpall: Textual backup'
+ *  - PG_BASEBACKUP: 'pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup'
+ *  - PG_LOGICAL: 'pg_logical and alike: Logical replication'
+ */
+const PG_BACKUP_TOOL = Object.freeze({
+    DISK_SNAPSHOT: 0,
+    PG_DUMP: 1,
+    PG_BASE_BACKUP: 2,
+    PG_LOGICAL: 3,
+})
 
-    valueOf() {
-        return this.num();
-    }
-}
-// Define the PG_SIZING enum members
-PG_SIZING.MINI = new PG_SIZING(SIZE_PROFILE[0]);
-PG_SIZING.MEDIUM = new PG_SIZING(SIZE_PROFILE[1]);
-PG_SIZING.LARGE = new PG_SIZING(SIZE_PROFILE[2]);
-PG_SIZING.MALL = new PG_SIZING(SIZE_PROFILE[3]);
-PG_SIZING.BIGT = new PG_SIZING(SIZE_PROFILE[4]);
+/**
+ * The PostgreSQL optimization enumeration during workload, maintenance, logging experience for DEV/DBA,
+ * and possibly other options. Note that this tuning profile should not be relied on as a single source
+ * of truth.
+ * Available values:
+ * - NONE: This mode bypasses the second phase of the tuning process and applies general tuning only.
+ * - SPIDEY: Suitable for servers with limited resources, applying an easy, basic workload optimization profile.
+ * - OPTIMUS_PRIME: Suitable for servers with more resources, balancing between data integrity and performance.
+ * - PRIMORDIAL: Suitable for servers with more resources, applying an aggressive workload configuration with a focus on data integrity.
+ */
+const PG_PROFILE_OPTMODE = Object.freeze({
+    NONE: 0,
+    SPIDEY: 1,
+    OPTIMUS_PRIME: 2,
+    PRIMORDIAL: 3,
+})
 
 // ----------------------------------------------------------------
 // PG_DISK_SIZING: Represents a PostgreSQL disk sizing profile
@@ -994,72 +1022,30 @@ class PG_DISK_PERF {
             data.num_disks : 1;
         this.disk_usable_size = (typeof data.disk_usable_size !== 'undefined') ?
             data.disk_usable_size : 20 * Gi;
-        // Internal cache properties
-        this._raid_scale_factor = undefined;
-        this._single_perf = undefined;
-        // Post initialization to resolve any string specifications
     }
 
-    /**
-     * Cached property: Computes the RAID scale factor.
-     *
-     * @returns {number} The RAID scale factor rounded to 2 decimal places.
-     */
     raid_scale_factor() {
-        if (this._raid_scale_factor === undefined) {
-            const factor = Math.max(1.0, (this.num_disks - 1) * this.per_scale_in_raid + 1.0);
-            this._raid_scale_factor = Math.round(factor * 100) / 100;
-        }
-        return this._raid_scale_factor;
+        const round_ndigits = 2;
+        const factor = Math.max(1.0, (this.num_disks - 1) * this.per_scale_in_raid + 1.0);
+        return Math.round(factor * Math.pow(10, round_ndigits)) / Math.pow(10, round_ndigits);
     }
 
-    /**
-     * Cached property: Computes the single disk performance.
-     *
-     * @returns {Array<number>} An array where element 0 is throughput and element 1 is IOPS.
-     */
     single_perf() {
-        if (this._single_perf === undefined) {
-            const s_tput = Math.floor(this.throughput_spec * this.throughput_scale_factor);
-            const s_iops = Math.floor(this.random_iops_spec * this.random_iops_scale_factor);
-            this._single_perf = [s_tput, s_iops];
-        }
-        return this._single_perf;
+        const s_tput = Math.floor(this.throughput_spec * this.throughput_scale_factor);
+        const s_iops = Math.floor(this.random_iops_spec * this.random_iops_scale_factor);
+        return [s_tput, s_iops];
     }
 
-    /**
-     * Compute the RAID-adjusted performance.
-     *
-     * @returns {Array<number>} An array where element 0 is total throughput and element 1 is total IOPS.
-     */
     perf() {
         const raid_sf = this.raid_scale_factor();
         const [s_tput, s_iops] = this.single_perf();
         return [Math.floor(s_tput * raid_sf), Math.floor(s_iops * raid_sf)];
     }
 
-    /**
-     * Static method: Convert IOPS to throughput.
-     *
-     * IOPS is measured by the number of 8 KiB blocks.
-     * Throughput is measured in MiB.
-     *
-     * @param {number} iops - The IOPS value.
-     * @returns {number} The throughput value.
-     */
     static iops_to_throughput(iops) {
         return iops * DB_PAGE_SIZE / Mi;
     }
 
-    /**
-     * Static method: Convert throughput to IOPS.
-     *
-     * Throughput is measured in MiB.
-     * IOPS is measured by the number of 8 KiB blocks.
-     *
-     * @param {number} throughput - The throughput value.
-     * @returns {number} The IOPS value.
-     */
     static throughput_to_iops(throughput) {
         return throughput * Math.floor(Mi / DB_PAGE_SIZE);
     }
@@ -1146,181 +1132,6 @@ PGTUNER_SCOPE.KERNEL_SYSCTL = new PGTUNER_SCOPE('kernel_sysctl');
 PGTUNER_SCOPE.KERNEL_BOOT = new PGTUNER_SCOPE('kernel_boot');
 PGTUNER_SCOPE.DATABASE_CONFIG = new PGTUNER_SCOPE('database_config');
 
-
-// =================================================================================
-/**
- * Original Source File: ./src/tuner/data/optmode.py
- */
-
-/**
- * The PostgreSQL optimization mode during workload, maintenance, logging experience for DEV/DBA,
- * and possibly other options. Note that this tuning profile should not be relied on as a single source
- * of truth.
- *
- * Parameters:
- * ----------
- *
- * NONE: string = "none"
- *     This mode bypasses the second phase of the tuning process and applies general tuning only.
- *
- * SPIDEY: string = "lightweight"
- *     Suitable for servers with limited resources, applying an easy, basic workload optimization profile.
- *
- * OPTIMUS_PRIME: string = "general"
- *     Suitable for servers with more resources, balancing between data integrity and performance.
- *
- * PRIMORDIAL: string = "aggressive"
- *     Suitable for servers with more resources, applying an aggressive workload configuration with a focus on data integrity.
- */
-class PG_PROFILE_OPTMODE {
-    static NONE = "none";
-    static SPIDEY = "lightweight";
-    static OPTIMUS_PRIME = "general";
-    static PRIMORDIAL = "aggressive";
-
-    /**
-     * Returns the ordering of the profiles.
-     *
-     * @returns {Array<string>} An array containing the ordered profile modes.
-     */
-    static profile_ordering() {
-        return [
-            PG_PROFILE_OPTMODE.NONE,
-            PG_PROFILE_OPTMODE.SPIDEY,
-            PG_PROFILE_OPTMODE.OPTIMUS_PRIME,
-            PG_PROFILE_OPTMODE.PRIMORDIAL
-        ];
-    }
-}
-
-/**
- * Enumeration of PostgreSQL backup tools.
- * Available values:
- *  - DISK_SNAPSHOT: 'Backup by Disk Snapshot'
- *  - PG_DUMP: 'pg_dump/pg_dumpall: Textual backup'
- *  - PG_BASEBACKUP: 'pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup'
- *  - PG_LOGICAL: 'pg_logical and alike: Logical replication'
- */
-class PG_BACKUP_TOOL {
-    static DISK_SNAPSHOT = 'Backup by Disk Snapshot';
-    static PG_DUMP = 'pg_dump/pg_dumpall: Textual backup';
-    static PG_BASEBACKUP = 'pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup';
-    static PG_LOGICAL = 'pg_logical and alike: Logical replication';
-
-    /**
-     * Simulates the __missing__ behavior by returning a matching tool for the given key.
-     *
-     * @param {string|number} key - The key to search for.
-     * @returns {string} The matching backup tool.
-     * @throws {Error} If no matching backup tool is found.
-     */
-    static __missing__(key) {
-        if (typeof key === 'string') {
-            const k = key.trim().toLowerCase();
-            switch (k) {
-                case 'disk_snapshot':
-                    return PG_BACKUP_TOOL.DISK_SNAPSHOT;
-                case 'pg_dump':
-                    return PG_BACKUP_TOOL.PG_DUMP;
-                case 'pg_basebackup':
-                    return PG_BACKUP_TOOL.PG_BASEBACKUP;
-                case 'pg_logical':
-                    return PG_BACKUP_TOOL.PG_LOGICAL;
-                default:
-                    throw new Error(`Unknown backup tool: ${key}`);
-            }
-        } else if (typeof key === 'number') {
-            const tools = [
-                PG_BACKUP_TOOL.DISK_SNAPSHOT,
-                PG_BACKUP_TOOL.PG_DUMP,
-                PG_BACKUP_TOOL.PG_BASEBACKUP,
-                PG_BACKUP_TOOL.PG_LOGICAL
-            ];
-            if (key < 0 || key >= tools.length) {
-                throw new Error(`Unknown backup tool: ${key}`);
-            }
-            return tools[key];
-        }
-        throw new Error(`Unknown backup tool: ${key}`);
-    }
-}
-
-// ==================================================================================
-/**
- * Original Source File: ./src/tuner/data/workload.py
- */
-
-/**
-This enum represents some typical workloads or usage patterns that can be used to tune the database.
-Options:
--------
-
-# Business Workload
-TSR_IOT = 'tst' (Time-Series Data / Streaming)
-    - Description: Database usually aggregated with timestamped data points.
-    - Transaction Lifespan: Short-lived transactions optimized for high frequency for IoT data.
-    - Read/Write Balance: Heavy writes with frequent time-stamped data points. Frequent READ operation (
-        usually after 1 - 5 minutes) for monitoring, dashboard display, and alerting.
-    - Query Complexity: Often simple reads with time-based filtering and aggregations (non-complex data 
-        transformation, joins, and aggregations).
-    - Data Access (READ) Pattern: Sequential access to time-ordered data.
-    - Insertion (WRITE) Pattern: Append-only; constant insertion of new, timestamped records; Continuous 
-        or batch insertion of log entries.
-    - Typical Usage: Monitoring IoT data, and system performance metrics. Log analysis, monitoring, 
-        anomaly detection, and security event correlation.
-
-OLTP = 'oltp' (Online Transaction Processing)
-    - Description: Traditional OLTP workload with frequent read and write operations.
-    - Transaction Lifespan: Short-lived transactions (milliseconds to seconds).
-    - Read/Write Balance: Balanced; often read-heavy but includes frequent writes.
-    - Query Complexity: Simple read and write queries, usually targeting single rows or small subsets.
-    - Data Access (READ) Pattern: Random access to small subsets of data.
-    - Insertion (WRITE) Pattern: Constant insertion and updates, with high concurrency.
-    - Typical Usage: Applications like banking, e-commerce, and CRM where data changes frequently.
-
-HTAP = 'htap' (Hybrid Transactional/Analytical Processing)
-    - Description: Combines OLTP and OLAP workloads in a single database. Analytic workloads are usually financial
-        reporting, real-time analytics.
-    - Transaction Lifespan: Mix of short transactional and long analytical queries.
-    - Read/Write Balance: Balances frequent writes (OLTP) with complex reads (OLAP).
-    - Query Complexity: Simple transactional queries along with complex analytical queries.
-    - Data Access (READ) Pattern: Random access for OLTP and sequential access for OLAP.
-    - Insertion (WRITE) Pattern: Real-time or near real-time inserts, often through streaming or continuous updates.
-    - Typical Usage: Real-time dashboards, fraud detection where operational and historical data are combined.
-
-# Internal Management Workload
-OLAP = 'olap' (Online Analytical Processing) && TSR_OLAP = 'tsa' (Time-Series Data Analytics)
-    - Description: Analytical workload with complex queries and aggregations.
-    - Transaction Lifespan: Long-lived, complex queries (seconds to minutes, even HOUR on large database).
-    - Read/Write Balance: Read-heavy; few updates or inserts after initial loading.
-    - Query Complexity: Complex read queries with aggregations, joins, and large scans.
-    - Data Access (READ) Pattern: Sequential access to large data sets.
-    - Insertion (WRITE) Pattern: Bulk insertion during ETL processes, usually at scheduled intervals.
-    - Typical Usage: Business analytics and reporting where large data volumes are analyzed.
-
-# Specific Workload such as Search, RAG, Geospatial, and Document Indexing
-VECTOR = 'vector'
-    - Description: Workload operates over vector-based data type such as SEARCH (search toolbar in Azure),
-        INDEX (document indexing) and RAG (Retrieval-Augmented Generation), and GEOSPATIAL (Geospatial Workloads).
-        Whilst data and query plans are not identical, they share similar characteristics in terms of Data Access.
-    - Transaction Lifespan: Varies based on query complexity, usually fast and low-latency queries.
-    - Read/Write Balance: Read-heavy with occasional writes in normal operation (ignore bulk load).
-    - Query Complexity: Complex, involving vector search, similarity queries, and geospatial filtering.
-    - Data Access (READ) Pattern: Random access to feature vectors, embeddings, and geospatial data.
-    - Insertion (WRITE) Pattern: Bulk insertions for training datasets at beginning but some real-time
-        and minor/small updates for live models.
-    - Typical Usage: Full-text search in e-commerce, knowledge bases, and document search engines; Model training,
-        feature extraction, and serving models in recommendation systems; Location-based services, mapping,
-        geographic data analysis, proximity searches.
-
- */
-const PG_WORKLOAD = Object.freeze({
-    TSR_IOT: "tst",
-    OLTP: "oltp",
-    HTAP: "htap",
-    OLAP: "olap",
-    VECTOR: "vector",
-});
 
 // ==================================================================================
 /**
@@ -2788,7 +2599,7 @@ class PG_TUNE_RESPONSE {
         // Higher level would assume more hash-based operations, which reduce the work_mem in correction-tuning phase
         // Smaller level would assume less hash-based operations, which increase the work_mem in correction-tuning phase
         // real_world_work_mem = work_mem * hash_mem_multiplier
-        const real_world_mem_scale = generalized_mean(1, hash_mem_multiplier, _kwargs.hash_mem_usage_level);
+        const real_world_mem_scale = generalized_mean([1, hash_mem_multiplier], _kwargs.hash_mem_usage_level);
         const real_world_work_mem = work_mem * real_world_mem_scale;
         const total_working_memory = (temp_buffers + real_world_work_mem);
         const total_working_memory_hr = bytesize_to_hr(total_working_memory);
@@ -2852,7 +2663,7 @@ class PG_TUNE_RESPONSE {
         const [data_tput, data_iops] = options.data_index_spec.perf()
         const checkpoint_timeout = managed_cache['checkpoint_timeout'];
         const checkpoint_completion_target = managed_cache['checkpoint_completion_target'];
-        const _ckpt_iops = PG_DISK_PERF.throughput_to_iops(0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(data_iops), data_tput, -2.5));   // The merge between sequential IOPS and random IOPS with weighted average of -2.5 and 70% efficiency
+        const _ckpt_iops = PG_DISK_PERF.throughput_to_iops(0.70 * generalized_mean([PG_DISK_PERF.iops_to_throughput(data_iops), data_tput], -2.5));   // The merge between sequential IOPS and random IOPS with weighted average of -2.5 and 70% efficiency
         const ckpt05 = checkpoint_time(checkpoint_timeout, checkpoint_completion_target, shared_buffers, 0.05, effective_cache_size, managed_cache['max_wal_size'], _ckpt_iops);
         const ckpt30 = checkpoint_time(checkpoint_timeout, checkpoint_completion_target, shared_buffers, 0.30, effective_cache_size, managed_cache['max_wal_size'], _ckpt_iops);
         const ckpt95 = checkpoint_time(checkpoint_timeout, checkpoint_completion_target, shared_buffers, 0.95, effective_cache_size, managed_cache['max_wal_size'], _ckpt_iops);
@@ -3777,7 +3588,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _wraparound_effective_io = 0.80  // Assume during aggressive anti-wraparound vacuum the effective IO is 80%
     const _data_tran_tput = PG_DISK_PERF.iops_to_throughput(_data_iops)
-    const _data_avg_tput = generalized_mean(_data_tran_tput, _data_tput, 0.85)
+    const _data_avg_tput = generalized_mean([_data_tran_tput, _data_tput], 0.85)
 
     const _data_size = 0.75 * request.options.database_size_in_gib * Ki  // Measured in MiB
     const _index_size = 0.25 * request.options.database_size_in_gib * Ki  // Measured in MiB
@@ -3842,8 +3653,8 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Our perspective is that we either need to set our failsafe as low as possible (ranging as 1.4B to 1.9B), for
     // xid failsafe, and a bit higher for xmin/xmax failsafe.
 
-    const _decre_xid = generalized_mean(24 + (18 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time, 0.5)
-    const _decre_mxid = generalized_mean(24 + (12 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time, 0.5)
+    const _decre_xid = generalized_mean([24 + (18 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time], 0.5)
+    const _decre_mxid = generalized_mean([24 + (12 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time], 0.5)
     let xid_failsafe_age = Math.max(1_900_000_000 - _transaction_rate * _decre_xid, 1_400_000_000)
     xid_failsafe_age = realign_value(xid_failsafe_age, 500 * K10)[request.options.align_index]
     let mxid_failsafe_age = Math.max(1_900_000_000 - _transaction_rate * _decre_mxid, 1_400_000_000)
@@ -3855,10 +3666,10 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         _item_tuning('vacuum_multixact_failsafe_age', mxid_failsafe_age, PG_SCOPE.MAINTENANCE, response)
     }
 
-    let _decre_max_xid = Math.max(1.25 * _worst_data_vacuum_time, generalized_mean(36 + (24 - _transaction_coef) * _transaction_coef,
-        1.5 * _worst_data_vacuum_time, 0.5))
-    let _decre_max_mxid = Math.max(1.25 * _worst_data_vacuum_time, generalized_mean(24 + (20 - _transaction_coef) * _transaction_coef,
-        1.25 *  _worst_data_vacuum_time, 0.5))
+    let _decre_max_xid = Math.max(1.25 * _worst_data_vacuum_time, generalized_mean([36 + (24 - _transaction_coef) * _transaction_coef,
+        1.5 * _worst_data_vacuum_time], 0.5))
+    let _decre_max_mxid = Math.max(1.25 * _worst_data_vacuum_time, generalized_mean([24 + (20 - _transaction_coef) * _transaction_coef,
+        1.25 *  _worst_data_vacuum_time], 0.5))
 
     let xid_max_age = Math.max(Math.floor(0.95 * managed_cache['autovacuum_freeze_max_age']),
         0.85 * xid_failsafe_age - _transaction_rate * _decre_max_xid)
@@ -4260,7 +4071,7 @@ function _wrk_mem_tune(request, response) {
         [PG_PROFILE_OPTMODE.PRIMORDIAL]: 1.0
     }
 
-    let hash_mem = generalized_mean(1, managed_cache['hash_mem_multiplier'], _kwargs.hash_mem_usage_level)
+    let hash_mem = generalized_mean([1, managed_cache['hash_mem_multiplier']], _kwargs.hash_mem_usage_level)
     let work_mem_single = (1 - _kwargs.temp_buffers_ratio) * hash_mem
     let TBk = _kwargs.temp_buffers_ratio + work_mem_single
     if (_kwargs.mem_pool_parallel_estimate) {
@@ -4344,7 +4155,7 @@ function _wrk_mem_tune(request, response) {
     // The minimum data amount is under normal condition of working (not initial bulk load)
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _data_iops = request.options.data_index_spec.perf()[1]
-    const _data_trans_tput = 0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput, -2.5)
+    const _data_trans_tput = 0.70 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -2.5)
     let _shared_buffers_ratio = 0.30    // Don't used for tuning, just an estimate of how checkpoint data writes
     if (request.options.workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR]) {
         _shared_buffers_ratio = 0.15

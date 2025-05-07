@@ -34,7 +34,7 @@ console.log(COLOR.RED > COLOR.BLUE); // true
 const CUSTOM_COLOR = Object.freeze({
   RED: [3, 'red'],
   GREEN: [2, 'green'],
-  BLUE: [1, 'blue'],
+  BLUE: [1, 'yellow'],
 });
 console.log(CUSTOM_COLOR.GREEN < CUSTOM_COLOR.BLUE); // true
 console.log(COLOR.BLUE < COLOR.GREEN); // true
