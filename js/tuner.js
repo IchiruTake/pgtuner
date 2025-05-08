@@ -1143,7 +1143,7 @@ class PG_TUNE_USR_KWARGS {
         this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 4;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
-        this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.3;
+        this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
         // Memory Utilization (Basic)
         this.effective_cache_size_available_ratio = options.effective_cache_size_available_ratio ?? 0.985;
         this.shared_buffers_ratio = options.shared_buffers_ratio ?? 0.25;
@@ -1400,12 +1400,8 @@ _<Scope>_<Description>_PROFILE = {
 }
  */
 
-// This could be increased if your database server is not under hypervisor and run under Xeon_v6, recent AMD EPYC 
-// (2020) or powerful ARM CPU, or AMD Threadripper (2020+). But in most cases, the 4x scale factor here is enough 
-// to be generalized. Even on PostgreSQL 14, the scaling is significant when the PostgreSQL server is not 
-// virtualized and have a lot of CPU to use (> 32 - 96|128 cores).    
+  
 const __BASE_RESERVED_DB_CONNECTION = 3; 
-const __SCALE_FACTOR_CPU_TO_CONNECTION = 4;
 const __DESCALE_FACTOR_RESERVED_DB_CONNECTION = 4; // This is the descaling factor for reserved connections
 
 function _GetNumConnections(options, response, use_reserved_connection = false, use_full_connection = false) {
@@ -1432,11 +1428,11 @@ function _GetNumConnections(options, response, use_reserved_connection = false, 
 
 function _GetMemConnInTotal(options, response, use_reserved_connection = false, use_full_connection = false) {
     /* 
-    The memory usage per connection is varied and some articles said it could range on scale 1.5 - 14 MiB,
-    or 5 - 10 MiB so we just take this ratio. This memory is assumed to be on one connection without execute
-    any query or transaction.
+    The memory usage per connection is varied and some articles said it could range on scale 1.5 - 14 MiB based 
+    on AWS report. Since it is not 100% contextually correct but giving good enough result, we can use the
+    5 - 10 MiB so we just take this ratio. 
     References:
-    - https://www.cybertec-postgresql.com/en/postgresql-connection-memory-usage/
+    - https://aws.amazon.com/blogs/database/resources-consumed-by-idle-postgresql-connections/
     - https://cloud.ibm.com/docs/databases-for-postgresql?topic=databases-for-postgresql-managing-connections
     - https://techcommunity.microsoft.com/blog/adforpostgresql/analyzing-the-limits-of-connection-scalability-in-postgres/1757266
     - https://techcommunity.microsoft.com/blog/adforpostgresql/improving-postgres-connection-scalability-snapshots/1806462
@@ -1448,7 +1444,7 @@ function _GetMemConnInTotal(options, response, use_reserved_connection = false, 
     */
     let num_conns = _GetNumConnections(options, response, use_reserved_connection, use_full_connection);
     let mem_conn_overhead = options.tuning_kwargs.single_memory_connection_overhead;
-    return num_conns * mem_conn_overhead;
+    return Math.ceil(num_conns * mem_conn_overhead);
 }
 
 function _CalcSharedBuffers(options) {
@@ -1461,9 +1457,7 @@ function _CalcSharedBuffers(options) {
     if (shared_buffers === 128 * Mi) {
         console.warning('No benefit is found on tuning this variable');
     }
-    // Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
-    // probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
-    shared_buffers = realign_value(shared_buffers, DB_PAGE_SIZE)[options.align_index];
+    shared_buffers = realign_value(Math.ceil(shared_buffers), DB_PAGE_SIZE)[options.align_index];
     console.debug(`shared_buffers: ${Math.floor(shared_buffers / Mi)}MiB`);
     return shared_buffers;
 }
@@ -1475,41 +1469,40 @@ function _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response
     - [25]: work_mem = (RAM - shared_buffers) / (16 * vCPU cores).
     - pgTune: work_mem = (RAM - shared_buffers) / (3 * max_connections) / max_parallel_workers_per_gather
     - Microsoft TechCommunity (*): RAM / max_connections / 16   (1/16 is conservative factors)
+    - Azure: "Unlike shared buffers, which are in the shared memory area, work_mem is allocated in a per-session 
+    or per-query private memory space. By setting an adequate work_mem size, you can significantly improve the 
+    efficiency of these operations and reduce the need to write temporary data to disk"
 
-    Whilst these settings are good and bad, from Azure docs, "Unlike shared buffers, which are in the shared memory
-    area, work_mem is allocated in a per-session or per-query private memory space. By setting an adequate work_mem
-    size, you can significantly improve the efficiency of these operations and reduce the need to write temporary
-    data to disk". Whilst this advice is good in general, I believe not every applications have the ability to
-    change it on-the-fly due to the application design, database sizing, the number of connections and CPUs, and
-    the change of data after time of usage before considering specific tuning. Unless it is under interactive
-    sessions made by developers or DBA, those are not there. 
+    Our: These formulas are not wrong, but they are not the best either as they are not taking into account the
+    workload dynamic, database sizing, the number of connections and CPUs quality, ... From PostgreSQL docs, 
+    we propose a better flexible formula that is more dynamic and prevents the system from being overloaded.
 
-    From our rationale, when we target on first on-board database, we don't know how the application will behave
-    on it wished queries, but we know its workload type, and it safeguard. So this is our solution.
-    work_mem = ratio * (RAM - shared_buffers - overhead_of_os_conn) * threshold / effective_user_connections
-
-    And then we cap it to below a 64 MiB - 1.5 GiB (depending on workload) to ensure our setup is don't
-    exceed the memory usage.
+    (1): Calculate the available dedicated memory: RAM - shared_buffers - overhead - wal_buffers (if have)
+    (2): Use a portion of the available memory and distribute across the number of *effective* connections to both 
+        work_mem and temp_buffers. A good portion is around 5-15% based on query complexity. Ignore the geometric 
+        mean caused by HASH-based operation.
+    (3) Capping the work_mem and temp_buffers value of each under 256 MiB to 8 GiB (workload dependent) to ensure the
+        PostgreSQL don't kill due to OOM
     - https://techcommunity.microsoft.com/blog/adforpostgresql/optimizing-query-performance-with-work-mem/4196408
     */
-    let pgmem_available = options.usable_ram - group_cache['shared_buffers'];
-    let _mem_conns = _GetMemConnInTotal(options, response, false, true);
-    pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio;
+    let overhead = _GetMemConnInTotal(options, response, false, true) * options.tuning_kwargs.single_memory_connection_overhead;
+    let pgmem_available = options.usable_ram - group_cache['shared_buffers'] - overhead;
     if ('wal_buffers' in global_cache) {   // I don't know if this make significant impact?
         pgmem_available -= global_cache['wal_buffers'];
     }
     let max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio;
     let active_connections = _GetNumConnections(options, response, false, false);
-    let total_buffers = pgmem_available * max_work_buffer_ratio // active_connections;
+    let total_buffers = Math.floor(pgmem_available * max_work_buffer_ratio / active_connections);
+    
     // Minimum to 1 MiB and maximum is varied between workloads
     let max_cap = 1.5 * Gi;
     if (options.workload_type === PG_WORKLOAD.TSR_IOT) {
         max_cap = 256 * Mi;
-    }
-    if (options.workload_type === PG_WORKLOAD.HTAP || options.workload_type === PG_WORKLOAD.OLAP) {
+    } else if (options.workload_type === PG_WORKLOAD.HTAP || options.workload_type === PG_WORKLOAD.OLAP) {
         // I don't think I will make risk beyond this number
         max_cap = 8 * Gi;
     }
+
     let temp_buffer_ratio = options.tuning_kwargs.temp_buffers_ratio;
     let temp_buffers = cap_value(total_buffers * temp_buffer_ratio, 1 * Mi, max_cap);
     let work_mem = cap_value(total_buffers * (1 - temp_buffer_ratio), 1 * Mi, max_cap);
@@ -1517,9 +1510,8 @@ function _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response
     // Realign the number (always use the lower bound for memory safety)
     temp_buffers = realign_value(Math.floor(temp_buffers), DB_PAGE_SIZE)[options.align_index];
     work_mem = realign_value(Math.floor(work_mem), DB_PAGE_SIZE)[options.align_index];
-    console.debug(`temp_buffers: ${Math.floor(temp_buffers / Mi)}MiB`);
-    console.debug(`work_mem: ${Math.floor(work_mem / Mi)}MiB`);
-    
+    console.debug(`temp_buffers: ${bytesize_to_hr(temp_buffers)}`);
+    console.debug(`work_mem: ${bytesize_to_hr(work_mem)}`);
     return [temp_buffers, work_mem];
 }
 
@@ -1538,8 +1530,7 @@ function _GetMaxConns(options, group_cache, min_user_conns, max_user_conns) {
         const allowed_connections = options.tuning_kwargs.user_max_connections;
         return allowed_connections + total_reserved_connections;
     }
-    // Make a small upscale here to future-proof database scaling, and reduce the number of connections
-    let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;  // / max(0.75, options.tuning_kwargs.effective_connection_ratio)
+    let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;
     console.debug(`The max_connections variable is determined by the number of logical CPU count 
         with the scale factor of ${__SCALE_FACTOR_CPU_TO_CONNECTION.toFixed(1)}x.`);
     let _minimum = Math.max(min_user_conns, total_reserved_connections);
@@ -1555,12 +1546,12 @@ function _GetReservedConns(options, minimum, maximum, superuser_mode = false, ba
     // 1.5x here is heuristically defined to limit the number of superuser reserved connections
     let reserved_connections;
     let descale_factor;
-    let superuser_heuristic_percentage;
+    let superuser_descale_ratio;
     if (!superuser_mode) {
         reserved_connections = options.vcpu / __DESCALE_FACTOR_RESERVED_DB_CONNECTION;
     } else {
-        superuser_heuristic_percentage = options.tuning_kwargs.superuser_reserved_connections_scale_ratio;
-        descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_heuristic_percentage;
+        superuser_descale_ratio = options.tuning_kwargs.superuser_reserved_connections_scale_ratio;
+        descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_descale_ratio;
         reserved_connections = Math.floor(options.vcpu / descale_factor);
     }
     return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection;
@@ -1568,22 +1559,17 @@ function _GetReservedConns(options, minimum, maximum, superuser_mode = false, ba
 
 function _CalcEffectiveCacheSize(group_cache, global_cache, options, response) {
     /*
-    The following setup made by the Azure PostgreSQL team. The reason is that their tuning guideline are better as 
-    compared as what I see in AWS PostgreSQL. The Azure guideline is to take the available 
-    memory (RAM - shared_buffers):
+    The effective_cache_size determines the maximum amount of OS page cache to allow lookup when fetch data from 
+    disk, with guideline about 50% to 75% of RAM due to the reduction of shared_buffers. 
+    Our formula is : (RAM - shared_buffers - overhead) * effective_cache_size_ratio
     https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/server-parameters-table-query-tuning-planner-cost-constants?pivots=postgresql-17#effective_cache_size
-    and https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
-    Default is half of physical RAM memory on most tuning guideline
+    https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
     */
-    let pgmem_available = Math.floor(options.usable_ram);    // Make a copy
-    pgmem_available -= global_cache['shared_buffers'];
-    let _mem_conns = _GetMemConnInTotal(options, response, false, true);
-    pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio;
-
-    // Re-align the number (always use the lower bound for memory safety)
+    let overhead = _GetMemConnInTotal(options, response, false, true) * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio;
+    let pgmem_available = Math.floor(options.usable_ram - global_cache['shared_buffers'] - overhead);
     let effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio;
     effective_cache_size = realign_value(Math.floor(effective_cache_size), DB_PAGE_SIZE)[options.align_index];
-    console.debug("Effective cache size: ${Math.floor(effective_cache_size / Mi)}MiB");
+    console.debug(`Effective cache size: ${bytesize_to_hr(effective_cache_size)}`);
     return effective_cache_size;
 }
 
@@ -1964,11 +1950,7 @@ _DB_QUERY_PROFILE = {
         'default': 1000,
     },
     'parallel_tuple_cost': {
-        'instructions': {
-            'large': (group_cache, global_cache, options, response) => Math.min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-            'mall': (group_cache, global_cache, options, response) => Math.min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-            'bigt': (group_cache, global_cache, options, response) => Math.min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-        },
+        'tune_op': (group_cache, global_cache, options, response) => (group_cache['cpu_tuple_cost'] * 8 + 0.1) / 2,
         'default': 0.1,
     },
     // Commit Behaviour
@@ -2341,13 +2323,16 @@ console.debug(`DB17_CONFIG_PROFILE: ${JSON.stringify(DB17_CONFIG_PROFILE)}`);
 // The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 // Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
 const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized
-function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput) {
+function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput, wal_init_zero) {
     // The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     // or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     console.debug('Estimate the time required to flush the full WAL buffers to disk');
     const data_amount = Math.floor(wal_buffers * data_amount_ratio);
     const num_wal_files_required = Math.floor(data_amount / wal_segment_size) + 1;
-    const rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
+    let rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
+    if (wal_init_zero === true || wal_init_zero === 'on') {
+        rotate_time_in_ms += wal_segment_size / wal_throughput * K10;
+    }
     const write_time_in_ms = (data_amount / Mi) / wal_throughput * K10;
 
     // Calculate maximum how many delay time

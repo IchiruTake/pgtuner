@@ -54,9 +54,9 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'incorrect (recommend to be between 4 - 8 MiB).'
     )
     memory_connection_to_dedicated_os_ratio: float = Field(
-        default=0.3, ge=0.0, le=1.0, frozen=True,
+        default=0.7, ge=0.0, le=1.0, frozen=True,
         description='The ratio of the memory connection to the dedicated OS memory rather than shared_buffers of '
-                    'the PostgreSQL memory. The supported range is [0, 1], default is 0.3 or 30%. '
+                    'the PostgreSQL memory. The supported range is [0, 1], default is 0.7 or 70%. '
     )
     # Memory Utilization (Basic)
     effective_cache_size_available_ratio: PositiveFloat = Field(
