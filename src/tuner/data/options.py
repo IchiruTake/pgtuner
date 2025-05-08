@@ -28,6 +28,18 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'user connections exceed 75 then it is better to use connection pooling to minimize connection '
                     'latency, overhead, and memory usage.'
     )
+    # This could be increased if your database server is not under hypervisor and run under Xeon_v6, recent AMD EPYC (2020)
+    # or powerful ARM CPU, or AMD Threadripper (2020+). But in most cases, the 4x scale factor here is enough to be
+    # generalized. Even on PostgreSQL 14, the scaling is significant when the PostgreSQL server is not virtualized and
+    # have a lot of CPU to use (> 32 - 96|128 cores).
+    cpu_to_connection_scale_ratio: PositiveFloat = Field(
+        default=4, ge=1, le=8, frozen=True,
+        description='The scale ratio of the CPU to the number of connections. The supported range is [1, 8], default '
+                    'is 4. This value is used to estimate the number of connections that can be handled by the server '
+                    'based on the number of CPU cores. The higher value means more connections can be handled by the '
+                    'server. From modern perspective, the good ratio is between 4-6, but default to 4 for optimal ' \
+                    'performance with less risk for idle connection overhead.'
+    )
     superuser_reserved_connections_scale_ratio: PositiveFloat = Field(
         default=1.5, ge=1, le=3, frozen=True,
         description='The de-scale ratio for the reserved superuser connections over the normal reserved connection. '
@@ -134,7 +146,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     max_runtime_ms_to_log_slow_query: PositiveInt = Field(
         default=2 * K10, ge=20, le=100 * K10, frozen=True,
         description='The maximum runtime of the query in milliseconds to be logged as a slow query. The supported '
-                    'range is [10, 100K], default is 2000 ms (or 2 seconds). We recommend and enforce you should '
+                    'range is [20, 100K], default is 2000 ms (or 2 seconds). We recommend and enforce you should '
                     'know your average runtime query and its distribution and pivot the timerange to log the *slow* '
                     'query based on the database sizing and business requirements. This value is re-aligned by 20 ms '
                     'to support some old system with high time-resolution.'

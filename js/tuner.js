@@ -1129,9 +1129,7 @@ class PGTUNER_SCOPE {
 
 // Define enum instances for PGTUNER_SCOPE
 PGTUNER_SCOPE.KERNEL_SYSCTL = new PGTUNER_SCOPE('kernel_sysctl');
-PGTUNER_SCOPE.KERNEL_BOOT = new PGTUNER_SCOPE('kernel_boot');
 PGTUNER_SCOPE.DATABASE_CONFIG = new PGTUNER_SCOPE('database_config');
-
 
 // ==================================================================================
 /**
@@ -1142,6 +1140,7 @@ class PG_TUNE_USR_KWARGS {
     constructor(options = {}) {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
+        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 4;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.3;
@@ -1266,23 +1265,17 @@ class PG_TUNE_USR_OPTIONS {
             console.warn(`Database size ${this.database_size_in_gib} GiB exceeds 90% of data volume; capping to ${_database_limit} GiB.`);
             this.database_size_in_gib = _database_limit;
         }
-    }
 
-    /**
-     * Cached property: maps hardware scope keys to the workload profile.
-     * @returns {Object<string, *>} An object mapping scopes to this.workload_profile.
-     */
-    get hardware_scope() {
-        if (!this._hardware_scope) {
-            this._hardware_scope = {
-                cpu: this.workload_profile,
-                mem: this.workload_profile,
-                net: this.workload_profile,
-                disk: this.workload_profile,
-                overall: this.workload_profile
-            };
-        }
-        return this._hardware_scope;
+        // Add the hardware_scope into dictionary format (a cache)
+        this.hardware_scope = {
+            'cpu': this.workload_profile, 
+            'mem': this.workload_profile,
+            'net': this.workload_profile,
+            'disk': this.workload_profile, 
+            'overall': this.workload_profile
+        };
+        this.usable_ram = this.total_ram - this.base_kernel_memory_usage - this.base_monitoring_memory_usage
+
     }
 
     /**
@@ -1300,24 +1293,6 @@ class PG_TUNE_USR_OPTIONS {
             }
         }
         return this.workload_profile;
-    }
-
-    /**
-     * Cached property: calculates usable RAM by subtracting kernel and monitoring usage from total RAM.
-     * @returns {number} The usable RAM in bytes.
-     * @throws {Error} If usable RAM is less than 0.
-     */
-    get usable_ram() {
-        if (this._usable_ram === undefined) {
-            let mem_available = this.total_ram;
-            mem_available -= this.base_kernel_memory_usage;
-            mem_available -= this.base_monitoring_memory_usage;
-            if (mem_available < 0) {
-                throw new Error('The available memory is less than 0. Please check the memory usage.');
-            }
-            this._usable_ram = mem_available;
-        }
-        return this._usable_ram;
     }
 }
 
@@ -1444,7 +1419,7 @@ function _GetNumConnections(options, response, use_reserved_connection = false, 
             total_connections -= reserved_connections;
         } else {
             console.debug(`The reserved mode is enabled (not recommended) as reserved connections are purposely 
-            different usage such as troubleshooting, maintenance, **replication**, sharding, cluster, ...`)
+                different usage such as troubleshooting, maintenance, **replication**, sharding, cluster, ...`)
         }
         if (!use_full_connection) {
             total_connections *= options.tuning_kwargs.effective_connection_ratio;
@@ -1479,8 +1454,8 @@ function _GetMemConnInTotal(options, response, use_reserved_connection = false, 
 function _CalcSharedBuffers(options) {
     let shared_buffers_ratio = options.tuning_kwargs.shared_buffers_ratio;
     if (shared_buffers_ratio < 0.25) {
-        console.warning('The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended ' +
-            'the starting point is 25% of RAM or over. Please consider increasing the ratio.');
+        console.warning(`The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended 
+            the starting point is 25% of RAM or over. Please consider increasing the ratio.`);
     }
     let shared_buffers = Math.max(options.usable_ram * shared_buffers_ratio, 128 * Mi);
     if (shared_buffers === 128 * Mi) {
@@ -1564,9 +1539,9 @@ function _GetMaxConns(options, group_cache, min_user_conns, max_user_conns) {
         return allowed_connections + total_reserved_connections;
     }
     // Make a small upscale here to future-proof database scaling, and reduce the number of connections
-    let _upscale = __SCALE_FACTOR_CPU_TO_CONNECTION;  // / max(0.75, options.tuning_kwargs.effective_connection_ratio)
-    console.debug("The max_connections variable is determined by the number of logical CPU count " + 
-        "with the scale factor of ${__SCALE_FACTOR_CPU_TO_CONNECTION}x.");
+    let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;  // / max(0.75, options.tuning_kwargs.effective_connection_ratio)
+    console.debug(`The max_connections variable is determined by the number of logical CPU count 
+        with the scale factor of ${__SCALE_FACTOR_CPU_TO_CONNECTION.toFixed(1)}x.`);
     let _minimum = Math.max(min_user_conns, total_reserved_connections);
     let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections;
     console.debug(`max_connections: ${max_connections}`);

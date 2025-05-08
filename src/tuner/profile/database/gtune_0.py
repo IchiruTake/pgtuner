@@ -45,11 +45,6 @@ if DB_PAGE_SIZE != 8 * Ki:
 # =============================================================================
 # Don't change these constant
 __BASE_RESERVED_DB_CONNECTION: int = 3
-# This could be increased if your database server is not under hypervisor and run under Xeon_v6, recent AMD EPYC (2020)
-# or powerful ARM CPU, or AMD Threadripper (2020+). But in most cases, the 4x scale factor here is enough to be
-# generalized. Even on PostgreSQL 14, the scaling is significant when the PostgreSQL server is not virtualized and
-# have a lot of CPU to use (> 32 - 96|128 cores).
-__SCALE_FACTOR_CPU_TO_CONNECTION: int = 4
 __DESCALE_FACTOR_RESERVED_DB_CONNECTION: int = 4
 
 
@@ -199,11 +194,9 @@ def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_
         allowed_connections = options.tuning_kwargs.user_max_connections
         return allowed_connections + total_reserved_connections
 
-    # Should I upscale here?
-    # Make a small upscale here to future-proof database scaling, and reduce the number of connections
-    _upscale: float = __SCALE_FACTOR_CPU_TO_CONNECTION  # / max(0.75, options.tuning_kwargs.effective_connection_ratio)
+    _upscale: float = options.tuning_kwargs.cpu_to_connection_scale_ratio
     _logger.debug(f'The max_connections variable is determined by the number of logical CPU count with the scale '
-                  f'factor of {__SCALE_FACTOR_CPU_TO_CONNECTION:.1f}x.')
+                  f'factor of {_upscale:.1f}x.')
     _minimum = max(min_user_conns, total_reserved_connections)
     max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections
     _logger.debug(f'max_connections: {max_connections}')
