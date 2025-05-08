@@ -711,13 +711,57 @@ const PG_WORKLOAD = Object.freeze({
 });
 
 // PG_SIZING: Represents a PostgreSQL sizing profile
-const PG_SIZING = Object.freeze({
-    MINI: 0,
-    MEDIUM: 1,
-    LARGE: 2,
-    MALL: 3,
-    BIGT: 4,
-})
+class PG_SIZING {
+    constructor(value) {
+      if (typeof value === 'string') { 
+          if (!PG_SIZING.values.includes(value)) { 
+              throw new Error(`Invalid value: ${value}`);
+          } 
+      }  else if (typeof value === 'number') {
+          value = PG_SIZING.values[value];
+      } else {
+        throw new Error(`Invalid value: ${value}`);
+      }
+      this.value = value;
+    }
+  
+    static values = ['mini', 'medium', 'large', 'mall', 'bigt'];
+    static MINI = new PG_SIZING('mini');
+    static MEDIUM = new PG_SIZING('medium');
+    static LARGE = new PG_SIZING('large');
+    static MALL = new PG_SIZING('mall');
+    static BIGT = new PG_SIZING('bigt');
+  
+    static fromString(str) {
+      return new PG_SIZING(str)
+    }
+  
+    num() {
+      return PG_SIZING.values.findIndex(t => t === this.value);
+    }
+  
+    equals(otherEnum) {
+      return this.num() == otherEnum.num();
+    }
+  
+    toString() {
+      return this.value;
+    }
+
+    valueOf() {
+        return this.value;
+    }
+    
+    [Symbol.toPrimitive](hint) {
+      if (hint === "number") {
+        return this.num();
+      }
+      if (hint === "string") {
+        return this.value;
+      } 
+      return this.value;
+    }
+  }
 
 /**
  * Enumeration of PostgreSQL backup tools.
@@ -1242,12 +1286,6 @@ class PG_TUNE_USR_OPTIONS {
             console.debug(`Set the kernel memory usage to ${bytesize_to_hr(this.base_kernel_memory_usage, false, ' ')}`);
         }
 
-        // Check that the PostgreSQL version is supported.
-        if (!SUPPORTED_POSTGRES_VERSIONS.includes(this.pgsql_version.toLocaleString())) {
-            console.warn(`The PostgreSQL version ${this.pgsql_version} is not in the supported version list. Forcing the version to the latest supported version.`);
-            this.pgsql_version = SUPPORTED_POSTGRES_VERSIONS[SUPPORTED_POSTGRES_VERSIONS.length - 1];
-        }
-
         // Check minimal usable RAM.
         if (this.usable_ram < 4 * Gi) {
             const _sign = (this.usable_ram >= 0) ? '+' : '-';
@@ -1284,7 +1322,7 @@ class PG_TUNE_USR_OPTIONS {
      * @returns {*} The corresponding workload profile.
      */
     translate_hardware_scope(term) {
-        if (term) {
+        if (term !== null) {
             term = term.toLowerCase().trim();
             if (this.hardware_scope.hasOwnProperty(term)) {
                 return this.hardware_scope[term];
@@ -1450,12 +1488,12 @@ function _GetMemConnInTotal(options, response, use_reserved_connection = false, 
 function _CalcSharedBuffers(options) {
     let shared_buffers_ratio = options.tuning_kwargs.shared_buffers_ratio;
     if (shared_buffers_ratio < 0.25) {
-        console.warning(`The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended 
+        console.warn(`The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended 
             the starting point is 25% of RAM or over. Please consider increasing the ratio.`);
     }
     let shared_buffers = Math.max(options.usable_ram * shared_buffers_ratio, 128 * Mi);
     if (shared_buffers === 128 * Mi) {
-        console.warning('No benefit is found on tuning this variable');
+        console.warn('No benefit is found on tuning this variable');
     }
     shared_buffers = realign_value(Math.ceil(shared_buffers), DB_PAGE_SIZE)[options.align_index];
     console.debug(`shared_buffers: ${Math.floor(shared_buffers / Mi)}MiB`);
@@ -2323,16 +2361,13 @@ console.debug(`DB17_CONFIG_PROFILE: ${JSON.stringify(DB17_CONFIG_PROFILE)}`);
 // The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 // Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
 const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized
-function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput, wal_init_zero) {
+function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput) {
     // The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     // or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     console.debug('Estimate the time required to flush the full WAL buffers to disk');
     const data_amount = Math.floor(wal_buffers * data_amount_ratio);
     const num_wal_files_required = Math.floor(data_amount / wal_segment_size) + 1;
-    let rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
-    if (wal_init_zero === true || wal_init_zero === 'on') {
-        rotate_time_in_ms += wal_segment_size / wal_throughput * K10;
-    }
+    const rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
     const write_time_in_ms = (data_amount / Mi) / wal_throughput * K10;
 
     // Calculate maximum how many delay time
@@ -2348,12 +2383,12 @@ function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_d
     const total_time = rotate_time_in_ms + write_time_in_ms + delay_time;
     const msg = `Estimate the time required to flush the full-queued WAL buffers ${bytesize_to_hr(data_amount)} to disk: rotation time: ${rotate_time_in_ms.toFixed(2)} ms, write time: ${write_time_in_ms.toFixed(2)} ms, delay time: ${delay_time.toFixed(2)} ms --> Total: ${total_time.toFixed(2)} ms with ${num_wal_files_required} WAL files.`;
     return {
-        numWalFiles: num_wal_files_required,
-        rotateTime: rotate_time_in_ms,
-        writeTime: write_time_in_ms,
-        delayTime: delay_time,
-        totalTime: total_time,
-        msg: msg
+        'num_wal_files': num_wal_files_required,
+        'rotate_time': rotate_time_in_ms,
+        'write_time': write_time_in_ms,
+        'delay_time': delay_time,
+        'delay_time': total_time,
+        'msg': msg
     };
 }
 
@@ -2461,7 +2496,7 @@ function vacuum_scale(threshold, scale_factor) {
  */
 class PG_TUNE_REQUEST {
     constructor(options) {
-        this.options = options;
+        this.options = options.options || {};
         this.include_comment = options.include_comment || false;
         this.custom_style = options.custom_style || null;
     }
@@ -2477,11 +2512,21 @@ class PG_TUNE_RESPONSE {
     }
 
     get_managed_items(target, scope) {
-        return this.outcome.get(target).get(scope);
+        if (!this.outcome.hasOwnProperty(target)) {
+            this.outcome[target] = {};
+        } 
+        if (!this.outcome[target].hasOwnProperty(scope)) {
+            this.outcome[target][scope] = {};
+        }
+
+        return this.outcome[target][scope];
     }
 
     get_managed_cache(target) {
-        return this.outcome_cache.get(target);
+        if (!this.outcome_cache.hasOwnProperty(target)) {
+            this.outcome_cache[target] = {};
+        }
+        return this.outcome_cache[target];
     }
 
     _generate_content_as_file(target, request, backup_settings = true, exclude_names = null) {
@@ -2897,22 +2942,28 @@ function _MakeItm(key, before, after, trigger, tuneEntry, hardwareScope) {
 
 function _GetFnDefault(key, tune_entry, hw_scope) {
     let msg = '';
-    if (!('instructions' in tune_entry)) { // No profile-based tuning
+    if (!(tune_entry.hasOwnProperty('instructions'))) { // No profile-based tuning
         msg = `DEBUG: Profile-based tuning is not found for this item ${key} -> Use the general tuning instead.`;
         console.debug(msg);
-        const fn = tune_entry.tune_op || null;
-        const default_value = tune_entry.default;
+        const fn = tune_entry.hasOwnProperty('tune_op') ? tune_entry['tune_op'] : null;
+        const default_value = tune_entry['default'];
         return [fn, default_value, msg];
     }
 
     // Profile-based Tuning
-    const profile_fn = tune_entry.instructions[hw_scope.value] || tune_entry.tune_op || null;
-    let profile_default = tune_entry.instructions[`${hw_scope.value}_default`] || null;
+    let profile_fn = null;
+    if (tune_entry['instructions'].hasOwnProperty(`${hw_scope.value}`)) {
+        profile_fn = tune_entry['instructions'][`${hw_scope.value}`];
+    } else if (tune_entry.hasOwnProperty('tune_op')) {
+        profile_fn = tune_entry['tune_op'];
+    }
+    let profile_default = tune_entry['instructions'].hasOwnProperty(`${hw_scope.value}_default`) ? tune_entry['instructions'][`${hw_scope.value}_default`] : null;
     if (profile_default === null) {
-        profile_default = tune_entry.default;
+        profile_default = tune_entry['default'];
         if (profile_fn === null || typeof profile_fn !== 'function') {
-            msg = `WARNING: Profile-based tuning function collection is not found for this item ${key} and the associated hardware scope '${hw_scope}' is NOT found, pushing to use the generic default.`;
+            msg = `WARNING: Profile-based tuning function collection is not found for this item ${key} and the associated hardware scope '${hw_scope.value}' is NOT found, pushing to use the generic default.`;
             console.warn(msg);
+            console.warn(profile_fn, profile_default, hw_scope);
         }
     }
     return [profile_fn, profile_default, msg];
@@ -2930,7 +2981,6 @@ function _GetFnDefault(key, tune_entry, hw_scope) {
 
 function Optimize(request, response, target, target_items) {
     const global_cache = response.outcome_cache[target];
-    const dummy_fn = () => true;
     for (const [unused_1, [scope, category, unused_2]] of Object.entries(target_items)) {
         const group_cache = {};
         const group_itm = []; // A group of tuning items
@@ -2944,35 +2994,45 @@ function Optimize(request, response, target, target_items) {
             const key = keys[0].trim();
 
             // Check the profile scope of the tuning item
-            const hw_scope_term = tune_entry.hardware_scope || 'overall';
+            const hw_scope_term = tune_entry.hasOwnProperty('hardware_scope') ? tune_entry['hardware_scope'] : 'overall';
             const hw_scope_value = request.options.translate_hardware_scope(hw_scope_term);
 
             // Get tuning function and default value
             const [fn, default_value, msg] = _GetFnDefault(key, tune_entry, hw_scope_value);
             const [result, triggering] = _VarTune(request, response, group_cache, global_cache, fn, default_value);
-            const itm = _MakeItm(key, null, result || tune_entry.default, triggering, tune_entry, [hw_scope_term, hw_scope_value]);
+            const itm = _MakeItm(key, null, result !== null ? result : tune_entry.default, triggering, tune_entry, [hw_scope_term, hw_scope_value]);
 
-            if (!itm || itm.after == null) {
+            if (itm === null || itm.after === null) {
                 console.warn(`WARNING: Error in tuning the variable as default value is not found or set to null for '${key}' -> Skipping and not adding to the final result.`);
                 continue;
             }
+            console.log(itm);
 
             // Perform post-condition check
-            if (!tune_entry['post-condition']?.(itm.after) ?? dummy_fn(itm.after)) {
-                console.error(`ERROR: Post-condition self-check of '${key}' failed on new value ${itm.after}. Skipping and not adding to the final result.`);
-                continue;
+            if (tune_entry.hasOwnProperty('post-condition') && typeof tune_entry['post-condition'] === 'function') {
+                if (tune_entry['post-condition'](itm.after) === false) {
+                    console.error(`ERROR: Post-condition self-check of '${key}' failed on new value ${itm.after}. Skipping and not adding to the final result.`);
+                    continue;
+                }
             }
+
+            if (tune_entry.hasOwnProperty('post-condition-group') && typeof tune_entry['post-condition-group'] === 'function') {
+                if (tune_entry['post-condition-group'](itm.after, group_cache, request.options) === false) {
+                    console.error(`ERROR: Post-condition group-check of '${key}' failed on new value ${itm.after}. Skipping and not adding to the final result.`);
+                    continue;
+                }
+            } 
 
             // Add successful result to the cache
             group_cache[key] = itm.after;
-            const post_condition_all_fn = tune_entry['post-condition-all'] || dummy_fn;
+            const post_condition_all_fn = tune_entry.hasOwnProperty('post-condition-all') ? tune_entry['post-condition-all'] : null;
             group_itm.push([itm, post_condition_all_fn]);
             console.info(`Variable '${key}' has been tuned from ${itm.before} to ${itm.out_display()}.`);
 
             // Clone tuning items for the same result
             for (const k of keys.slice(1)) {
                 const sub_key = k.trim();
-                const cloned_itm = { ...itm, key: sub_key };
+                const cloned_itm = _MakeItm(sub_key, null, result || tune_entry.default, triggering, tune_entry, [hw_scope_term, hw_scope_value]);
                 group_cache[sub_key] = cloned_itm.after;
                 group_itm.push([cloned_itm, post_condition_all_fn]);
                 console.info(`Variable '${sub_key}' has been tuned from ${cloned_itm.before} to ${cloned_itm.out_display()} by copying the tuning result from '${key}'.`);
@@ -2981,12 +3041,13 @@ function Optimize(request, response, target, target_items) {
 
         // Perform global post-condition check
         for (const [itm, post_func] of group_itm) {
-            if (!post_func(itm.after, global_cache, request.options)) {
+            if (post_func !== null && !post_func(itm.after, group_cache, request.options)) {
                 console.error(`ERROR: Post-condition total-check of '${itm.key}' failed on new value ${itm.after}. The tuning item is not added to the final result.`);
                 continue;
             }
 
             // Add to the items
+            console.log(itm);
             global_cache[itm.key] = itm.after;
             managed_items[itm.key] = itm;
         }
@@ -3639,7 +3700,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     mxid_max_age = realign_value(mxid_max_age, 250 * K10)[request.options.align_index]
     if (xid_max_age <= Math.floor(1.15 * managed_cache['autovacuum_freeze_max_age']) ||
         mxid_max_age <= Math.floor(1.05 * managed_cache['autovacuum_multixact_freeze_max_age'])) {
-        console.warning(
+        console.warn(
             `WARNING: The autovacuum freeze max age is already at the minimum value. Please check if you can have a 
             better SSD for data volume or apply sharding or partitioned to distribute data across servers or tables.`
         )
@@ -4287,8 +4348,8 @@ options = new PG_TUNE_USR_OPTIONS(
         offshore_replication: false,
     }
 )
-rq = new PG_TUNE_REQUEST({ options: options, include_comment: false, custom_style: null} )
 
+rq = new PG_TUNE_REQUEST({ options: options, include_comment: false, custom_style: null} )
 response = new PG_TUNE_RESPONSE()
 Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
 

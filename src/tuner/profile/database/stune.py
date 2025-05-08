@@ -171,7 +171,7 @@ def _conn_cache_query_timeout_tune(
         _item_tuning('cpu_tuple_cost', new_cpu_tuple_cost, scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
         _trigger_tuning({
             PG_SCOPE.QUERY_TUNING: ('parallel_tuple_cost',),
-        }, request, response)
+        }, request, response, _logs)
 
         # 7 seconds was added as the reservation for query plan before taking the lock
         _item_tuning('lock_timeout', base_timeout, scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
@@ -182,9 +182,9 @@ def _conn_cache_query_timeout_tune(
     after_default_statistics_target = managed_cache['default_statistics_target']
     default_statistics_target_hw_scope = managed_items['default_statistics_target'].hardware_scope[1]
     if request.options.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP):
-        after_default_statistics_target = 200 + 125 * max(default_statistics_target_hw_scope.value, 0)
+        after_default_statistics_target = 200 + 125 * max(default_statistics_target_hw_scope.num(), 0)
     else:
-        after_default_statistics_target = 200 + 100 * max(default_statistics_target_hw_scope.value - 1, 0)
+        after_default_statistics_target = 200 + 100 * max(default_statistics_target_hw_scope.num() - 1, 0)
     _item_tuning('default_statistics_target', after_default_statistics_target, scope=PG_SCOPE.QUERY_TUNING,
                  response=response, _log_pool=_logs)
 
@@ -198,11 +198,11 @@ def _conn_cache_query_timeout_tune(
     # IOPS between the data partition and WAL partition.
     # Now we can calculate the commit_delay (* K10 to convert to millisecond)
     commit_delay_hw_scope = managed_items['commit_delay'].hardware_scope[1]
-    after_commit_delay = int(K10 // 10 * 2.5 * (commit_delay_hw_scope.value + 1))
+    after_commit_delay = int(K10 // 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
     after_commit_delay = cap_value(after_commit_delay, 0, 2 * K10)
     _item_tuning('commit_delay', after_commit_delay, scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_logs)
-    _item_tuning('commit_siblings', 5 + 3 * managed_items['commit_siblings'].hardware_scope[1].value,
+    _item_tuning('commit_siblings', 5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
                  scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
     return _flush_log_pool(_logs)
 
@@ -528,11 +528,11 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # its average is 1.4K/s on weekday, but with 2.3M/h, its average WRITE time is 10.9h per day, which is 45.4% of
     # of the day, seems valid compared to 8 hours of working time in human life.
     _transaction_rate = request.options.num_write_transaction_per_hour_on_workload
-    _transaction_coef = request.options.workload_profile.value
+    _transaction_coef = request.options.workload_profile.num()
 
     # This variable is used so that even when we have a suboptimal performance, the estimation could still handle
     # in worst case scenario
-    _future_data_scaler = 2.5 + (0.5 * request.options.workload_profile.value)
+    _future_data_scaler = 2.5 + (0.5 * _transaction_coef)
 
     """
     Tuning ideology for extreme anti-wraparound vacuum: Whilst the internal algorithm can have some optimization or 

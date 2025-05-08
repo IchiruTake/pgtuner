@@ -20,15 +20,14 @@ _FILE_ROTATION_TIME_MS = 0.21 * 2  # 0.21 ms on average when direct bare-metal, 
 
 
 def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_segment_size: ByteSize | int,
-             wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int, wal_init_zero: bool | str = True) -> dict:
+             wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int) -> dict:
     # The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
     data_amount = int(wal_buffers * data_amount_ratio)
     num_wal_files_required = data_amount // wal_segment_size + 1
     rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS
-    if wal_init_zero is True or wal_init_zero == 'true' or wal_init_zero == '1' or wal_init_zero == 'on':
-        rotate_time_in_ms += wal_segment_size / wal_throughput * K10  # 1x of wal_buffers are synced
+    # We don't add WAL_fill_time here because it is usually managed by min_wal_size and its cost is negligible
     write_time_in_ms = (data_amount / Mi) / wal_throughput * K10
 
     # Calculate maximum how many delay time
@@ -54,7 +53,7 @@ def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_se
     }
 
 
-def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target,
+def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target: float,
                     shared_buffers: int, shared_buffers_ratio: float, effective_cache_size: int,
                     max_wal_size: int, data_disk_iops: int) -> dict:
     # Validate the maximum number of times to complete the checkpoint

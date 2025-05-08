@@ -121,10 +121,21 @@ class PG_BACKUP_TOOL(IntEnum):
 # ==============================================================================
 # This class determines the workload sizing
 # The PostgreSQL sizing profile determines the workload sizing.
-class PG_SIZING(IntEnum):
-    MINI = 0
-    MEDIUM = 1
-    LARGE = 2
-    MALL = 3
-    BIGT = 4
+SIZE_PROFILES = ('mini', 'medium', 'large', 'mall', 'bigt')
+class PG_SIZING(StrEnum):
+    MINI = SIZE_PROFILES[0]
+    MEDIUM = SIZE_PROFILES[1]
+    LARGE = SIZE_PROFILES[2]
+    MALL = SIZE_PROFILES[3]
+    BIGT = SIZE_PROFILES[4]
 
+    def num(self) -> int:
+        return SIZE_PROFILES.index(self.value)
+
+    def __lt__(self, other: 'PG_SIZING') -> bool:
+        return self.num() < other.num()
+
+    def __eq__(self, other: 'PG_SIZING') -> bool:
+        t1 = SIZE_PROFILES.index(self.value)
+        t2 = SIZE_PROFILES.index(other.value)
+        return self.num() == other.num()

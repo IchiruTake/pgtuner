@@ -58,7 +58,6 @@ def GeneralOptimize(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, target
     post_condition_check = not WEB_MODE
     _logger.warning(f'The post-condition check is enabled? {post_condition_check}')
     global_cache: dict[str, Any] = response.outcome_cache[target]
-    _dummy_fn = lambda *args, **kwargs: True
 
     for _, (scope, category, _) in tuning_items.items():
         group_cache: dict[str, Any] = {}
@@ -99,11 +98,12 @@ def GeneralOptimize(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, target
 
             # Perform post-condition check:
             if post_condition_check:
-                if not tune_entry.get('post-condition', _dummy_fn)(itm.after):
+                if 'post-condition' in tune_entry and not tune_entry['post-condition'](itm.after):
                     _warn_error_log.append(f"ERROR: Post-condition self-check of '{key}' failed on new value "
                                            f"{itm.after}. Skipping and not adding to the final result.")
                     continue
-                if not tune_entry.get('post-condition-group', _dummy_fn)(itm.after, group_cache, request.options):
+                if 'post-condition-group' in tune_entry and \
+                    not tune_entry['post-condition-group'](itm.after, group_cache, request.options):
                     _warn_error_log.append(f"ERROR: Post-condition group-check of '{key}' failed on new value "
                                            f"{itm.after}. Skipping and not adding to the final result.")
                     continue
@@ -111,7 +111,7 @@ def GeneralOptimize(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, target
             # We don't add failing validation result to the cache, which is used for instruction-based tuning
             # and result validation. We only add the successful result to the cache.
             group_cache[key] = itm.after
-            _post_condition_all_fn = tune_entry.get('post-condition-all', _dummy_fn)
+            _post_condition_all_fn = tune_entry.get('post-condition-all', None)
             group_itm.append((itm, _post_condition_all_fn))
             _info_log.append(f"Variable '{key}' has been tuned from {itm.before} to {itm.out_display()}.")
 
@@ -126,10 +126,11 @@ def GeneralOptimize(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, target
 
         # Perform global post-condition check
         for itm, post_func in group_itm:
-            if post_condition_check and not post_func(itm.after, global_cache, request.options):
-                _warn_error_log.append(f"ERROR: Post-condition total-check of '{itm.key}' failed on new value "
-                                       f"{itm.after}. The tuning item is not added to the final result.")
-                continue
+            if post_condition_check:
+                if post_func is not None and not post_func(itm.after, group_cache, request.options):
+                    _warn_error_log.append(f"ERROR: Post-condition total-check of '{itm.key}' failed on new value "
+                                           f"{itm.after}. The tuning item is not added to the final result.")
+                    continue
 
             # Since this item has passed all the checks, we add it to the items
             global_cache[itm.key] = itm.after

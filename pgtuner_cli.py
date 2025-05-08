@@ -22,7 +22,7 @@ from datetime import datetime
 
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
-from src.tuner.data.workload import PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
+from src.tuner.data.workload import PG_SIZING, PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.utils.static import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR, K10, Mi, Ki, \
     BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.scope import PGTUNER_SCOPE
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         enable_sysctl_general_tuning=False, enable_sysctl_correction_tuning=False,
         enable_database_general_tuning=True, enable_database_correction_tuning=True,
         ## User-Tuning Profiles
-        workload_profile=2, pgsql_version=17,
+        workload_profile=PG_SIZING.LARGE, pgsql_version=17,
         database_size_in_gib=0, # [0, 1000]. Default is 0 GiB for maximum of 60% of data disk
         num_write_transaction_per_hour_on_workload=50 * K10, # [K10, 20 * M10]. Default is 50 * K10 (50K).
         align_index=1, # [0, 1]. Default is 1. Choose the higher number during alignment
