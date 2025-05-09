@@ -33,7 +33,7 @@ _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
 _CHANGE_CACHE = set()  # The collection of tuning items
 
 
-def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE,
+def _TriggerAutoTune(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE,
                     _log_pool: list[str] | None) -> None:
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     change_list = []
@@ -55,7 +55,7 @@ def _trigger_tuning(keys: dict[PG_SCOPE, tuple[str, ...]], request: PG_TUNE_REQU
     return None
 
 
-def _item_tuning(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPONSE,
+def _ApplyItmTune(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPONSE,
                  _log_pool: list[str] | None, suffix_text: str = '') -> None:
     _CHANGE_CACHE.add(key)
     items = response.get_managed_items(_TARGET_SCOPE, scope=scope)
@@ -77,7 +77,7 @@ def _item_tuning(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPON
     return None
 
 
-def _flush_log_pool(log_pool: list[str]) -> None:
+def _FlushLog(log_pool: list[str]) -> None:
     _info_log_pool = []  # This is used for the info log
     _flush_info = lambda: _logger.info('\n'.join(_info_log_pool)) if _info_log_pool else None
 
@@ -116,20 +116,21 @@ def _conn_cache_query_timeout_tune(
     ]
     _kwargs = request.options.tuning_kwargs
     managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    workload_type = request.options.workload_type
 
     # ----------------------------------------------------------------------------------------------
     # Optimize the max_connections
     if _kwargs.user_max_connections > 0:
         _logs.append('The user has overridden the max_connections -> Skip the maximum tuning')
-    elif request.options.workload_type in (PG_WORKLOAD.OLAP,):
+    elif workload_type in (PG_WORKLOAD.OLAP,):
         # Find the PG_SCOPE.CONNECTION -> max_connections
         reserved_connections = managed_cache['reserved_connections'] + managed_cache['superuser_reserved_connections']
         new_result = cap_value(managed_cache['max_connections'] - reserved_connections,
                                max(_MIN_USER_CONN_FOR_ANALYTICS, reserved_connections),
                                max(_MAX_USER_CONN_FOR_ANALYTICS, reserved_connections))
-        _item_tuning('max_connections', new_result + reserved_connections, scope=PG_SCOPE.CONNECTION,
+        _ApplyItmTune('max_connections', new_result + reserved_connections, scope=PG_SCOPE.CONNECTION,
                      response=response, _log_pool=_logs)
-        _trigger_tuning({
+        _TriggerAutoTune({
             PG_SCOPE.MEMORY: ('temp_buffers', 'work_mem'),
             PG_SCOPE.QUERY_TUNING: ('effective_cache_size',),
         }, request, response, _logs)
@@ -150,7 +151,7 @@ def _conn_cache_query_timeout_tune(
         _tmp_user_conn = (user_connections - _MAX_USER_CONN_FOR_ANALYTICS)
         after_idle_in_transaction_session_timeout = \
             managed_cache['idle_in_transaction_session_timeout'] - 30 * SECOND * (_tmp_user_conn // 25)
-        _item_tuning('idle_in_transaction_session_timeout', max(31, after_idle_in_transaction_session_timeout),
+        _ApplyItmTune('idle_in_transaction_session_timeout', max(31, after_idle_in_transaction_session_timeout),
                      scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
 
     # ----------------------------------------------------------------------------------------------
@@ -168,14 +169,14 @@ def _conn_cache_query_timeout_tune(
     }
     if request.options.workload_type in _workload_translations:
         new_cpu_tuple_cost, base_timeout = _workload_translations[request.options.workload_type]
-        _item_tuning('cpu_tuple_cost', new_cpu_tuple_cost, scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
-        _trigger_tuning({
+        _ApplyItmTune('cpu_tuple_cost', new_cpu_tuple_cost, scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
+        _TriggerAutoTune({
             PG_SCOPE.QUERY_TUNING: ('parallel_tuple_cost',),
         }, request, response, _logs)
 
         # 7 seconds was added as the reservation for query plan before taking the lock
-        _item_tuning('lock_timeout', base_timeout, scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
-        _item_tuning('statement_timeout', base_timeout + 7, scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
+        _ApplyItmTune('lock_timeout', base_timeout, scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
+        _ApplyItmTune('statement_timeout', base_timeout + 7, scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
 
     # Tune the default_statistics_target
     managed_items = response.get_managed_items(_TARGET_SCOPE, scope=PG_SCOPE.QUERY_TUNING)
@@ -185,7 +186,7 @@ def _conn_cache_query_timeout_tune(
         after_default_statistics_target = 200 + 125 * max(default_statistics_target_hw_scope.num(), 0)
     else:
         after_default_statistics_target = 200 + 100 * max(default_statistics_target_hw_scope.num() - 1, 0)
-    _item_tuning('default_statistics_target', after_default_statistics_target, scope=PG_SCOPE.QUERY_TUNING,
+    _ApplyItmTune('default_statistics_target', after_default_statistics_target, scope=PG_SCOPE.QUERY_TUNING,
                  response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -200,11 +201,11 @@ def _conn_cache_query_timeout_tune(
     commit_delay_hw_scope = managed_items['commit_delay'].hardware_scope[1]
     after_commit_delay = int(K10 // 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
     after_commit_delay = cap_value(after_commit_delay, 0, 2 * K10)
-    _item_tuning('commit_delay', after_commit_delay, scope=PG_SCOPE.QUERY_TUNING, response=response,
+    _ApplyItmTune('commit_delay', after_commit_delay, scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_logs)
-    _item_tuning('commit_siblings', 5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
+    _ApplyItmTune('commit_siblings', 5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
                  scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
-    return _flush_log_pool(_logs)
+    return _FlushLog(_logs)
 
 
 # =============================================================================
@@ -242,7 +243,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         after_random_page_cost = 1.05
     else:
         after_random_page_cost = 1.01
-    _item_tuning('random_page_cost', after_random_page_cost, scope=PG_SCOPE.QUERY_TUNING, response=response,
+    _ApplyItmTune('random_page_cost', after_random_page_cost, scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_logs)
 
     # ----------------------------------------------------------------------------------------------
@@ -269,9 +270,9 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         after_effective_io_concurrency = 32
     after_effective_io_concurrency = cap_value(after_effective_io_concurrency, 16, K10)
     after_maintenance_io_concurrency = cap_value(after_effective_io_concurrency // 2, 16, K10)
-    _item_tuning('effective_io_concurrency', after_effective_io_concurrency, scope=PG_SCOPE.OTHERS,
+    _ApplyItmTune('effective_io_concurrency', after_effective_io_concurrency, scope=PG_SCOPE.OTHERS,
                  response=response, _log_pool=_logs)
-    _item_tuning('maintenance_io_concurrency', after_maintenance_io_concurrency, scope=PG_SCOPE.OTHERS,
+    _ApplyItmTune('maintenance_io_concurrency', after_maintenance_io_concurrency, scope=PG_SCOPE.OTHERS,
                  response=response, _log_pool=_logs)
 
     # ----------------------------------------------------------------------------------------------
@@ -323,9 +324,9 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         elif PG_DISK_SIZING.match_disk_series_in_range(data_iops, RANDOM_IOPS, 'ssd', 'nvme'):
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
-        _item_tuning('bgwriter_flush_after', after_bgwriter_flush_after, scope=PG_SCOPE.OTHERS, 
+        _ApplyItmTune('bgwriter_flush_after', after_bgwriter_flush_after, scope=PG_SCOPE.OTHERS, 
                      response=response, _log_pool=_logs)
-        _item_tuning('checkpoint_flush_after', after_checkpoint_flush_after,
+        _ApplyItmTune('checkpoint_flush_after', after_checkpoint_flush_after,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
 
         wal_tput = request.options.wal_spec.perf()[0]
@@ -334,26 +335,26 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
             after_wal_writer_flush_after = 2 * Mi
         if request.options.workload_profile >= PG_SIZING.LARGE:
             after_wal_writer_flush_after *= 2
-        _item_tuning('wal_writer_flush_after', after_wal_writer_flush_after,
+        _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
 
         after_backend_flush_after = min(managed_cache['checkpoint_flush_after'], managed_cache['bgwriter_flush_after'])
-        _item_tuning('backend_flush_after', after_backend_flush_after, scope=PG_SCOPE.OTHERS, 
+        _ApplyItmTune('backend_flush_after', after_backend_flush_after, scope=PG_SCOPE.OTHERS, 
                      response=response, _log_pool=_logs)
     else:
         # Default by Windows --> See line 152 at src/include/pg_config_manual.h;
-        _item_tuning('checkpoint_flush_after', 0, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+        _ApplyItmTune('checkpoint_flush_after', 0, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                      response=response, _log_pool=_logs)
-        _item_tuning('bgwriter_flush_after', 0, scope=PG_SCOPE.OTHERS,
+        _ApplyItmTune('bgwriter_flush_after', 0, scope=PG_SCOPE.OTHERS,
                      response=response, _log_pool=_logs)
-        _item_tuning('backend_flush_after', 0, scope=PG_SCOPE.OTHERS,
+        _ApplyItmTune('backend_flush_after', 0, scope=PG_SCOPE.OTHERS,
                      response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
     # Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
     # --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
     after_bgwriter_delay = floor(max(100, managed_cache['bgwriter_delay'] - 8 * data_iops // int(1 * K10)))
-    _item_tuning('bgwriter_delay', after_bgwriter_delay, scope=PG_SCOPE.OTHERS, 
+    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, scope=PG_SCOPE.OTHERS, 
                  response=response, _log_pool=_logs)
 
     # Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
@@ -368,7 +369,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
             after_bgwriter_lru_maxpages += 100 + 150
         elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'nvme'):
             after_bgwriter_lru_maxpages += 100 + 150 + 200
-        _item_tuning(key='bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
+        _ApplyItmTune(key='bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
                      response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -468,11 +469,11 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         after_autovacuum_vacuum_cost_delay = 5
         after_vacuum_cost_page_dirty = 10
 
-    _item_tuning('vacuum_cost_page_miss', after_vacuum_cost_page_miss, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('vacuum_cost_page_miss', after_vacuum_cost_page_miss, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
-    _item_tuning('autovacuum_vacuum_cost_delay', after_autovacuum_vacuum_cost_delay, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('autovacuum_vacuum_cost_delay', after_autovacuum_vacuum_cost_delay, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
-    _item_tuning('vacuum_cost_page_dirty', after_vacuum_cost_page_dirty, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('vacuum_cost_page_dirty', after_vacuum_cost_page_dirty, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
 
     # Now we tune the vacuum_cost_limit. Don;t worry about this decay, it is just the estimation
@@ -513,7 +514,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         after_vacuum_cost_limit,
         after_vacuum_cost_page_dirty + after_vacuum_cost_page_miss
     )[request.options.align_index]
-    _item_tuning('vacuum_cost_limit', after_vacuum_cost_limit, scope=PG_SCOPE.MAINTENANCE, response=response,
+    _ApplyItmTune('vacuum_cost_limit', after_vacuum_cost_limit, scope=PG_SCOPE.MAINTENANCE, response=response,
                  _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -636,10 +637,10 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     mxid_failsafe_age = max(1_900_000_000 - _transaction_rate * _decre_mxid, 1_400_000_000)
     mxid_failsafe_age = realign_value(mxid_failsafe_age, 500 * K10)[request.options.align_index]
     if 'vacuum_failsafe_age' in managed_cache:  # Supported since PostgreSQL v14+
-        _item_tuning('vacuum_failsafe_age', xid_failsafe_age, scope=PG_SCOPE.MAINTENANCE,
+        _ApplyItmTune('vacuum_failsafe_age', xid_failsafe_age, scope=PG_SCOPE.MAINTENANCE,
                      response=response, _log_pool=_logs)
     if 'vacuum_multixact_failsafe_age' in managed_cache:  # Supported since PostgreSQL v14+
-        _item_tuning('vacuum_multixact_failsafe_age', mxid_failsafe_age, scope=PG_SCOPE.MAINTENANCE,
+        _ApplyItmTune('vacuum_multixact_failsafe_age', mxid_failsafe_age, scope=PG_SCOPE.MAINTENANCE,
                      response=response, _log_pool=_logs)
 
     _decre_max_xid = max(1.25 * _worst_data_vacuum_time,
@@ -664,11 +665,11 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
             f'better SSD for data volume or apply sharding or partitioned to distribute data across servers or tables.'
         )
 
-    _item_tuning('autovacuum_freeze_max_age', xid_max_age, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('autovacuum_freeze_max_age', xid_max_age, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
-    _item_tuning('autovacuum_multixact_freeze_max_age', mxid_max_age, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('autovacuum_multixact_freeze_max_age', mxid_max_age, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
-    _trigger_tuning({
+    _TriggerAutoTune({
         PG_SCOPE.MAINTENANCE: ('vacuum_freeze_table_age', 'vacuum_multixact_freeze_table_age',)
     }, request, response, _logs)
 
@@ -680,24 +681,25 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     if the row is modified soon thereafter (causing it to acquire a new XID). So the setting should be large enough 
     that rows are not frozen until they are unlikely to change anymore. We silently capped the value to be in 
     between of 20M and 15% of the maximum value.
+
+    For the MXID min_age, this support the row locking which is rarely met in the real-world (unless concurrent
+    analytics/warehouse workload). But usually only one instance of WRITE connection is done gracefully (except
+    concurrent Kafka stream, etc are writing during incident). Usually, unless you need the row visibility on
+    long time for transaction, this could be low (5M of xmin/xmax vs 50M of xid by default).
+
     """
     xid_min_age = cap_value(_transaction_rate * 24, 20 * M10,
                             managed_cache['autovacuum_freeze_max_age'] * 0.15)
     xid_min_age = realign_value(xid_min_age, 250 * K10)[request.options.align_index]
-    _item_tuning('vacuum_freeze_min_age', xid_min_age, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('vacuum_freeze_min_age', xid_min_age, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
-
-    # For the MXID min_age, this support the row locking which is rarely met in the real-world (unless concurrent
-    # analytics/warehouse workload). But usually only one instance of WRITE connection is done gracefully (except
-    # concurrent Kafka stream, etc are writing during incident). Usually, unless you need the row visibility on
-    # long time for transaction, this could be low (5M of xmin/xmax vs 50M of xid by default).
     multixact_min_age = cap_value(_transaction_rate * 18, 2 * M10,
                                   managed_cache['autovacuum_multixact_freeze_max_age'] * 0.15)
     multixact_min_age = realign_value(multixact_min_age, 250 * K10)[request.options.align_index]
-    _item_tuning('vacuum_multixact_freeze_min_age', multixact_min_age, scope=PG_SCOPE.MAINTENANCE,
+    _ApplyItmTune('vacuum_multixact_freeze_min_age', multixact_min_age, scope=PG_SCOPE.MAINTENANCE,
                  response=response, _log_pool=_logs)
 
-    return _flush_log_pool(_logs)
+    return _FlushLog(_logs)
 
 
 # =============================================================================
@@ -733,10 +735,10 @@ def _wal_integrity_buffer_size_tune(
     elif replication_level <= PG_BACKUP_TOOL.PG_DUMP and num_replicas == 0:
         # 'and' condition is to ensure the recovery
         after_wal_level = 'minimal'
-    _item_tuning('wal_level', after_wal_level, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _ApplyItmTune('wal_level', after_wal_level, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
     # Disable since it is not used
-    _item_tuning(key='log_replication_commands', after='on' if after_wal_level != 'minimal' else 'off',
+    _ApplyItmTune(key='log_replication_commands', after='on' if after_wal_level != 'minimal' else 'off',
                  scope=PG_SCOPE.LOGGING, response=response, _log_pool=_logs)
 
     # Tune the max_wal_senders, max_replication_slots, and wal_sender_timeout
@@ -751,21 +753,21 @@ def _wal_integrity_buffer_size_tune(
         elif num_replicas >= 16:
             reserved_wal_senders = _DEFAULT_WAL_SENDERS[2]
     after_max_wal_senders = reserved_wal_senders + (num_replicas if after_wal_level != 'minimal' else 0)
-    _item_tuning('max_wal_senders', after_max_wal_senders, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _ApplyItmTune('max_wal_senders', after_max_wal_senders, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
-    _item_tuning('max_replication_slots', after_max_wal_senders, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _ApplyItmTune('max_replication_slots', after_max_wal_senders, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
 
     # Tune the wal_sender_timeout
     if request.options.offshore_replication and after_wal_level != 'minimal':
         wal_sender_timeout = 'wal_sender_timeout'
         after_wal_sender_timeout = max(5 * MINUTE, ceil(MINUTE * (2 + (num_replicas / 4))))
-        _item_tuning(key=wal_sender_timeout, after=after_wal_sender_timeout,
+        _ApplyItmTune(key=wal_sender_timeout, after=after_wal_sender_timeout,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
 
     # Tune the logical_decoding_work_mem (Scale back to default)
     if after_wal_level != 'logical':
-        _item_tuning(key='logical_decoding_work_mem', after=64 * Mi, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+        _ApplyItmTune(key='logical_decoding_work_mem', after=64 * Mi, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                      response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -790,14 +792,14 @@ def _wal_integrity_buffer_size_tune(
         _logs.append(f'WARNING: User allows the lost transaction during crash but with {after_wal_level} '
                      f'wal_level at profile {request.options.opt_transaction_lost} but data loss could be there. '
                      f'Only enable this during testing only. ')
-        _item_tuning(synchronous_commit, after_synchronous_commit,
+        _ApplyItmTune(synchronous_commit, after_synchronous_commit,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
         if request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.OPTIMUS_PRIME:
-            _item_tuning('full_page_writes', 'off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+            _ApplyItmTune('full_page_writes', 'off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                          response=response, _log_pool=_logs)
             if (request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.PRIMORDIAL and
                     request.options.operating_system == 'linux'):
-                _item_tuning('fsync', 'off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response,
+                _ApplyItmTune('fsync', 'off', scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response,
                              _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -827,7 +829,7 @@ def _wal_integrity_buffer_size_tune(
         64 * Gi
     )
     after_max_wal_size = realign_value(after_max_wal_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
-    _item_tuning('max_wal_size', after_max_wal_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+    _ApplyItmTune('max_wal_size', after_max_wal_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
     assert managed_cache['max_wal_size'] <= int(_wal_disk_size), 'The max_wal_size is greater than the WAL disk size'
 
@@ -842,7 +844,7 @@ def _wal_integrity_buffer_size_tune(
         int(1.05 * after_max_wal_size)
     )
     after_min_wal_size = realign_value(after_min_wal_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
-    _item_tuning('min_wal_size', after_min_wal_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+    _ApplyItmTune('min_wal_size', after_min_wal_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
 
     # 95% here to ensure you don't make mistake from your tuning guideline
@@ -864,7 +866,7 @@ def _wal_integrity_buffer_size_tune(
         64 * Gi
     )
     after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
-    _item_tuning('wal_keep_size', after_wal_keep_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+    _ApplyItmTune('wal_keep_size', after_wal_keep_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
     assert managed_cache['wal_keep_size'] <= int(_wal_disk_size * 0.50), \
         'The wal_keep_size is greater than half of the WAL disk size'
@@ -885,7 +887,7 @@ def _wal_integrity_buffer_size_tune(
                   30 * MINUTE, 2 * HOUR),
         MINUTE // 4
     )[request.options.align_index]
-    _item_tuning('archive_timeout', after_archive_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+    _ApplyItmTune('archive_timeout', after_archive_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -898,7 +900,7 @@ def _wal_integrity_buffer_size_tune(
     # Apply tune the wal_writer_delay here regardless of the synchronous_commit so that we can ensure
     # no mixed of lossy and safe transactions
     after_wal_writer_delay = int(request.options.max_time_transaction_loss_allow_in_millisecond / 3.25)
-    _item_tuning('wal_writer_delay', after_wal_writer_delay, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _ApplyItmTune('wal_writer_delay', after_wal_writer_delay, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
@@ -938,30 +940,24 @@ def _wal_integrity_buffer_size_tune(
     while transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
                                             after_wal_writer_delay, wal_tput)['total_time']:
         current_wal_buffers -= decay_rate
-    _item_tuning('wal_buffers', current_wal_buffers, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+    _ApplyItmTune('wal_buffers', current_wal_buffers, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
     wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
                                after_wal_writer_delay, wal_tput)['msg']
     _logs.append(f'The wal_buffers is set to {bytesize_to_hr(current_wal_buffers)} -> {wal_time_report}')
-    return _flush_log_pool(_logs)
+    return _FlushLog(_logs)
 
 
 # -----------------------------------------------------------------------------
 # Tune the memory usage based on specific workload
 def _get_wrk_mem_func():
-    def _func_v1(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
-        return response.report(options, use_full_connection=True, ignore_report=True)[1]
-
-    def _func_v2(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
-        return response.report(options, use_full_connection=False, ignore_report=True)[1]
-
-    def _func_v3(options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE):
-        return (_func_v1(options, response) + _func_v2(options, response)) // 2
-
+    _f1 = lambda options, response: response.report(options, use_full_connection=True, ignore_report=True)[1]
+    _f2 = lambda options, response: response.report(options, use_full_connection=False, ignore_report=True)[1]
+    _f3 = lambda options, response: (_f1(options, response) + _f2(options, response)) // 2
     return {
-        PG_PROFILE_OPTMODE.SPIDEY: _func_v1,
-        PG_PROFILE_OPTMODE.OPTIMUS_PRIME: _func_v3,
-        PG_PROFILE_OPTMODE.PRIMORDIAL: _func_v2,
+        PG_PROFILE_OPTMODE.SPIDEY: _f1,
+        PG_PROFILE_OPTMODE.OPTIMUS_PRIME: _f3,
+        PG_PROFILE_OPTMODE.PRIMORDIAL: _f2,
     }
 
 
@@ -981,7 +977,7 @@ def _hash_mem_adjust(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
         after_hash_mem_multiplier = min(2.0 + 0.125 * (current_work_mem // (40 * Mi)), 3.0)
     elif request.options.workload_type in (PG_WORKLOAD.OLAP,):
         after_hash_mem_multiplier = min(2.0 + 0.150 * (current_work_mem // (40 * Mi)), 3.0)
-    _item_tuning('hash_mem_multiplier', after_hash_mem_multiplier, scope=PG_SCOPE.MEMORY, 
+    _ApplyItmTune('hash_mem_multiplier', after_hash_mem_multiplier, scope=PG_SCOPE.MEMORY, 
                  response=response, _log_pool=None,)
     return None
 
@@ -1007,7 +1003,7 @@ def _wrk_mem_tune_oneshot(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, 
     if not sbuf_ok and not wbuf_ok:
         _log_pool.append(f'WARNING: The shared_buffers and work_mem are not increased as the condition is met '
                          f'or being unchanged, or converged -> Stop ...')
-    _trigger_tuning(tuning_items, request, response, _log_pool=None)
+    _TriggerAutoTune(tuning_items, request, response, _log_pool=None)
     _hash_mem_adjust(request, response)
     return sbuf_ok, wbuf_ok
 
@@ -1026,7 +1022,8 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     _logs = [
         '\n ===== Memory Usage Tuning ====='
         'Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: '
-        'shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size'
+        'shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size, '
+        'maintenance_work_mem'
     ]
     _kwargs = request.options.tuning_kwargs
     ram = request.options.usable_ram
@@ -1038,7 +1035,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     keys = {
         PG_SCOPE.MEMORY: ('shared_buffers', 'temp_buffers', 'work_mem'),
         PG_SCOPE.QUERY_TUNING: ('effective_cache_size',),
-        PG_SCOPE.MAINTENANCE: ('vacuum_buffer_usage_limit',),
+        PG_SCOPE.MAINTENANCE: ('maintenance_work_mem', 'vacuum_buffer_usage_limit'),
     }
 
     def _show_tuning_result(first_text: str):
@@ -1174,11 +1171,11 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
             int(int(log2(_kwargs.wal_segment_size // BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
             min_ckpt_time / managed_cache['checkpoint_completion_target']), page_size=MINUTE // 2
     )[request.options.align_index]
-    _item_tuning('checkpoint_timeout', after_checkpoint_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
-    _item_tuning('checkpoint_warning', after_checkpoint_timeout // 10, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
+    _ApplyItmTune('checkpoint_warning', after_checkpoint_timeout // 10, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
-    return _flush_log_pool(_logs)
+    return _FlushLog(_logs)
 
 
 # =============================================================================
@@ -1198,29 +1195,29 @@ def _logger_tune(
 
     # Configure the track_activity_query_size, log_parameter_max_length, log_parameter_max_error_length
     log_length = realign_value(_kwargs.max_query_length_in_bytes, 64)[request.options.align_index]
-    _item_tuning(key='track_activity_query_size', after=log_length, scope=PG_SCOPE.QUERY_TUNING, response=response,
+    _ApplyItmTune(key='track_activity_query_size', after=log_length, scope=PG_SCOPE.QUERY_TUNING, response=response,
                  _log_pool=_logs)
-    _item_tuning(key='log_parameter_max_length', after=log_length, scope=PG_SCOPE.LOGGING, response=response,
+    _ApplyItmTune(key='log_parameter_max_length', after=log_length, scope=PG_SCOPE.LOGGING, response=response,
                  _log_pool=_logs)
-    _item_tuning(key='log_parameter_max_length_on_error', after=log_length, scope=PG_SCOPE.LOGGING, response=response,
+    _ApplyItmTune(key='log_parameter_max_length_on_error', after=log_length, scope=PG_SCOPE.LOGGING, response=response,
                  _log_pool=_logs)
 
     # Configure the log_min_duration_statement, auto_explain.log_min_duration
     log_min_duration = realign_value(_kwargs.max_runtime_ms_to_log_slow_query, 20)[request.options.align_index]
-    _item_tuning(key='log_min_duration_statement', after=log_min_duration, scope=PG_SCOPE.LOGGING, response=response,
+    _ApplyItmTune(key='log_min_duration_statement', after=log_min_duration, scope=PG_SCOPE.LOGGING, response=response,
                  _log_pool=_logs)
     explain_min_duration = int(log_min_duration * _kwargs.max_runtime_ratio_to_explain_slow_query)
     explain_min_duration = realign_value(explain_min_duration, 20)[request.options.align_index]
-    _item_tuning(key='auto_explain.log_min_duration', after=explain_min_duration, scope=PG_SCOPE.EXTRA,
+    _ApplyItmTune(key='auto_explain.log_min_duration', after=explain_min_duration, scope=PG_SCOPE.EXTRA,
                  response=response, _log_pool=_logs)
 
     # Tune the IO timing
-    # _item_tuning(key='track_counts', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
-    # _item_tuning(key='track_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
+    # _ApplyItmTune(key='track_counts', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response, _log_pool=_logs)
+    # _ApplyItmTune(key='track_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
     #              _log_pool=_logs)
-    # _item_tuning(key='track_wal_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
+    # _ApplyItmTune(key='track_wal_io_timing', after='on', scope=PG_SCOPE.QUERY_TUNING, response=response,
     #              _log_pool=_logs)
-    # _item_tuning(key='auto_explain.log_timing', after='on', scope=PG_SCOPE.EXTRA, response=response,
+    # _ApplyItmTune(key='auto_explain.log_timing', after='on', scope=PG_SCOPE.EXTRA, response=response,
     #              _log_pool=_logs)
     return None
 

@@ -122,7 +122,7 @@ console.log(`JavaScript version: ${javascript_version}`); // Expected ES6 or hig
  * @returns {string} - A human-readable string representation of the byte size.
  */
 const bytesize_to_hr = (bytesize, decimal = false, separator = ' ') => {
-    if (typeof bytesize === 'number') {
+    if (typeof bytesize !== 'number') {
         bytesize = Math.floor(bytesize);
     }
     if (bytesize === 0) {
@@ -269,15 +269,23 @@ class RecursionError extends Error {
     }
 }
 
-// Cached computation of maximum items allowed at a given depth.
-const _max_num_items_in_depth_cache = new Map();
-function _max_num_items_in_depth(depth) {
-    if (_max_num_items_in_depth_cache.has(depth)) {
-        return _max_num_items_in_depth_cache.get(depth);
+function checkVariableType(variable) {
+    if (Array.isArray(variable)) {
+      return "list";
+    } else if (variable instanceof Map) {
+      return "map";
+    } else if (typeof variable === 'object' &&
+      variable !== null &&
+      variable.constructor === Object) {
+      return "hashmap";
+    } else {
+      return "other";
     }
-    const value = Math.max(_min_num_base_item_in_layer, Math.floor(_max_num_base_item_in_layer / (4 ** depth)));
-    _max_num_items_in_depth_cache.set(depth, value);
-    return value;
+  }
+  
+
+function _max_num_items_in_depth(depth = Math.floor(_max_depth / 2 + 1)) {
+    return Math.max(_min_num_base_item_in_layer, Math.floor(_max_num_base_item_in_layer / (4 ** depth)));
 }
 
 // Compute depth count: for objects and arrays.
@@ -1287,10 +1295,13 @@ class PG_TUNE_USR_OPTIONS {
         }
 
         // Check minimal usable RAM.
+        this.usable_ram = this.total_ram - this.base_kernel_memory_usage - this.base_monitoring_memory_usage
         if (this.usable_ram < 4 * Gi) {
             const _sign = (this.usable_ram >= 0) ? '+' : '-';
             const _msg = `The usable RAM ${_sign}${bytesize_to_hr(this.usable_ram, false, ' ')} is less than 4 GiB. Tuning may not be accurate.`;
             console.warn(_msg);
+        } else {
+            console.debug(`The usable RAM is ${bytesize_to_hr(this.usable_ram)}`);
         }
 
         // Adjust database size based on data volume.
@@ -1312,8 +1323,6 @@ class PG_TUNE_USR_OPTIONS {
             'disk': this.workload_profile, 
             'overall': this.workload_profile
         };
-        this.usable_ram = this.total_ram - this.base_kernel_memory_usage - this.base_monitoring_memory_usage
-
     }
 
     /**
@@ -1496,7 +1505,7 @@ function _CalcSharedBuffers(options) {
         console.warn('No benefit is found on tuning this variable');
     }
     shared_buffers = realign_value(Math.ceil(shared_buffers), DB_PAGE_SIZE)[options.align_index];
-    console.debug(`shared_buffers: ${Math.floor(shared_buffers / Mi)}MiB`);
+    console.debug(`shared_buffers: ${bytesize_to_hr(shared_buffers)}`);
     return shared_buffers;
 }
 
@@ -1523,7 +1532,7 @@ function _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response
         PostgreSQL don't kill due to OOM
     - https://techcommunity.microsoft.com/blog/adforpostgresql/optimizing-query-performance-with-work-mem/4196408
     */
-    let overhead = _GetMemConnInTotal(options, response, false, true) * options.tuning_kwargs.single_memory_connection_overhead;
+    let overhead = _GetMemConnInTotal(options, response, false, true) * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio;
     let pgmem_available = options.usable_ram - group_cache['shared_buffers'] - overhead;
     if ('wal_buffers' in global_cache) {   // I don't know if this make significant impact?
         pgmem_available -= global_cache['wal_buffers'];
@@ -1531,7 +1540,6 @@ function _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response
     let max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio;
     let active_connections = _GetNumConnections(options, response, false, false);
     let total_buffers = Math.floor(pgmem_available * max_work_buffer_ratio / active_connections);
-    
     // Minimum to 1 MiB and maximum is varied between workloads
     let max_cap = 1.5 * Gi;
     if (options.workload_type === PG_WORKLOAD.TSR_IOT) {
@@ -1569,8 +1577,7 @@ function _GetMaxConns(options, group_cache, min_user_conns, max_user_conns) {
         return allowed_connections + total_reserved_connections;
     }
     let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;
-    console.debug(`The max_connections variable is determined by the number of logical CPU count 
-        with the scale factor of ${__SCALE_FACTOR_CPU_TO_CONNECTION.toFixed(1)}x.`);
+    console.debug(`The max_connections variable is determined by the number of logical CPU count with the scale factor of ${_upscale.toFixed(1)}x.`);
     let _minimum = Math.max(min_user_conns, total_reserved_connections);
     let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections;
     console.debug(`max_connections: ${max_connections}`);
@@ -1703,8 +1710,8 @@ _DB_VACUUM_PROFILE = {
         'partial_func': (value) => `${Math.floor(value / SECOND)}s`,
     },
     'maintenance_work_mem': {
-        'tune_op': (group_cache, global_cache, options, response) =>
-            _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response)[1],
+        'tune_op': (group_cache, global_cache, options, response) => realign_value(
+            cap_value(Math.floor((options.usable_ram - global_cache['shared_buffers']) / 10), 64 * Mi, 8 * Gi), Ki)[options.align_index],
         'default': 64 * Mi,
         'post-condition-group': (value, cache, options) =>
             value * cache['autovacuum_max_workers'] < Math.floor(options.usable_ram / 2),
@@ -2155,16 +2162,16 @@ console.debug(`DB13_CONFIG_PROFILE: ${JSON.stringify(DB13_CONFIG_PROFILE)}`);
 
 // Timeout profile
 const _DB14_TIMEOUT_PROFILE = {
-    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
+    'idle_session_timeout': { "default": 0, "partial_func": value => `${value}s`, },
 };
 // Query profile
 const _DB14_QUERY_PROFILE = {
-    "track_wal_io_timing": { "default": 'on', },
+    'track_wal_io_timing': { "default": 'on', },
 };
 // Vacuum profile
 const _DB14_VACUUM_PROFILE = {
-    "vacuum_failsafe_age": { "default": 1600000000, },
-    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
+    'vacuum_failsafe_age': { "default": 1600000000, },
+    'vacuum_multixact_failsafe_age': { "default": 1600000000, }
 };
 
 // Merge mapping: use tuples as arrays
@@ -2198,16 +2205,16 @@ const _DB15_LOG_PROFILE = {
 };
 // Timeout profile
 const _DB15_TIMEOUT_PROFILE = {
-    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
+    'idle_session_timeout': { "default": 0, "partial_func": value => `${value}s`, },
 };
 // Query profile
 const _DB15_QUERY_PROFILE = {
-    "track_wal_io_timing": { "default": 'on', },
+    'track_wal_io_timing': { 'default': 'on', },
 };
 // Vacuum profile
 const _DB15_VACUUM_PROFILE = {
-    "vacuum_failsafe_age": { "default": 1600000000, },
-    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
+    'vacuum_failsafe_age': { 'default': 1600000000, },
+    'vacuum_multixact_failsafe_age': { 'default': 1600000000, }
 };
 
 // Merge mapping: use tuples as arrays
@@ -2241,10 +2248,9 @@ const _DB16_LOG_PROFILE = {
 };
 // Vacuum profile
 const _DB16_VACUUM_PROFILE = {
-	"vacuum_buffer_usage_limit": {
+	'vacuum_buffer_usage_limit': {
 		"tune_op": (group_cache, global_cache, options, response) =>
-			realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi),
-			DB_PAGE_SIZE)[options.align_index],
+			realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
 		"default": 2 * Mi,
 		"hardware_scope": "mem",
 		"partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -2303,8 +2309,7 @@ const _DB17_LOG_PROFILE = {
 const _DB17_VACUUM_PROFILE = {
     "vacuum_buffer_usage_limit": {
         "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi),
-                DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         "default": 2 * Mi,
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -2387,7 +2392,7 @@ function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_d
         'rotate_time': rotate_time_in_ms,
         'write_time': write_time_in_ms,
         'delay_time': delay_time,
-        'delay_time': total_time,
+        'total_time': total_time,
         'msg': msg
     };
 }
@@ -2874,7 +2879,6 @@ As mentioned, consult with your developer, DBA, and system administrator to ensu
 best performance and reliability of the database system.
 # ===============================================================      
         `;
-
     }
 
     calc_worker_in_parallel(options, num_active_user_conns) {
@@ -2934,14 +2938,15 @@ function _MakeItm(key, before, after, trigger, tuneEntry, hardwareScope) {
         after: after,
         trigger: trigger,
         hardware_scope: hardwareScope,
-        comment: tuneEntry.comment || null,
-        style: tuneEntry.style || null,
-        partial_func: tuneEntry.partial_func || null
+        comment: tuneEntry.hasOwnProperty('comment') ? tuneEntry['comment'] : null,
+        style: tuneEntry.hasOwnProperty('style') ? tuneEntry['style'] : null,
+        partial_func: tuneEntry.hasOwnProperty('partial_func') ? tuneEntry['partial_func'] : null
     });
 }
 
 function _GetFnDefault(key, tune_entry, hw_scope) {
     let msg = '';
+    console.log(tune_entry);
     if (!(tune_entry.hasOwnProperty('instructions'))) { // No profile-based tuning
         msg = `DEBUG: Profile-based tuning is not found for this item ${key} -> Use the general tuning instead.`;
         console.debug(msg);
@@ -2957,17 +2962,18 @@ function _GetFnDefault(key, tune_entry, hw_scope) {
     } else if (tune_entry.hasOwnProperty('tune_op')) {
         profile_fn = tune_entry['tune_op'];
     }
-    let profile_default = tune_entry['instructions'].hasOwnProperty(`${hw_scope.value}_default`) ? tune_entry['instructions'][`${hw_scope.value}_default`] : null;
+    let profile_default = null;
+    if (tune_entry['instructions'].hasOwnProperty(`${hw_scope.value}_default`)) {
+        profile_default = tune_entry['instructions'][`${hw_scope.value}_default`];
+    }
     if (profile_default === null) {
         profile_default = tune_entry['default'];
         if (profile_fn === null || typeof profile_fn !== 'function') {
             msg = `WARNING: Profile-based tuning function collection is not found for this item ${key} and the associated hardware scope '${hw_scope.value}' is NOT found, pushing to use the generic default.`;
             console.warn(msg);
-            console.warn(profile_fn, profile_default, hw_scope);
         }
     }
     return [profile_fn, profile_default, msg];
-
 }
 
 /**
@@ -3000,8 +3006,8 @@ function Optimize(request, response, target, target_items) {
             // Get tuning function and default value
             const [fn, default_value, msg] = _GetFnDefault(key, tune_entry, hw_scope_value);
             const [result, triggering] = _VarTune(request, response, group_cache, global_cache, fn, default_value);
-            const itm = _MakeItm(key, null, result !== null ? result : tune_entry.default, triggering, tune_entry, [hw_scope_term, hw_scope_value]);
-
+            const itm = _MakeItm(key, null, result !== null ? result : tune_entry['default'], triggering, tune_entry, [hw_scope_term, hw_scope_value]);
+            console.log(fn, default_value, result, triggering);
             if (itm === null || itm.after === null) {
                 console.warn(`WARNING: Error in tuning the variable as default value is not found or set to null for '${key}' -> Skipping and not adding to the final result.`);
                 continue;
@@ -3047,7 +3053,6 @@ function Optimize(request, response, target, target_items) {
             }
 
             // Add to the items
-            console.log(itm);
             global_cache[itm.key] = itm.after;
             managed_items[itm.key] = itm;
         }
@@ -3064,14 +3069,19 @@ const _MAX_USER_CONN_FOR_ANALYTICS = 25
 const _DEFAULT_WAL_SENDERS = [3, 5, 7]
 const _TARGET_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG
 
-function _trigger_tuning(keys, request, response) {
+function _TriggerAutoTune(keys, request, response) {
     const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     const change_list = []
     for (const [scope, items] of Object.entries(keys)) {
         const managed_items = response.get_managed_items(_TARGET_SCOPE, scope)
         for (const key of items) {
+            if (!(managed_items.hasOwnProperty(key))) {
+                console.warn(`WARNING: The ${key} is not found in the managed tuning item list, probably the scope is invalid.`)
+                continue
+            }
             const t_itm = managed_items[key]
-            if (t_itm && t_itm.trigger) {
+            if (t_itm !== null && typeof t_itm.trigger !== 'function') {
+                console.log(t_itm);
                 const old_result = managed_cache[key]
                 t_itm.after = t_itm.trigger(managed_cache, managed_cache, request.options, response)
                 managed_cache[key] = t_itm.after
@@ -3089,7 +3099,7 @@ function _trigger_tuning(keys, request, response) {
     return null;
 }
 
-function _item_tuning(key, after, scope, response, suffix_text) {
+function _ApplyItmTune(key, after, scope, response, suffix_text = '') {
     const items = response.get_managed_items(_TARGET_SCOPE, scope)
     const cache = response.get_managed_cache(_TARGET_SCOPE)
 
@@ -3101,8 +3111,7 @@ function _item_tuning(key, after, scope, response, suffix_text) {
     }
 
     const before = cache[key]
-    console.info(`The ${key} is updated from ${before} (or ${items[key].out_display()}) to ${after} 
-        (or ${items[key].out_display(override_value=after)}) ${suffix_text}.`)
+    console.info(`The ${key} is updated from ${before} (or ${items[key].out_display()}) to ${after} (or ${items[key].out_display(override_value=after)}) ${suffix_text}.`)
     items[key].after = after
     cache[key] = after
     return null
@@ -3111,9 +3120,7 @@ function _item_tuning(key, after, scope, response, suffix_text) {
 // --------------------------------------------------------------------------------
 function _conn_cache_query_timeout_tune(request, response) {
     console.info(`===== CPU & Statistics Tuning =====`)
-    console.info(`Start tuning the connection, statistic caching, disk cache of the PostgreSQL database server based 
-        on the database workload. \nImpacted Attributes: max_connections, temp_buffers, work_mem, effective_cache_size, 
-        idle_in_transaction_session_timeout.`)
+    console.info(`Start tuning the connection, statistic caching, disk cache of the PostgreSQL database server based on the database workload. \nImpacted Attributes: max_connections, temp_buffers, work_mem, effective_cache_size, idle_in_transaction_session_timeout.`)
     const _kwargs = request.options.tuning_kwargs
     const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     const workload_type = request.options.workload_type
@@ -3131,12 +3138,12 @@ function _conn_cache_query_timeout_tune(request, response) {
         const new_result = cap_value(managed_cache[max_connections] - reserved_connections,
             Math.max(_MIN_USER_CONN_FOR_ANALYTICS, reserved_connections),
             Math.max(_MAX_USER_CONN_FOR_ANALYTICS, reserved_connections))
-        _item_tuning(max_connections, new_result + reserved_connections, PG_SCOPE.CONNECTION, response)
+        _ApplyItmTune(max_connections, new_result + reserved_connections, PG_SCOPE.CONNECTION, response)
         const updates = {
             [PG_SCOPE.MEMORY]: ['temp_buffers', 'work_mem'],
             [PG_SCOPE.QUERY_TUNING]: ['effective_cache_size']
         }
-        _trigger_tuning(updates, request, response);
+        _TriggerAutoTune(updates, request, response);
     } else {
         console.info('The connection tuning is ignored due to applied workload type does not match expectation.')
     }
@@ -3154,13 +3161,12 @@ function _conn_cache_query_timeout_tune(request, response) {
         // This should be lowed regardless of workload to prevent the idle-in-transaction state on a lot of active connections
         const tmp_user_conn = (user_connections - _MAX_USER_CONN_FOR_ANALYTICS)
         const after_idle_in_transaction_session_timeout = managed_cache['idle_in_transaction_session_timeout'] - 30 * SECOND * (tmp_user_conn / 25)
-        _item_tuning('idle_in_transaction_session_timeout', Math.max(31, after_idle_in_transaction_session_timeout), PG_SCOPE.OTHERS, response)
+        _ApplyItmTune('idle_in_transaction_session_timeout', Math.max(31, after_idle_in_transaction_session_timeout), 
+        PG_SCOPE.OTHERS, response)
     }
 
     // ----------------------------------------------------------------------------------------------
-    console.info(`Start tuning the query timeout of the PostgreSQL database server based on the database workload. 
-        \nImpacted Attributes: statement_timeout, lock_timeout, cpu_tuple_cost, parallel_tuple_cost, 
-        default_statistics_target, commit_delay.`)
+    console.info(`Start tuning the query timeout of the PostgreSQL database server based on the database workload. \nImpacted Attributes: statement_timeout, lock_timeout, cpu_tuple_cost, parallel_tuple_cost, default_statistics_target, commit_delay.`)
 
     // Tune the cpu_tuple_cost, parallel_tuple_cost, lock_timeout, statement_timeout
     const workload_translations = {
@@ -3173,14 +3179,14 @@ function _conn_cache_query_timeout_tune(request, response) {
     const suffix_text = `by workload: ${workload_type}`
     if (workload_type in workload_translations) {
         const [new_cpu_tuple_cost, base_timeout] = workload_translations[workload_type]
-        _item_tuning('cpu_tuple_cost', new_cpu_tuple_cost, PG_SCOPE.QUERY_TUNING, response, suffix_text)
+        _ApplyItmTune('cpu_tuple_cost', new_cpu_tuple_cost, PG_SCOPE.QUERY_TUNING, response, suffix_text)
         const updates = {
             [PG_SCOPE.QUERY_TUNING]: ['parallel_tuple_cost']
         }
-        _trigger_tuning(updates, request, response)
-        // 3 seconds was added as the reservation for query plan before taking the lock
-        _item_tuning('lock_timeout', base_timeout, PG_SCOPE.OTHERS, response, suffix_text)
-        _item_tuning('statement_timeout', base_timeout + 3, PG_SCOPE.OTHERS, response, suffix_text)
+        _TriggerAutoTune(updates, request, response)
+        // 7 seconds was added as the reservation for query plan before taking the lock
+        _ApplyItmTune('lock_timeout', base_timeout, PG_SCOPE.OTHERS, response, suffix_text)
+        _ApplyItmTune('statement_timeout', base_timeout + 7, PG_SCOPE.OTHERS, response, suffix_text)
     }
 
     // Tune the default_statistics_target
@@ -3189,26 +3195,11 @@ function _conn_cache_query_timeout_tune(request, response) {
     let after_default_statistics_target = managed_cache[default_statistics_target]
     let default_statistics_target_hw_scope = managed_items[default_statistics_target].hardware_scope[1]
     if (workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP]) {
-        after_default_statistics_target = 200
-        if (default_statistics_target_hw_scope === PG_SIZING.MEDIUM) {
-            after_default_statistics_target = 350
-        } else if (default_statistics_target_hw_scope === PG_SIZING.LARGE) {
-            after_default_statistics_target = 500
-        } else if (default_statistics_target_hw_scope === PG_SIZING.MALL) {
-            after_default_statistics_target = 750
-        } else if (default_statistics_target_hw_scope === PG_SIZING.BIGT) {
-            after_default_statistics_target = 1000
-        }
-    } else if (workload_type in [PG_WORKLOAD.OLTP, PG_WORKLOAD.VECTOR]) {
-        if (default_statistics_target_hw_scope === PG_SIZING.LARGE) {
-            after_default_statistics_target = 250
-        } else if (default_statistics_target_hw_scope === PG_SIZING.MALL) {
-            after_default_statistics_target = 400
-        } else if (default_statistics_target_hw_scope === PG_SIZING.BIGT) {
-            after_default_statistics_target = 600
-        }
+        after_default_statistics_target = 200 + 125 * Math.max(default_statistics_target_hw_scope.num(), 0)
+    } else {
+        after_default_statistics_target = 200 + 100 * Math.max(default_statistics_target_hw_scope.num() - 1, 0)
     }
-    _item_tuning(default_statistics_target, after_default_statistics_target, PG_SCOPE.QUERY_TUNING,
+    _ApplyItmTune(default_statistics_target, after_default_statistics_target, PG_SCOPE.QUERY_TUNING, 
         response, suffix_text)
 
     // ----------------------------------------------------------------------------------------------
@@ -3220,63 +3211,27 @@ function _conn_cache_query_timeout_tune(request, response) {
     // high-transaction rate, the READ operation on WAL partition is used intensively. Thus, we use the minimum
     // IOPS between the data partition and WAL partition.
     // Now we can calculate the commit_delay (* K10 to convert to millisecond)
-    let after_commit_delay = managed_cache['commit_delay']
     let commit_delay_hw_scope = managed_items['commit_delay'].hardware_scope[1]
-    if (workload_type in [PG_WORKLOAD.TSR_IOT]) {
-        // These workloads are not critical so we can set a high commit_delay. In normal case, the constraint is
-        // based on the number of commits and disk size. The server largeness may not impact here
-        // The commit_siblings is tuned by sizing at general tuning phase so no actions here.
-        // This is made during burst so we combine the calculation here
-        const mixed_iops = Math.min(request.options.data_index_spec.perf()[1],
-            PG_DISK_PERF.throughput_to_iops(request.options.wal_spec.perf()[0]))
+    let after_commit_delay = Math.floor(K10 / 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
+    after_commit_delay = cap_value(after_commit_delay, 0, 2 * K10)
 
-        // This is just the rough estimation so don't fall for it.
-        if (PG_DISK_SIZING.matchDiskSeries(mixed_iops, RANDOM_IOPS, 'hdd', 'weak')) {
-            after_commit_delay = 3 * K10
-        } else if (PG_DISK_SIZING.matchDiskSeries(mixed_iops, RANDOM_IOPS, 'hdd', 'strong')) {
-            after_commit_delay = Math.floor(2.5 * K10)
-        } else if (PG_DISK_SIZING.matchDiskSeries(mixed_iops, RANDOM_IOPS, 'san')) {
-            after_commit_delay = 2 * K10
-        } else {
-            after_commit_delay = 1 * K10
-        }
-    } else if (workload_type in [PG_WORKLOAD.VECTOR]) {
-        // Workload: VECTOR (Search, RAG, Geospatial)
-        // The workload pattern of this is usually READ, the indexing is added incrementally if user make new
-        // or updated resources. Since update patterns are rarely done, the commit_delay still not have much
-        // impact.
-        after_commit_delay = Math.floor(K10 / 10 * 2.5 * (commit_delay_hw_scope.num() + 1))
-    } else if (workload_type in [PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.OLAP]) {
-        // Workload: HTAP and OLTP
-        // These workloads have highest and require the data integrity. Thus, the commit_delay should be set to the
-        // minimum value. The higher data rate change, the burden caused on the disk is large, so we want to minimize
-        // the disk impact, but hopefully we got UPS or BBU for the disk.
-        // Workload: OLAP and Data Warehouse
-        // These workloads are critical but not require end-user and internally managed and transformed by the
-        // application side so a high commit_delay is allowed, but it does not bring large impact since commit_delay
-        // affected group/batched commit of small transactions.
-        after_commit_delay = K10
-    }
-    _item_tuning('commit_delay', after_commit_delay, PG_SCOPE.QUERY_TUNING, response, suffix_text)
-    _item_tuning('commit_siblings', 5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
-        PG_SCOPE.QUERY_TUNING, response, suffix_text)
+    _ApplyItmTune('commit_delay', after_commit_delay, PG_SCOPE.QUERY_TUNING, response)
+    _ApplyItmTune('commit_siblings', 5 + 3 * managed_items['commit_siblings'].hardware_scope[1].num(),
+        PG_SCOPE.QUERY_TUNING, response)
     return null;
 }
 
 function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response) {
     console.info(`\n ===== Disk-based Tuning =====`)
-    console.info(`Start tuning the disk-based I/O, background writer, and vacuuming of the PostgreSQL database 
-    server based on the database workload. \nImpacted Attributes: effective_io_concurrency, bgwriter_lru_maxpages, 
-    bgwriter_delay, autovacuum_vacuum_cost_limit, autovacuum_vacuum_cost_delay, autovacuum_vacuum_scale_factor, 
-    autovacuum_vacuum_threshold.`)
+    console.info(`Start tuning the disk-based I/O, background writer, and vacuuming of the PostgreSQL database server based on the database workload. \nImpacted Attributes: effective_io_concurrency, bgwriter_lru_maxpages, bgwriter_delay, autovacuum_vacuum_cost_limit, autovacuum_vacuum_cost_delay, autovacuum_vacuum_scale_factor, autovacuum_vacuum_threshold.`)
     const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    const _kwargs = request.options.tuning_kwargs
 
     // The WRITE operation in WAL partition is sequential, but its read (when WAL content is not flushed to the
     // datafiles) is random IOPS. Especially during high-latency replication, unclean/unexpected shutdown, or
     // high-transaction rate, the READ operation on WAL partition is used intensively. Thus, we use the minimum
     // IOPS between the data partition and WAL partition.
-    const data_iops = Math.min(request.options.data_index_spec.perf()[1],
-        PG_DISK_PERF.throughput_to_iops(request.options.wal_spec.perf()[0]))
+    const data_iops = request.options.data_index_spec.perf()[1]
 
     // Tune the random_page_cost by converting to disk throughput, then compute its minimum
     let after_random_page_cost = 1.01
@@ -3299,7 +3254,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     } else if (PG_DISK_SIZING.matchOneDisk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.SSDv5)) {
         after_random_page_cost = 1.05
     }
-    _item_tuning('random_page_cost', after_random_page_cost, PG_SCOPE.QUERY_TUNING, response)
+    _ApplyItmTune('random_page_cost', after_random_page_cost, PG_SCOPE.QUERY_TUNING, response)
 
     // ----------------------------------------------------------------------------------------------
     // Tune the effective_io_concurrency and maintenance_io_concurrency
@@ -3326,8 +3281,8 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     let after_maintenance_io_concurrency = Math.max(16, after_effective_io_concurrency / 2)
     after_effective_io_concurrency = cap_value(after_effective_io_concurrency, 16, K10)
     after_maintenance_io_concurrency = cap_value(after_maintenance_io_concurrency, 16, K10)
-    _item_tuning('effective_io_concurrency', after_effective_io_concurrency, PG_SCOPE.OTHERS, response)
-    _item_tuning('maintenance_io_concurrency', after_maintenance_io_concurrency, PG_SCOPE.OTHERS, response)
+    _ApplyItmTune('effective_io_concurrency', after_effective_io_concurrency, PG_SCOPE.OTHERS, response)
+    _ApplyItmTune('maintenance_io_concurrency', after_maintenance_io_concurrency, PG_SCOPE.OTHERS, response)
 
     // ----------------------------------------------------------------------------------------------
     // Tune the *_flush_after. For a strong disk with change applied within neighboring pages, 256 KiB and 1 MiB
@@ -3375,8 +3330,8 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
         }
-        _item_tuning('bgwriter_flush_after', after_bgwriter_flush_after, PG_SCOPE.OTHERS, response)
-        _item_tuning('checkpoint_flush_after', after_checkpoint_flush_after, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        _ApplyItmTune('bgwriter_flush_after', after_bgwriter_flush_after, PG_SCOPE.OTHERS, response)
+        _ApplyItmTune('checkpoint_flush_after', after_checkpoint_flush_after, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
         let wal_tput = request.options.wal_spec.perf()[0]
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
@@ -3386,25 +3341,22 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (request.options.workload_profile >= PG_SIZING.LARGE) {
             after_wal_writer_flush_after *= 2
         }
-        _item_tuning('wal_writer_flush_after', after_wal_writer_flush_after, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
         let after_backend_flush_after = Math.min(managed_cache['checkpoint_flush_after'], managed_cache['bgwriter_flush_after'])
-        _item_tuning('backend_flush_after', after_backend_flush_after, PG_SCOPE.OTHERS, response)
+        _ApplyItmTune('backend_flush_after', after_backend_flush_after, PG_SCOPE.OTHERS, response)
     } else {
         // Default by Windows --> See line 152 at src/include/pg_config_manual.h;
-        _item_tuning('checkpoint_flush_after', 0, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-        _item_tuning('bgwriter_flush_after', 0, PG_SCOPE.OTHERS, response)
-        _item_tuning('wal_writer_flush_after', 0, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        _ApplyItmTune('checkpoint_flush_after', 0, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        _ApplyItmTune('bgwriter_flush_after', 0, PG_SCOPE.OTHERS, response)
+        _ApplyItmTune('wal_writer_flush_after', 0, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     }
 
     // ----------------------------------------------------------------------------------------------
-    console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.`)
-    console.info(`Impacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.`)
-    let _data_iops = request.options.data_index_spec.perf()[1]
-
+    console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.\nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.`)
     // Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
     // --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
-    let after_bgwriter_delay = Math.floor(Math.max(100, managed_cache['bgwriter_delay'] - 8 * _data_iops / K10))
-    _item_tuning('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response)
+    let after_bgwriter_delay = Math.floor(Math.max(100, managed_cache['bgwriter_delay'] - 8 * data_iops / K10))
+    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response)
 
     // Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
     // workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
@@ -3418,111 +3370,108 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'nvme')) {
             after_bgwriter_lru_maxpages += 100 + 150 + 200
         }
-        _item_tuning('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response)
+        _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response)
     }
 
     // ----------------------------------------------------------------------------------------------
-    // This docstring aims to describe how we tune the autovacuum. Basically, we run autovacuum more frequently, the ratio
-    // of dirty pages compared to total is minimized (usually between 1/8 - 1/16, average at 1/12). But if the autovacuum
-    // or vacuum is run rarely, the ratio becomes 1/3 or higher, and the missed page is always higher than the dirty page.
-    // So the page sourced from disk usually around 65-75% (average at 70%) or higher. Since PostgreSQL 12, the MISS page
-    // cost is set to 2, making the dominant cost of IO is at WRITE on DIRTY page.
-    //
-    // In the official PostgreSQL documentation, the autovacuum (or normal VACUUM) "normally only scans pages that have
-    // been modified since the last vacuum" due to the use of visibility map. The visibility map is a bitmap that to
-    // keep track of which pages contain only tuples that are known to be visible to all active transactions (and
-    // all future transactions, until the page is again modified). This has two purposes. First, vacuum itself can
-    // skip such pages on the next run. Second, it allows PostgreSQL to answer some queries using only the index,
-    // without reference to the underlying table --> Based on this information, the VACUUM used the random IOPS
-    //
-    // But here is the things I found (which you can analyze from my Excel file):
-    // - Frequent autovacuum has DIRTY page of 1/12 on total. DIRTY:MISS ratio is around 1/4 - 1/8
-    // - The DIRTY page since PostgreSQL 12 (MISS=2 for page in RAM) becomes the dominant point of cost estimation if doing
-    // less frequently
-    //
-    // Here is my disk benchmark with CrystalDiskMark 8.0.5 on 8 KiB NTFS page on Windows 10 at i7-8700H, 32GB RAM DDR4,
-    // 1GB test file 3 runs (don't focus on the raw number, but more on ratio and disk type). I just let the number only
-    // and scrubbed the disk name for you to feel the value rather than reproduce your benchmark, also the number are
-    // relative (I have rounded some for simplicity):
-    //
-    // Disk Type: HDD 5400 RPM 1 TB (34% full)
-    // -> In HDD, large page size (randomly) can bring higher throughput but the IOPS is maintained. Queue depth or
-    // IO thread does not affect the story.
-    // -> Here the ratio is 1:40 (synthetically) so the autovacuum seems right.
-    // | Benchmark | READ (MiB/s -- IOPS) | WRITE (MiB/s -- IOPS) |
-    // | --------- | -------------------- | --------------------- |
-    // | Seq (1M)  | 80  -- 77            | 80 -- 75              |
-    // | Rand (8K) | 1.7 -- 206           | 1.9 -- 250            |
-    // | --------- | -------------------- | --------------------- |
-    //
-    // Disk Type: NVME PCIe v3x4 1 TB (10 % full, locally) HP FX900 PRO
-    // -> In NVME, the IOPS is high but the throughput is maintained.
-    // -> The ratio now is 1:2 (synthetically)
-    // | Benchmark         | READ (MiB/s -- IOPS) | WRITE (MiB/s -- IOPS) |
-    // | ----------------- | -------------------- | --------------------- |
-    // | Seq (1M Q8T1)     | 3,380 -- 3228.5      | 3,360 -- 3205.0       |
-    // | Seq (128K Q32T1)  | 3,400 -- 25983       | 3,360 -- 25671        |
-    // | Rand (8K Q32T16)  | 2,000 -- 244431      | 1,700 -- 207566       |
-    // | Rand (8K Q1T1)    | 97.60 -- 11914       | 218.9 -- 26717        |
-    // | ----------------- | -------------------- | --------------------- |
-    //
-    // Our goal are well aligned with PostgreSQL ideology: "moderately-frequent standard VACUUM runs are a better
-    // approach than infrequent VACUUM FULL runs for maintaining heavily-updated tables." And the autovacuum (normal
-    // VACUUM) or manual vacuum (which can have ANALYZE or VACUUM FULL) can hold SHARE UPDATE EXCLUSIVE lock or
-    // even ACCESS EXCLUSIVE lock when VACUUM FULL so we want to have SHARE UPDATE EXCLUSIVE lock more than ACCESS
-    // EXCLUSIVE lock (see line 2041 in src/backend/commands/vacuum.c).
-    //
-    // Its source code can be found at
-    // - Cost Determination: relation_needs_vacanalyze in src/backend/commands/autovacuum.c
-    // - Action Triggering for Autovacuum: autovacuum_do_vac_analyze in src/backend/commands/autovacuum.c
-    // - Vacuum Action: vacuum, vacuum_rel in src/backend/commands/vacuum.c
-    // - Vacuum Delay: vacuum_delay_point in src/backend/commands/vacuum.c
-    // - Table Vacuum: table_relation_vacuum in src/include/access/tableam.h --> heap_vacuum_rel in src/backend/access/heap
-    // /vacuumlazy.c and in here we coud see it doing the statistic report
-    console.log(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.`)
-    console.log(`Impacted Attributes: autovacuum_vacuum_cost_delay, vacuum_cost_page_dirty, *_vacuum_cost_limit, 
-        *_freeze_min_age, *_failsafe_age, *_table_age`)
-    let _kwargs = request.options.tuning_kwargs
+    /**
+     * This docstring aims to describe how we tune the autovacuum. Basically, we run autovacuum more frequently, the ratio 
+     * of dirty pages compared to total is minimized (usually between 1/8 - 1/16, average at 1/12). But if the autovacuum 
+     * or vacuum is run rarely, the ratio becomes 1/3 or higher, and the missed page is always higher than the dirty page. 
+     * So the page sourced from disk usually around 65-75% (average at 70%) or higher. Since PostgreSQL 12, the MISS page 
+     * cost is set to 2, making the dominant cost of IO is at WRITE on DIRTY page.
+     * 
+     * In the official PostgreSQL documentation, the autovacuum (or normal VACUUM) "normally only scans pages that have
+     * been modified since the last vacuum" due to the use of visibility map. The visibility map is a bitmap that to
+     * keep track of which pages contain only tuples that are known to be visible to all active transactions (and
+     * all future transactions, until the page is again modified). This has two purposes. First, vacuum itself can 
+     * skip such pages on the next run. Second, it allows PostgreSQL to answer some queries using only the index, 
+     * without reference to the underlying table --> Based on this information, the VACUUM used the random IOPS
+     * 
+     * But here is the things I found (which you can analyze from my Excel file):
+     * - Frequent autovacuum has DIRTY page of 1/12 on total. DIRTY:MISS ratio is around 1/4 - 1/8
+     * - The DIRTY page since PostgreSQL 12 (MISS=2 for page in RAM) becomes the dominant point of cost estimation if doing 
+     * less frequently
+     * 
+     * Here is my disk benchmark with CrystalDiskMark 8.0.5 on 8 KiB NTFS page on Windows 10 at i7-8700H, 32GB RAM DDR4, 
+     * 1GB test file 3 runs (don't focus on the raw number, but more on ratio and disk type). I just let the number only 
+     * and scrubbed the disk name for you to feel the value rather than reproduce your benchmark, also the number are 
+     * relative (I have rounded some for simplicity):
+     * 
+     * Disk Type: HDD 5400 RPM 1 TB (34% full)
+     * -> In HDD, large page size (randomly) can bring higher throughput but the IOPS is maintained. Queue depth or 
+     * IO thread does not affect the story. 
+     * -> Here the ratio is 1:40 (synthetically) so the autovacuum seems right.
+    | Benchmark | READ (MiB/s -- IOPS) | WRITE (MiB/s -- IOPS) |
+    | --------- | -------------------- | --------------------- |
+    | Seq (1M)  | 80  -- 77            | 80 -- 75              |
+    | Rand (8K) | 1.7 -- 206           | 1.9 -- 250            |
+    | --------- | -------------------- | --------------------- |
+     * 
+     * Disk Type: NVME PCIe v3x4 1 TB (10 % full, locally) HP FX900 PRO 
+     * -> In NVME, the IOPS is high but the throughput is maintained. 
+     * -> The ratio now is 1:2 (synthetically)
+    | Benchmark         | READ (MiB/s -- IOPS) | WRITE (MiB/s -- IOPS) |
+    | ----------------- | -------------------- | --------------------- |
+    | Seq (1M Q8T1)     | 3,380 -- 3228.5      | 3,360 -- 3205.0       |
+    | Seq (128K Q32T1)  | 3,400 -- 25983       | 3,360 -- 25671        |
+    | Rand (8K Q32T16)  | 2,000 -- 244431      | 1,700 -- 207566       |
+    | Rand (8K Q1T1)    | 97.60 -- 11914       | 218.9 -- 26717        |
+    | ----------------- | -------------------- | --------------------- |
+     * 
+     * Our goal are well aligned with PostgreSQL ideology: "moderately-frequent standard VACUUM runs are a better 
+     * approach than infrequent VACUUM FULL runs for maintaining heavily-updated tables." And the autovacuum (normal 
+     * VACUUM) or manual vacuum (which can have ANALYZE or VACUUM FULL) can hold SHARE UPDATE EXCLUSIVE lock or 
+     * even ACCESS EXCLUSIVE lock when VACUUM FULL so we want to have SHARE UPDATE EXCLUSIVE lock more than ACCESS 
+     * EXCLUSIVE lock (see line 2041 in src/backend/commands/vacuum.c).
+     * 
+     * Its source code can be found at 
+     * - Cost Determination: relation_needs_vacanalyze in src/backend/commands/autovacuum.c 
+     * - Action Triggering for Autovacuum: autovacuum_do_vac_analyze in src/backend/commands/autovacuum.c 
+     * - Vacuum Action: vacuum, vacuum_rel in src/backend/commands/vacuum.c 
+     * - Vacuum Delay: vacuum_delay_point in src/backend/commands/vacuum.c 
+     * - Table Vacuum: table_relation_vacuum in src/include/access/tableam.h --> heap_vacuum_rel in src/backend/access/heap 
+     * /vacuumlazy.c and in here we coud see it doing the statistic report
+     * 
+     * ------------------------------------------------------------------------------------------------
+     * Since we are leveraging the cost-based tuning, and the *_cost_limit we have derived from the data disk IOPs, thus 
+     * the high value of dirty pages seems use-less and make other value difficult as based on the below thread, those pages 
+     * are extracted from shared_buffers (HIT) and RAM/effective_cache_size (MISS). Whilst technically, the idea
+     * is to tell that dirtying the pages (DIRTY -> WRITE) is 10x dangerous. The main reason is that PostgreSQL don't
+     * know about your disk hardware or capacity, so it is better to have a high cost for the dirty page. But now, we
+     * acknowledge that our cost is managed under control by the data disk IOPS, we could revise the cost of dirty page
+     * so as it can be running more frequently.
+     *   
+     * On this algorithm, increase either MISS cost or DIRTY cost would allow more pages as HIT but from our perspective,
+     * it is mostly useless, even the RAM is not the best as bare metal, usually at around 10 GiB/s (same as low-end
+     * DDR3 or DDR2, 20x times stronger than SeqIO of SSD) (DB server are mostly virtualized or containerized),
+     * but our real-world usually don't have NVME SSD for data volume due to the network bandwidth on SSD, and in the
+     * database, performance can be easily improved by adding more RAM on most cases (hopefully more cache hit due to
+     * RAM lacking) rather focusing on increasing the disk strength solely which is costly and not always have high
+     * cost per performance improvement.
+    
+     * Thereby, we want to increase the MISS cost (as compared to HIT cost) to scale our budget, and close the gap between
+     * the MISS and DIRTY cost. This is the best way to improve the autovacuum performance. Meanwhile, a high cost delay
+     * would allow lower budget, and let the IO controller have time to "breathe" and flush data in a timely interval,
+     * without overflowing the disk queue.
+     * 
+     */
 
-    // Since we are leveraging the cost-based tuning, and the *_cost_limit we have derived from the data disk IOPs, thus
-    // the high value of dirty pages seems use-less and make other value difficult as based on the below thread, those
-    // pages are extracted from shared_buffers (HIT) and RAM/effective_cache_size (MISS). Whilst technically, the idea
-    // is to tell that dirtying the pages (DIRTY -> WRITE) is 10x dangerous. The main reason is that PostgreSQL don't
-    // know about your disk hardware or capacity, so it is better to have a high cost for the dirty page. But now, we
-    // acknowledge that our cost is managed under control by the data disk IOPS, we could revise the cost of dirty page
-    // so as it can be running more frequently.
-    //
-    // On this algorithm, increase either MISS cost or DIRTY cost would allow more pages as HIT but from our perspective,
-    // it is mostly useless, even the RAM is not the best as bare metal, usually at around 10 GiB/s (same as low-end
-    // DDR3 or DDR2, 20x times stronger than SeqIO of SSD) (DB server are mostly virtualized or containerized),
-    // but our real-world usually don't have NVME SSD for data volume due to the network bandwidth on SSD, and in the
-    // database, performance can be easily improved by adding more RAM on most cases (hopefully more cache hit due to
-    // RAM lacking) rather focusing on increasing the disk strength solely which is costly and not always have high
-    // cost per performance improvement.
-    //
-    // Thereby, we want to increase the MISS cost (as compared to HIT cost) to scale our budget, and close the gap between
-    // the MISS and DIRTY cost. This is the best way to improve the autovacuum performance. Meanwhile, a high cost delay
-    // would allow lower budget, and let the IO controller have time to "breathe" and flush data in a timely interval,
-    // without overflowing the disk queue.
-    const autovacuum_vacuum_cost_delay = 'autovacuum_vacuum_cost_delay'
-    const vacuum_cost_page_dirty = 'vacuum_cost_page_dirty'
+    console.log(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.`)
+    console.log(`Impacted Attributes: autovacuum_vacuum_cost_delay, vacuum_cost_page_dirty, *_vacuum_cost_limit, *_freeze_min_age, *_failsafe_age, *_table_age`)
     let after_vacuum_cost_page_miss = 3
     let after_autovacuum_vacuum_cost_delay = 12
     let after_vacuum_cost_page_dirty = 15
-
     if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'hdd', 'weak')) {
         after_autovacuum_vacuum_cost_delay = 15
-        after_vacuum_cost_page_dirty = 15
-    } else if (PG_DISK_SIZING.matchOneDisk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.HDDv3) || PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'san')) {
-        after_autovacuum_vacuum_cost_delay = 12
         after_vacuum_cost_page_dirty = 15
     } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd') || PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'nvme')) {
         after_autovacuum_vacuum_cost_delay = 5
         after_vacuum_cost_page_dirty = 10
     }
-    _item_tuning('vacuum_cost_page_miss', after_vacuum_cost_page_miss, PG_SCOPE.MAINTENANCE, response)
-    _item_tuning(autovacuum_vacuum_cost_delay, after_autovacuum_vacuum_cost_delay, PG_SCOPE.MAINTENANCE, response)
-    _item_tuning(vacuum_cost_page_dirty, after_vacuum_cost_page_dirty, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('vacuum_cost_page_miss', after_vacuum_cost_page_miss, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('autovacuum_vacuum_cost_delay', after_autovacuum_vacuum_cost_delay, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('vacuum_cost_page_dirty', after_vacuum_cost_page_dirty, PG_SCOPE.MAINTENANCE, response)
 
     // Now we tune the vacuum_cost_limit. Don;t worry about this decay, it is just the estimation
     // P/s: If autovacuum frequently, the number of pages when MISS:DIRTY is around 4:1 to 6:1. If not, the ratio is
@@ -3545,7 +3494,6 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     }
     _delay += 0.005  // Adding 5us for the CPU interrupt and context switch
     _delay *= 1.025  // Adding 2.5% of the delay to safely reduce the number of maximum page per cycle by 2.43%
-    // _delay *= 1.05      // Adding 5% of the delay to safely reduce the number of maximum page per cycle by 4.76%
     const autovacuum_max_page_per_cycle = Math.floor(autovacuum_max_page_per_sec / K10 * _delay)
 
     // Since I tune for auto-vacuum, it is best to stick with MISS:DIRTY ratio is 5:5:1 (5 pages reads, 1 page writes,
@@ -3565,13 +3513,12 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         Math.floor(autovacuum_max_page_per_cycle * vacuum_cost_model),
         after_vacuum_cost_page_dirty + after_vacuum_cost_page_miss
     )[request.options.align_index]
-    _item_tuning('vacuum_cost_limit', after_vacuum_cost_limit, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('vacuum_cost_limit', after_vacuum_cost_limit, PG_SCOPE.MAINTENANCE, response)
 
     // ----------------------------------------------------------------------------------------------
     // The dependency here is related to workload (amount of transaction), disk strength (to run wrap-around), the
     // largest table size (the amount of data to be vacuumed), and especially if the user can predict correctly
-    console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.`)
-    console.info(`Impacted Attributes: *_freeze_min_age, *_failsafe_age, *_table_age`)
+    console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.\nImpacted Attributes: *_freeze_min_age, *_failsafe_age, *_table_age`)
 
     // Use-case: We extracted the TXID use-case from the GitLab PostgreSQL database, which has the TXID of 55M per day
     // or 2.3M per hour, at some point, it has 1.4K/s on weekday (5M/h) and 600/s (2M/h) on weekend.
@@ -3583,32 +3530,35 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
 
     // This variable is used so that even when we have a suboptimal performance, the estimation could still handle
     // in worst case scenario
-    const _future_data_scaler = 2.5 + (0.5 * request.options.workload_profile.num())
+    const _future_data_scaler = 2.5 + (0.5 * _transaction_coef)
 
-    // Tuning ideology for extreme anti-wraparound vacuum: Whilst the internal algorithm can have some optimization or
-    // skipping non-critical workloads, we can't completely rely on it to have a good future-proof estimation
-    //
-    // Based on this PR: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=1e55e7d17
-    // At failsafe, the index vacuuming is executed only if it more than 1 index (usually the primary key holds one)
-    // and PostgreSQL does not have cross-table index, thus the index vacuum and pruning is bypassed, unless it is
-    // index vacuum from the current vacuum then PostgreSQL would complete that index vacuum but stop all other index
-    // vacuuming (could be at the page or index level).
-    // --> See function lazy_check_wraparound_failsafe in /src/backend/access/heap/vacuumlazy.c
-    //
-    // Generally a good-designed database would have good index with approximately 20 - 1/3 of the whole database size.
-    // During the failsafe, whilst the database can still perform the WRITE operation on non too-old table, in practice,
-    // it is not practical as user in normal only access several 'hottest' large table, thus maintaining its impact.
-    // However, during the failsafe, cost-based vacuuming limit is removed and only SHARE UPDATE EXCLUSIVE lock is held
-    // that is there to prevent DDL command (schema change, index alteration, table structure change, ...).  Also, since
-    // the free-space map (1/256 of pages) and visibility map (2b/pages) could be updated, so we must take those
-    // into consideration, so guessing we could have around 50-70 % of the random I/O during the failsafe.
-    //
-    // Unfortunately, the amount of data review could be twice as much as the normal vacuum so we should consider it into
-    // our internal algorithm (as during aggressive anti-wraparound vacuum, those pages are mostly on disk, but not on
-    // dirty buffers in shared_buffers region).
+    /**
+     * Tuning ideology for extreme anti-wraparound vacuum: Whilst the internal algorithm can have some optimization or
+     * skipping non-critical workloads, we can't completely rely on it to have a good future-proof estimation
+     * 
+     * Based on this PR: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=1e55e7d17
+     * At failsafe, the index vacuuming is executed only if it more than 1 index (usually the primary key holds one)
+     * and PostgreSQL does not have cross-table index, thus the index vacuum and pruning is bypassed, unless it is
+     * index vacuum from the current vacuum then PostgreSQL would complete that index vacuum but stop all other index
+     * vacuuming (could be at the page or index level).
+     * --> See function lazy_check_wraparound_failsafe in /src/backend/access/heap/vacuumlazy.c
+     * 
+     * Generally a good-designed database would have good index with approximately 20 - 1/3 of the whole database size.
+     * During the failsafe, whilst the database can still perform the WRITE operation on non too-old table, in practice,
+     * it is not practical as user in normal only access several 'hottest' large table, thus maintaining its impact.
+     * However, during the failsafe, cost-based vacuuming limit is removed and only SHARE UPDATE EXCLUSIVE lock is held
+     * that is there to prevent DDL command (schema change, index alteration, table structure change, ...).  Also, since
+     * the free-space map (1/256 of pages) and visibility map (2b/pages) could be updated, so we must take those
+     * into consideration, so guessing we could have around 50-70 % of the random I/O during the failsafe.
+     * 
+     * Unfortunately, the amount of data review could be twice as much as the normal vacuum so we should consider it into
+     * our internal algorithm (as during aggressive anti-wraparound vacuum, those pages are mostly on disk, but not on
+     * dirty buffers in shared_buffers region). 
+     */
+
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _wraparound_effective_io = 0.80  // Assume during aggressive anti-wraparound vacuum the effective IO is 80%
-    const _data_tran_tput = PG_DISK_PERF.iops_to_throughput(_data_iops)
+    const _data_tran_tput = PG_DISK_PERF.iops_to_throughput(data_iops)
     const _data_avg_tput = generalized_mean([_data_tran_tput, _data_tput], 0.85)
 
     const _data_size = 0.75 * request.options.database_size_in_gib * Ki  // Measured in MiB
@@ -3638,42 +3588,43 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         alternative to schedule manual vacuuming when age is coming to normal vacuuming threshold.`
     )
 
-    // Our wish is to have a better estimation of how anti-wraparound vacuum works with good enough analysis, so that we
-    // can either delay or fasten the VACUUM process as our wish. Since the maximum safe cutoff point from PostgreSQL is
-    // 2.0B (100M less than the theory), we would like to take our value a bit less than that (1.9B), so we can have a
-    // safe margin for the future.
-    //
-    // Our tuning direction is to do useful work with minimal IO and less disruptive as possible, either doing frequently
-    // with minimal IO (and probably useless work, if not optimize), or doing high IO workload at stable rate during
-    // emergency (but leaving headroom for the future).
-    //
-    // Tune the vacuum_failsafe_age for relfrozenid, and vacuum_multixact_failsafe_age
-    // Ref: https://gitlab.com/groups/gitlab-com/gl-infra/-/epics/413
-    // Ref: https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/12630
-    //
-    // Whilst this seems to be a good estimation, encourage the use of strong SSD drive (I know it is costly), but we need
-    // to forecast the workload scaling and data scaling. In general, the data scaling is varied across application. For
-    // example in 2019, the relational database in Notion is double every 18 months, but the Stackoverflow has around
-    // 2.8 TiB in 2013, so whilst the data scaling is varied, we can do a good estimation based on the current number of
-    // WRITE transaction per hour, and the data scaling (plus the future scaling).
-    //
-    // Normal anti-wraparound is not aggressive as it still applied the cost-based vacuuming limit, but the index vacuum
-    // is still OK. Our algorithm format allows you to deal with worst case (that you can deal with *current* full table
-    // scan), but we can also deal with low amount of data on WRITE but extremely high concurrency such as 1M
-    // attempted-WRITE transactions per hour. From Cybertec *, you could set autovacuum_freeze_max_age to 1.000.000.000,
-    // making the full scans happen 5x less often. More adventurous souls may want to go even closer to the limit,
-    // although the incremental gains are much smaller. If you do increase the value, monitor that autovacuum is actually
-    // keeping up so you don’t end up with downtime when your transaction rate outpaces autovacuum’s ability to freeze.
-    // Ref: https://www.cybertec-postgresql.com/en/autovacuum-wraparound-protection-in-postgresql/
-    //
-    // Maximum time of un-vacuumed table is 2B - *_min_age (by last vacuum) --> PostgreSQL introduce the *_failsafe_age
-    // which is by default 80% of 2B (1.6B) to prevent the overflow of the XID. However, when overflowed at xmin or
-    // xmax, only a subset of the WRITE is blocked compared to xid exhaustion which blocks all WRITE transaction.
-    //
-    // See Section 24.1.5.1: Multixacts and Wraparound in PostgreSQL documentation.
-    // Our perspective is that we either need to set our failsafe as low as possible (ranging as 1.4B to 1.9B), for
-    // xid failsafe, and a bit higher for xmin/xmax failsafe.
-
+    /** 
+     * Our wish is to have a better estimation of how anti-wraparound vacuum works with good enough analysis, so that we
+     * can either delay or fasten the VACUUM process as our wish. Since the maximum safe cutoff point from PostgreSQL is
+     * 2.0B (100M less than the theory), we would like to take our value a bit less than that (1.9B), so we can have a
+     * safe margin for the future.
+     * 
+     * Our tuning direction is to do useful work with minimal IO and less disruptive as possible, either doing frequently
+     * with minimal IO (and probably useless work, if not optimize), or doing high IO workload at stable rate during
+     * emergency (but leaving headroom for the future).
+     * 
+     * Tune the vacuum_failsafe_age for relfrozenid, and vacuum_multixact_failsafe_age
+     * Ref: https://gitlab.com/groups/gitlab-com/gl-infra/-/epics/413
+     * Ref: https://gitlab.com/gitlab-com/gl-infra/production-engineering/-/issues/12630
+     * 
+     * Whilst this seems to be a good estimation, encourage the use of strong SSD drive (I know it is costly), but we need
+     * to forecast the workload scaling and data scaling. In general, the data scaling is varied across application. For
+     * example in 2019, the relational database in Notion is double every 18 months, but the Stackoverflow has around
+     * 2.8 TiB in 2013, so whilst the data scaling is varied, we can do a good estimation based on the current number of
+     * WRITE transaction per hour, and the data scaling (plus the future scaling).
+    
+     * Normal anti-wraparound is not aggressive as it still applied the cost-based vacuuming limit, but the index vacuum
+     * is still OK. Our algorithm format allows you to deal with worst case (that you can deal with *current* full table
+     * scan), but we can also deal with low amount of data on WRITE but extremely high concurrency such as 1M
+     * attempted-WRITE transactions per hour. From Cybertec *, you could set autovacuum_freeze_max_age to 1.000.000.000,
+     * making the full scans happen 5x less often. More adventurous souls may want to go even closer to the limit,
+     * although the incremental gains are much smaller. If you do increase the value, monitor that autovacuum is actually
+     * keeping up so you don’t end up with downtime when your transaction rate outpaces autovacuum’s ability to freeze.
+     * Ref: https://www.cybertec-postgresql.com/en/autovacuum-wraparound-protection-in-postgresql/
+    
+     * Maximum time of un-vacuumed table is 2B - *_min_age (by last vacuum) --> PostgreSQL introduce the *_failsafe_age
+     * which is by default 80% of 2B (1.6B) to prevent the overflow of the XID. However, when overflowed at xmin or
+     * xmax, only a subset of the WRITE is blocked compared to xid exhaustion which blocks all WRITE transaction.
+     * 
+     * See Section 24.1.5.1: Multixacts and Wraparound in PostgreSQL documentation.
+     * Our perspective is that we either need to set our failsafe as low as possible (ranging as 1.4B to 1.9B), for
+     * xid failsafe, and a bit higher for xmin/xmax failsafe.
+     */
     const _decre_xid = generalized_mean([24 + (18 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time], 0.5)
     const _decre_mxid = generalized_mean([24 + (12 - _transaction_coef) * _transaction_coef, _worst_data_vacuum_time], 0.5)
     let xid_failsafe_age = Math.max(1_900_000_000 - _transaction_rate * _decre_xid, 1_400_000_000)
@@ -3681,10 +3632,10 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     let mxid_failsafe_age = Math.max(1_900_000_000 - _transaction_rate * _decre_mxid, 1_400_000_000)
     mxid_failsafe_age = realign_value(mxid_failsafe_age, 500 * K10)[request.options.align_index]
     if ('vacuum_failsafe_age' in managed_cache) {  // Supported since PostgreSQL v14+
-        _item_tuning('vacuum_failsafe_age', xid_failsafe_age, PG_SCOPE.MAINTENANCE, response)
+        _ApplyItmTune('vacuum_failsafe_age', xid_failsafe_age, PG_SCOPE.MAINTENANCE, response)
     }
     if ('vacuum_multixact_failsafe_age' in managed_cache) {  // Supported since PostgreSQL v14+
-        _item_tuning('vacuum_multixact_failsafe_age', mxid_failsafe_age, PG_SCOPE.MAINTENANCE, response)
+        _ApplyItmTune('vacuum_multixact_failsafe_age', mxid_failsafe_age, PG_SCOPE.MAINTENANCE, response)
     }
 
     let _decre_max_xid = Math.max(1.25 * _worst_data_vacuum_time, generalized_mean([36 + (24 - _transaction_coef) * _transaction_coef,
@@ -3705,32 +3656,34 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
             better SSD for data volume or apply sharding or partitioned to distribute data across servers or tables.`
         )
     }
-    _item_tuning('autovacuum_freeze_max_age', xid_max_age, PG_SCOPE.MAINTENANCE, response)
-    _item_tuning('autovacuum_multixact_freeze_max_age', mxid_max_age, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('autovacuum_freeze_max_age', xid_max_age, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('autovacuum_multixact_freeze_max_age', mxid_max_age, PG_SCOPE.MAINTENANCE, response)
     const updates = {
         [PG_SCOPE.MAINTENANCE]: ['vacuum_freeze_table_age', 'vacuum_multixact_freeze_table_age']
     }
-    _trigger_tuning(updates, request, response)
+    _TriggerAutoTune(updates, request, response)
 
     // ----------------------------------------------------------------------------------------------
-    // Tune the *_freeze_min_age high enough so that it can be stable, and allowing some newer rows to remain unfrozen.
-    // These rows can be frozen later when the database is stable and operating normally. One disadvantage of decreasing
-    // vacuum_freeze_min_age is that it might cause VACUUM to do useless work: freezing a row version is a waste of time
-    // if the row is modified soon thereafter (causing it to acquire a new XID). So the setting should be large enough
-    // that rows are not frozen until they are unlikely to change anymore. We silently capped the value to be in
-    // between of 20M and 1/4 of the maximum value.
+    /**
+     * Tune the *_freeze_min_age high enough so that it can be stable, and allowing some newer rows to remain unfrozen. 
+     * These rows can be frozen later when the database is stable and operating normally. One disadvantage of decreasing 
+     * vacuum_freeze_min_age is that it might cause VACUUM to do useless work: freezing a row version is a waste of time 
+     * if the row is modified soon thereafter (causing it to acquire a new XID). So the setting should be large enough 
+     * that rows are not frozen until they are unlikely to change anymore. We silently capped the value to be in 
+     * between of 20M and 15% of the maximum value.
+     * 
+     * For the MXID min_age, this support the row locking which is rarely met in the real-world (unless concurrent 
+     * analytics/warehouse workload). But usually only one instance of WRITE connection is done gracefully (except 
+     * concurrent Kafka stream, etc are writing during incident). Usually, unless you need the row visibility on 
+     * long time for transaction, this could be low (5M of xmin/xmax vs 50M of xid by default).
+     * 
+     */
     let xid_min_age = cap_value(_transaction_rate * 24, 20 * M10, managed_cache['autovacuum_freeze_max_age'] * 0.25)
     xid_min_age = realign_value(xid_min_age, 250 * K10)[request.options.align_index]
-    _item_tuning('vacuum_freeze_min_age', xid_min_age, PG_SCOPE.MAINTENANCE, response)
-
-    // For the MXID min_age, this support the row locking which is rarely met in the real-world (unless concurrent
-    // analytics/warehouse workload). But usually only one instance of WRITE connection is done gracefully (except
-    // concurrent Kafka stream, etc are writing during incident). Usually, unless you need the row visibility on
-    // long time for transaction, this could be low (5M of xmin/xmax vs 50M of xid by default).
-    // Tune the *_freeze_min_age
+    _ApplyItmTune('vacuum_freeze_min_age', xid_min_age, PG_SCOPE.MAINTENANCE, response)
     let multixact_min_age = cap_value(_transaction_rate * 18, 2 * M10, managed_cache['autovacuum_multixact_freeze_max_age'] * 0.25)
     multixact_min_age = realign_value(multixact_min_age, 250 * K10)[request.options.align_index]
-    _item_tuning('vacuum_multixact_freeze_min_age', multixact_min_age, PG_SCOPE.MAINTENANCE, response)
+    _ApplyItmTune('vacuum_multixact_freeze_min_age', multixact_min_age, PG_SCOPE.MAINTENANCE, response)
     return null;
 }
 
@@ -3741,28 +3694,28 @@ function _wal_integrity_buffer_size_tune(request, response) {
     console.info(`Impacted Attributes: wal_level, max_wal_senders, max_replication_slots, wal_sender_timeout,
         log_replication_commands, synchronous_commit, full_page_writes, fsync, logical_decoding_work_mem`)
     const replication_level = request.options.max_backup_replication_tool
-    const num_replicas = request.options.max_num_logical_replicas_on_primary +
-        request.options.max_num_stream_replicas_on_primary
+    const num_stream_replicas = request.options.max_num_stream_replicas_on_primary
+    const num_logical_replicas = request.options.max_num_logical_replicas_on_primary
+    const num_replicas = num_stream_replicas + num_logical_replicas
     const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
+    const _kwargs = request.options.tuning_kwargs
 
     // --------------------------------------------------------------------------
     // Tune the wal_level
-    const wal_level = 'wal_level'
-    let after_wal_level = managed_cache[wal_level]
-    if (replication_level === PG_BACKUP_TOOL.PG_LOGICAL || request.options.max_num_logical_replicas_on_primary > 0) {
+    let after_wal_level = managed_cache['wal_level']
+    if (replication_level === PG_BACKUP_TOOL.PG_LOGICAL || num_logical_replicas > 0) {
         // Logical replication (highest)
         after_wal_level = 'logical'
-    } else if (replication_level === PG_BACKUP_TOOL.PG_BASEBACKUP ||
-        request.options.max_num_stream_replicas_on_primary > 0 || num_replicas > 0) {
+    } else if (replication_level === PG_BACKUP_TOOL.PG_BASEBACKUP || num_stream_replicas > 0 || num_replicas > 0) {
         // Streaming replication (medium level)
         // The condition of num_replicas > 0 is to ensure that the user has set the replication slots
         after_wal_level = 'replica'
     } else if (replication_level in [PG_BACKUP_TOOL.PG_DUMP, PG_BACKUP_TOOL.DISK_SNAPSHOT] && num_replicas === 0) {
         after_wal_level = 'minimal'
     }
-    _item_tuning(wal_level, after_wal_level, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('wal_level', after_wal_level, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     // Disable since it is not used
-    _item_tuning('log_replication_commands', after_wal_level !== 'minimal' ? 'on' : 'off', PG_SCOPE.LOGGING, response)
+    _ApplyItmTune('log_replication_commands', after_wal_level !== 'minimal' ? 'on' : 'off', PG_SCOPE.LOGGING, response)
 
     // --------------------------------------------------------------------------
     // Tune the max_wal_senders, max_replication_slots, and wal_sender_timeout
@@ -3770,35 +3723,32 @@ function _wal_integrity_buffer_size_tune(request, response) {
     // forget to update this value so it is best to update it to be identical. Also, this value meant differently on
     // sending servers and subscriber, so it is best to keep it identical.
     // At PostgreSQL 11 or previously, the max_wal_senders is counted in max_connections
-    const max_wal_senders = 'max_wal_senders'
     let reserved_wal_senders = _DEFAULT_WAL_SENDERS[0]
-    if (managed_cache[wal_level] !== 'minimal') {
+    if (after_wal_level !== 'minimal') {
         if (num_replicas >= 8) {
             reserved_wal_senders = _DEFAULT_WAL_SENDERS[1]
         } else if (num_replicas >= 16) {
             reserved_wal_senders = _DEFAULT_WAL_SENDERS[2]
         }
     }
-    let after_max_wal_senders = reserved_wal_senders + (managed_cache[wal_level] !== 'minimal' ? num_replicas : 0)
-    _item_tuning(max_wal_senders, after_max_wal_senders, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    _item_tuning('max_replication_slots', after_max_wal_senders, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    let after_max_wal_senders = reserved_wal_senders + (after_wal_level !== 'minimal' ? num_replicas : 0)
+    _ApplyItmTune('max_wal_senders', after_max_wal_senders, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('max_replication_slots', after_max_wal_senders, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // Tune the wal_sender_timeout
-    if (request.options.offshore_replication && managed_cache[wal_level] !== 'minimal') {
+    if (request.options.offshore_replication && after_wal_level !== 'minimal') {
         const after_wal_sender_timeout = Math.max(10 * MINUTE, Math.ceil(MINUTE * (2 + (num_replicas / 4))))
-        _item_tuning('wal_sender_timeout', after_wal_sender_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        _ApplyItmTune('wal_sender_timeout', after_wal_sender_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     }
     // Tune the logical_decoding_work_mem
-    if (managed_cache[wal_level] !== 'logical') {
-        _item_tuning('logical_decoding_work_mem', 64 * Mi, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    if (after_wal_level !== 'logical') {
+        _ApplyItmTune('logical_decoding_work_mem', 64 * Mi, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     }
 
     // Tune the synchronous_commit, full_page_writes, fsync
-    const _profile_optmode_level = PG_PROFILE_OPTMODE.profile_ordering()
-    const synchronous_commit = 'synchronous_commit'
-    if (request.options.opt_transaction_lost in _profile_optmode_level.slice(1)) {
-        let after_synchronous_commit = managed_cache[synchronous_commit]
-        if (managed_cache[wal_level] === 'minimal') {
+    if (request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.SPIDEY) {
+        let after_synchronous_commit = managed_cache['synchronous_commit']
+        if (after_wal_level === 'minimal') {
             after_synchronous_commit = 'off'
             console.warn(`
                 WARNING: The synchronous_commit is off -> If data integrity is less important to you than response times
@@ -3816,27 +3766,22 @@ function _wal_integrity_buffer_size_tune(request, response) {
             after_synchronous_commit = 'remote_write'
         }
         console.warn(`
-                WARNING: User allows the lost transaction during crash but with ${managed_cache[wal_level]} wal_level at
+                WARNING: User allows the lost transaction during crash but with ${after_wal_level} wal_level at
                 profile ${request.options.opt_transaction_lost} but data loss could be there. Only enable this during
                 testing only.
             `)
-        _item_tuning(synchronous_commit, after_synchronous_commit, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-        if (request.options.opt_transaction_lost in _profile_optmode_level.slice(2)) {
-            _item_tuning('full_page_writes', 'off', PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-            if (request.options.opt_transaction_lost in _profile_optmode_level.slice(3) && request.options.operating_system === 'linux') {
-                _item_tuning('fsync', 'off', PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        _ApplyItmTune('synchronous_commit', after_synchronous_commit, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+        if (request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.OPTIMUS_PRIME) {
+            _ApplyItmTune('full_page_writes', 'off', PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+            if (request.options.opt_transaction_lost >= PG_PROFILE_OPTMODE.PRIMORDIAL && request.options.operating_system === 'linux') {
+                _ApplyItmTune('fsync', 'off', PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
             }
         }
     }
 
     // -------------------------------------------------------------------------
-    console.info(`Start tuning the WAL size of the PostgreSQL database server based on the WAL disk sizing`)
-    console.info(`Impacted Attributes: min_wal_size, max_wal_size, wal_keep_size, archive_timeout,
-        checkpoint_timeout, checkpoint_warning`)
-
+    console.info(`Start tuning the WAL size of the PostgreSQL database server based on the WAL disk sizing\nImpacted Attributes: min_wal_size, max_wal_size, wal_keep_size, archive_timeout, checkpoint_timeout, checkpoint_warning`)
     const _wal_disk_size = request.options.wal_spec.disk_usable_size
-    const _kwargs = request.options.tuning_kwargs
-    const _scope = PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE
 
     // Tune the max_wal_size (This is easy to tune as it is based on the maximum WAL disk total size) to trigger
     // the CHECKPOINT process. It is usually used to handle spikes in WAL usage (when the interval between two
@@ -3858,7 +3803,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         64 * Gi
     )
     after_max_wal_size = realign_value(after_max_wal_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
-    _item_tuning('max_wal_size', after_max_wal_size, _scope, response)
+    _ApplyItmTune('max_wal_size', after_max_wal_size, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // Tune the min_wal_size as these are not specifically related to the max_wal_size. This is the top limit of the
     // WAL partition so that if the disk usage beyond the threshold (disk capacity - min_wal_size), the WAL file
@@ -3871,7 +3816,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         Math.floor(1.05 * after_max_wal_size)
     )
     after_min_wal_size = realign_value(after_min_wal_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
-    _item_tuning('min_wal_size', after_min_wal_size, _scope, response)
+    _ApplyItmTune('min_wal_size', after_min_wal_size, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // 95% here to ensure you don't make mistake from your tuning guideline
     // 2x here is for SYNC phase during checkpoint, or in archive recovery or standby mode
@@ -3890,7 +3835,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         64 * Gi
     )
     after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
-    _item_tuning('wal_keep_size', after_wal_keep_size, _scope, response)
+    _ApplyItmTune('wal_keep_size', after_wal_keep_size, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // -------------------------------------------------------------------------
     // Tune the archive_timeout based on the WAL segment size. This is easy because we want to flush the WAL
@@ -3907,17 +3852,15 @@ function _wal_integrity_buffer_size_tune(request, response) {
         cap_value(managed_cache['archive_timeout'] + Math.floor(MINUTE * (_wal_scale_factor * 10 - num_replicas / 2 * 5)),
                   30 * MINUTE, 2 * HOUR), Math.floor(MINUTE / 4)
     )[request.options.align_index]
-    _item_tuning('archive_timeout', after_archive_timeout, _scope, response)
+    _ApplyItmTune('archive_timeout', after_archive_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // -------------------------------------------------------------------------
-    console.info(`Start tuning the WAL integrity of the PostgreSQL database server based on the data integrity 
-    and provided allowed time of data transaction loss.`)
-    console.info(`Impacted Attributes: wal_buffers, wal_writer_delay`)
+    console.info(`Start tuning the WAL integrity of the PostgreSQL database server based on the data integrity and provided allowed time of data transaction loss.\nImpacted Attributes: wal_buffers, wal_writer_delay`)
 
     // Apply tune the wal_writer_delay here regardless of the synchronous_commit so that we can ensure
     // no mixed of lossy and safe transactions
     const after_wal_writer_delay = Math.floor(request.options.max_time_transaction_loss_allow_in_millisecond / 3.25)
-    _item_tuning('wal_writer_delay', after_wal_writer_delay, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('wal_writer_delay', after_wal_writer_delay, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // -------------------------------------------------------------------------
     // Now we need to estimate how much time required to flush the full WAL buffers to disk (assuming we
@@ -3930,19 +3873,6 @@ function _wal_integrity_buffer_size_tune(request, response) {
         console.warn(`WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.`)
     }
     const wal_tput = request.options.wal_spec.perf()[0]
-
-    // Just some useful information
-    const best_wal_time = wal_time(Math.floor(managed_cache['wal_buffers']), 1.0, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['total_time']
-    const worst_wal_time = wal_time(Math.floor(managed_cache['wal_buffers']), 2.0, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['total_time']
-    console.info(`The WAL buffer (at full) flush time is estimated to be ${best_wal_time.toFixed(2)} ms and 
-        ${worst_wal_time.toFixed(2)} ms between cycle.`)
-    if (best_wal_time > after_wal_writer_delay ||
-        worst_wal_time > request.options.max_time_transaction_loss_allow_in_millisecond) {
-        console.warn(`WARNING: The WAL buffers flush time is greater than the wal_writer_delay or the maximum time of 
-            transaction loss allowed. It is better to reduce the WAL buffers or increase your WAL file size (to optimize 
-            clean throughput).`)
-    }
-
     let data_amount_ratio_input = 1
     let transaction_loss_ratio = 2 / 3.25  // Not 2x of delay at 1 full WAL buffers
     if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.OPTIMUS_PRIME) {
@@ -3964,7 +3894,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         current_wal_buffers -= decay_rate
     }
 
-    _item_tuning('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
     console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} flush time is estimated to be ${wal_time_report} ms.`)
     return null
@@ -3999,7 +3929,7 @@ function _hash_mem_adjust(request, response) {
     } else if (request.options.workload_type in [PG_WORKLOAD.OLAP]) {
         after_hash_mem_multiplier = Math.min(2.0 + 0.150 * (current_work_mem / (40 * Mi)), 3.0)
     }
-    _item_tuning('hash_mem_multiplier', after_hash_mem_multiplier, PG_SCOPE.MEMORY, response,
+    _ApplyItmTune('hash_mem_multiplier', after_hash_mem_multiplier, PG_SCOPE.MEMORY, response,
         `by workload: ${request.options.workload_type} and working memory ${current_work_mem}`)
     return null;
 }
@@ -4022,7 +3952,7 @@ function _wrk_mem_tune_oneshot(request, response, shared_buffers_ratio_increment
         console.warn(`WARNING: The shared_buffers and work_mem are not increased as the condition is met 
             or being unchanged, or converged -> Stop ...`)
     }
-    _trigger_tuning(tuning_items, request, response)
+    _TriggerAutoTune(tuning_items, request, response)
     _hash_mem_adjust(request, response)
     return [sbuf_ok, wbuf_ok]
 }
@@ -4041,8 +3971,7 @@ function _wrk_mem_tune(request, response) {
         console.warn(`WARNING: The memory pool tuning is disabled by the user -> Skip the extra tuning.`)
         return null;
     }
-    console.info(`Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: 
-        shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size`)
+    console.info(`Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size, maintenance_work_mem`)
     const _kwargs = request.options.tuning_kwargs
     let ram = request.options.usable_ram
     let srv_mem_str = bytesize_to_hr(ram)
@@ -4053,7 +3982,7 @@ function _wrk_mem_tune(request, response) {
     const keys = {
         [PG_SCOPE.MEMORY]: ['shared_buffers', 'temp_buffers', 'work_mem'],
         [PG_SCOPE.QUERY_TUNING]: ['effective_cache_size',],
-        [PG_SCOPE.MAINTENANCE]: ['vacuum_buffer_usage_limit',]
+        [PG_SCOPE.MAINTENANCE]: ['maintenance_work_mem', 'vacuum_buffer_usage_limit']
     }
 
     function _show_tuning_result(first_text) {
@@ -4064,8 +3993,7 @@ function _wrk_mem_tune(request, response) {
                 if (!(key_itm in m_items)) {
                     continue
                 }
-                console.info(`\n\t - ${m_items[key_itm].transform_keyname()}: ${m_items[key_itm].out_display()} 
-                    (in postgresql.conf) or detailed: ${m_items[key_itm].after} (in bytes).`)
+                console.info(`\t - ${m_items[key_itm].transform_keyname()}: ${m_items[key_itm].out_display()} (in postgresql.conf) or detailed: ${m_items[key_itm].after} (in bytes).`)
             }
         }
     }
@@ -4197,38 +4125,35 @@ function _wrk_mem_tune(request, response) {
             Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
             min_ckpt_time / managed_cache['checkpoint_completion_target']), Math.floor(MINUTE / 2)
     )[request.options.align_index]
-    _item_tuning('checkpoint_timeout', after_checkpoint_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    _item_tuning('checkpoint_warning', Math.floor(after_checkpoint_timeout / 10), PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout / 10), PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     return null;
 }
 
 function _logger_tune(request, response) {
     console.info('===== Logging and Query Statistics Tuning =====')
-    console.info(`Start tuning the logging and query statistics on the PostgreSQL database server based on the 
-        database workload and production guidelines. Impacted attributes: track_activity_query_size, 
-        log_parameter_max_length, log_parameter_max_length_on_error, log_min_duration_statement,
-        auto_explain.log_min_duration, track_counts, track_io_timing, track_wal_io_timing, `)
+    console.info(`Start tuning the logging and query statistics on the PostgreSQL database server based on the database workload and production guidelines. \nImpacted attributes: track_activity_query_size, log_parameter_max_length, log_parameter_max_length_on_error, log_min_duration_statement, auto_explain.log_min_duration, track_counts, track_io_timing, track_wal_io_timing, `)
     const _kwargs = request.options.tuning_kwargs;
 
     // Configure the track_activity_query_size, log_parameter_max_length, log_parameter_max_error_length
     const log_length = realign_value(_kwargs.max_query_length_in_bytes, 64)[request.options.align_index]
-    _item_tuning('track_activity_query_size', log_length, PG_SCOPE.QUERY_TUNING, response)
-    _item_tuning('log_parameter_max_length', log_length, PG_SCOPE.LOGGING, response)
-    _item_tuning('log_parameter_max_length_on_error', log_length, PG_SCOPE.LOGGING, response)
+    _ApplyItmTune('track_activity_query_size', log_length, PG_SCOPE.QUERY_TUNING, response)
+    _ApplyItmTune('log_parameter_max_length', log_length, PG_SCOPE.LOGGING, response)
+    _ApplyItmTune('log_parameter_max_length_on_error', log_length, PG_SCOPE.LOGGING, response)
 
     // Configure the log_min_duration_statement, auto_explain.log_min_duration
     const log_min_duration = realign_value(_kwargs.max_runtime_ms_to_log_slow_query, 20)[request.options.align_index]
-    _item_tuning('log_min_duration_statement', log_min_duration, PG_SCOPE.LOGGING, response)
+    _ApplyItmTune('log_min_duration_statement', log_min_duration, PG_SCOPE.LOGGING, response)
     let explain_min_duration = Math.floor(log_min_duration * _kwargs.max_runtime_ratio_to_explain_slow_query)
     explain_min_duration = realign_value(explain_min_duration, 20)[request.options.align_index]
-    _item_tuning('auto_explain.log_min_duration', explain_min_duration, PG_SCOPE.EXTRA, response)
+    _ApplyItmTune('auto_explain.log_min_duration', explain_min_duration, PG_SCOPE.EXTRA, response)
 
     // Tune the IO timing
-    _item_tuning('track_counts', 'on', PG_SCOPE.QUERY_TUNING, response)
-    _item_tuning('track_io_timing', 'on', PG_SCOPE.QUERY_TUNING, response)
-    _item_tuning('track_wal_io_timing', 'on', PG_SCOPE.QUERY_TUNING, response)
-    _item_tuning('auto_explain.log_timing', 'on', PG_SCOPE.EXTRA, response)
+    _ApplyItmTune('track_counts', 'on', PG_SCOPE.QUERY_TUNING, response)
+    _ApplyItmTune('track_io_timing', 'on', PG_SCOPE.QUERY_TUNING, response)
+    _ApplyItmTune('track_wal_io_timing', 'on', PG_SCOPE.QUERY_TUNING, response)
+    _ApplyItmTune('auto_explain.log_timing', 'on', PG_SCOPE.EXTRA, response)
     return null;
 }
 
@@ -4326,7 +4251,7 @@ options = new PG_TUNE_USR_OPTIONS(
         enable_sysctl_general_tuning: false, enable_sysctl_correction_tuning: false,
         enable_database_general_tuning: true, enable_database_correction_tuning: true,
         // User-Tuning Profiles
-        workload_profile: 2, pgsql_version: 17,
+        workload_profile: PG_SIZING.LARGE, pgsql_version: 17,
         database_size_in_gib: 0, // [0, 1000]. Default is 0 GiB for maximum of 60% of data disk
         num_write_transaction_per_hour_on_workload: 50 * K10, // [K10, 20 * M10]. Default is 50 * K10 (50K).
         align_index: 1, // [0, 1]. Default is 1. Choose the higher number during alignment
@@ -4352,5 +4277,5 @@ options = new PG_TUNE_USR_OPTIONS(
 rq = new PG_TUNE_REQUEST({ options: options, include_comment: false, custom_style: null} )
 response = new PG_TUNE_RESPONSE()
 Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
-
+correction_tune(rq, response);
 

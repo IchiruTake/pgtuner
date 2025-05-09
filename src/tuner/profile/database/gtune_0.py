@@ -386,7 +386,7 @@ _DB_VACUUM_PROFILE = {
     },
     'maintenance_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response: realign_value(
-            cap_value(options.usable_ram // 16, 64 * Mi, 8 * Gi), page_size=Ki)[options.align_index],
+            cap_value((options.usable_ram - global_cache['shared_buffers']) // 10, 64 * Mi, 8 * Gi), page_size=Ki)[options.align_index],
         'default': 64 * Mi,
         'hardware_scope': 'mem',
         'post-condition-group': lambda value, cache, options:
@@ -400,13 +400,13 @@ _DB_VACUUM_PROFILE = {
                    "default value too high. From Azure, if the task is VACUUM, the PostgreSQL implementation will only "
                    "use maximum 1 GiB (which is the same as one datafile). If the task is CREATE INDEX, the PostgreSQL "
                    "would use as much as autovacuum_work_mem with multiplier. By recommendation, it is best to keep at "
-                   "around 5 - 10% of physical memory (Amazon is 25%, Azure is restrained around 97 MiB to 577 MiB, "
-                   "but our is 8.33 %). This default is good enough and capped at maximum 8 GiB of RAM. "
-                   "Sets the limit for the amount that autovacuum, manual vacuum, bulk index build and other "
-                   "maintenance routines are permitted to use. Applications which perform large ETL operations may "
-                   "need to allocate up to 1/4 of RAM to support large bulk vacuums. Note that each autovacuum "
-                   "worker may use this much, so if using multiple autovacuum workers you may want to decrease this "
-                   "value so that they can't claim over 1/8 or 1/4 of available RAM (our is capped at 1/3).",
+                   "around 5 - 10% of physical memory (Amazon is 25%, Azure is restrained around 97 MiB to 577 MiB). "
+                   "This default is good enough and should be capped at maximum 8 GiB of RAM. Sets the limit for the "
+                   "amount that autovacuum, manual vacuum, bulk index build and other maintenance routines are permitted "
+                   "to use. Applications which perform large ETL operations may need to allocate up to 1/4 of RAM "
+                   "to support large bulk vacuums. Note that each autovacuum worker may use this much, so if using "
+                   "multiple autovacuum workers you may want to decrease this value so that they can't claim over "
+                   "1/8 or 1/4 of available RAM (our is capped at 1/3).",
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'autovacuum_work_mem': {
