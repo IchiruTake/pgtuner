@@ -916,19 +916,15 @@ def _wal_integrity_buffer_size_tune(
 
     wal_tput = request.options.wal_spec.perf()[0]
     current_wal_buffers = int(managed_cache['wal_buffers'])  # Ensure a new copy
-    match request.options.opt_wal_buffers:
-        case PG_PROFILE_OPTMODE.SPIDEY:
-            data_amount_ratio_input = 1
-            transaction_loss_ratio = 2 / 3.25  # Not 2x of delay at 1 full WAL buffers
-        case PG_PROFILE_OPTMODE.OPTIMUS_PRIME:
-            data_amount_ratio_input = 1.5
-            transaction_loss_ratio = 3 / 3.25
-        case PG_PROFILE_OPTMODE.PRIMORDIAL:
-            data_amount_ratio_input = 2
-            transaction_loss_ratio = 3 / 3.25
-        case _:
-            data_amount_ratio_input = 1
-            transaction_loss_ratio = 2 / 3.25
+    if request.options.opt_wal_buffers == PG_PROFILE_OPTMODE.OPTIMUS_PRIME:
+        data_amount_ratio_input = 1.5
+        transaction_loss_ratio = 3 / 3.25
+    elif request.options.opt_wal_buffers == PG_PROFILE_OPTMODE.PRIMORDIAL:
+        data_amount_ratio_input = 2
+        transaction_loss_ratio = 3 / 3.25
+    else:
+        data_amount_ratio_input = 1
+        transaction_loss_ratio = 2 / 3.25
 
     decay_rate = 16 * DB_PAGE_SIZE
     current_wal_buffers = realign_value(
@@ -1021,7 +1017,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # Additional workload for specific workload
     _logs = [
         '\n ===== Memory Usage Tuning ====='
-        'Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: '
+        '\nStart tuning the memory usage based on the specific workload profile. \nImpacted attributes: '
         'shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size, '
         'maintenance_work_mem'
     ]
@@ -1160,7 +1156,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
 
     # max_wal_size is added for automatic checkpoint as threshold
     # Technically the upper limit is at 1/2 of available RAM (since shared_buffers + effective_cache_size ~= RAM)
-    _data_amount = min(int(managed_cache['shared_buffers'] * _shared_buffers_ratio) // Mi,
+    _data_amount = min(int(managed_cache['shared_buffers'] * _shared_buffers_ratio / Mi),
                        managed_cache['effective_cache_size'] // Ki,
                        managed_cache['max_wal_size'] // Ki, )  # Measured by MiB.
     min_ckpt_time = ceil(_data_amount * 1 / _data_trans_tput)

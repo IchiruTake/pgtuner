@@ -19,7 +19,7 @@ function _TriggerAutoTune(keys, request, response) {
                 continue
             }
             const t_itm = managed_items[key]
-            if (t_itm !== null && typeof t_itm.trigger !== 'function') {
+            if (t_itm !== null && typeof t_itm.trigger === 'function') {
                 console.log(t_itm);
                 const old_result = managed_cache[key]
                 t_itm.after = t_itm.trigger(managed_cache, managed_cache, request.options, response)
@@ -507,12 +507,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     const _failsafe_data_size = (2 * _fsm_vm_size + 2 * _data_size)
     let _failsafe_hour = (2 * _fsm_vm_size / (_data_tput * _wraparound_effective_io)) / HOUR
     _failsafe_hour += (_failsafe_data_size / (_data_tput * _wraparound_effective_io)) / HOUR
-    console.log(`In the worst-case scenario (where failsafe triggered and cost-based vacuum is disabled), the amount 
-        of data read and write is usually twice the data files, resulting in ${_failsafe_data_size} MiB with effective 
-        throughput of ${(_wraparound_effective_io * 100).toFixed(1)}% or 
-        ${(_data_tput * _wraparound_effective_io).toFixed(1)} MiB/s; Thereby having a theoretical 
-        worst-case of ${_failsafe_hour.toFixed(1)} hours for failsafe vacuuming, and a safety scale factor 
-        of ${_future_data_scaler.toFixed(1)} times the worst-case scenario.`)
+    console.log(`In the worst-case scenario (where failsafe triggered and cost-based vacuum is disabled), the amount of data read and write is usually twice the data files, resulting in ${_failsafe_data_size} MiB with effective throughput of ${(_wraparound_effective_io * 100).toFixed(1)}% or ${(_data_tput * _wraparound_effective_io).toFixed(1)} MiB/s; Thereby having a theoretical worst-case of ${_failsafe_hour.toFixed(1)} hours for failsafe vacuuming, and a safety scale factor of ${_future_data_scaler.toFixed(1)} times the worst-case scenario.`)
 
     let _norm_hour = (2 * _fsm_vm_size / (_data_tput * _wraparound_effective_io)) / HOUR
     _norm_hour += ((_data_size + _index_size) / (_data_tput * _wraparound_effective_io)) / HOUR
@@ -521,10 +516,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     const _worst_data_vacuum_time = _data_vacuum_time * _future_data_scaler
 
     console.info(
-        `WARNING: The anti-wraparound vacuuming time is estimated to be ${_data_vacuum_time.toFixed(1)} hours and scaled 
-        time of ${_worst_data_vacuum_time.toFixed(1)} hours, either you should (1) upgrade the data volume to have a 
-        better performance with higher IOPS and throughput, or (2) leverage pg_cron, pg_timetable, or any cron-scheduled 
-        alternative to schedule manual vacuuming when age is coming to normal vacuuming threshold.`
+        `WARNING: The anti-wraparound vacuuming time is estimated to be ${_data_vacuum_time.toFixed(1)} hours and scaled time of ${_worst_data_vacuum_time.toFixed(1)} hours, either you should (1) upgrade the data volume to have a better performance with higher IOPS and throughput, or (2) leverage pg_cron, pg_timetable, or any cron-scheduled alternative to schedule manual vacuuming when age is coming to normal vacuuming threshold.`
     )
 
     /**
@@ -835,7 +827,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
 
     _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
-    console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} flush time is estimated to be ${wal_time_report} ms.`)
+    console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} -> ${wal_time_report}.`)
     return null
 }
 
@@ -906,10 +898,9 @@ function _wrk_mem_tune(request, response) {
     console.info(`===== Memory Usage Tuning =====`)
     _hash_mem_adjust(request, response)
     if (request.options.opt_mem_pool === PG_PROFILE_OPTMODE.NONE ) {
-        // Disable the additional memory tuning as these workload does not make benefits when increase the memory
-        console.warn(`WARNING: The memory pool tuning is disabled by the user -> Skip the extra tuning.`)
         return null;
     }
+
     console.info(`Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size, maintenance_work_mem`)
     const _kwargs = request.options.tuning_kwargs
     let ram = request.options.usable_ram
@@ -941,9 +932,7 @@ function _wrk_mem_tune(request, response) {
     let _mem_check_string = Object.entries(_get_wrk_mem_func())
         .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
         .join('; ');
-    console.info(`The working memory usage based on memory profile is ${_mem_check_string} before tuning. 
-        NOTICE: Expected maximum memory usage in normal condition: ${(stop_point * 100).toFixed(2)} (%) of
-        ${srv_mem_str} or ${bytesize_to_hr(Math.floor(ram * stop_point))}.`)
+    console.info(`The working memory usage based on memory profile is ${_mem_check_string} before tuning. NOTICE: Expected maximum memory usage in normal condition: ${(stop_point * 100).toFixed(2)} (%) of ${srv_mem_str} or ${bytesize_to_hr(Math.floor(ram * stop_point))}.`)
 
     // Trigger the tuning
     const shared_buffers_ratio_increment = boost_ratio * 2.0 * _kwargs.mem_pool_tuning_ratio
@@ -1019,12 +1008,11 @@ function _wrk_mem_tune(request, response) {
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
         decay_step += 1
     }
-
-    // Now we have the optimal point
     console.debug(`DEBUG: The optimal point is found after ${bump_step} bump steps and ${decay_step} decay steps`)
     if (bump_step + decay_step >= 3) {
         console.debug(`DEBUG: The memory pool tuning algorithm is incorrect. Revise algorithm to be more accurate`)
     }
+
     console.info(`The shared_buffers_ratio is now ${_kwargs.shared_buffers_ratio.toFixed(5)}.`)
     console.info(`The max_work_buffer_ratio is now ${_kwargs.max_work_buffer_ratio.toFixed(5)}.`)
     _show_tuning_result('Result (after): ')
@@ -1057,8 +1045,7 @@ function _wrk_mem_tune(request, response) {
         Math.floor(managed_cache['max_wal_size'] / Ki),
     )  // Measured by MiB.
     let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
-    console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation 
-        of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
+    console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
     const after_checkpoint_timeout = realign_value(
         Math.max(managed_cache['checkpoint_timeout'] +
             Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),

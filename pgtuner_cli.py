@@ -66,12 +66,12 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
 if __name__ == "__main__":
     data_index_disk = PG_DISK_PERF(
         random_iops_spec=5 * K10, random_iops_scale_factor=1.0,
-        throughput_spec=300, throughput_scale_factor=1.0,
+        throughput_spec=350, throughput_scale_factor=1.0,
         disk_usable_size=128 * Gi, num_disks=1
     )
     wal_disk = PG_DISK_PERF(
         random_iops_spec=5 * K10, random_iops_scale_factor=1.0,
-        throughput_spec=300, throughput_scale_factor=1.0,
+        throughput_spec=500, throughput_scale_factor=1.0,
         disk_usable_size=256 * Gi, num_disks=1
     )
     kw = PG_TUNE_USR_KWARGS(
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         user_max_connections=0, # Default to let pgtuner manage the number of connections
         superuser_reserved_connections_scale_ratio=1.5, # [1, 3]. Higher for less superuser reserved connections
         single_memory_connection_overhead=5 * Mi, # [2, 12]. Default is 5 MiB. This is estimation and not big impact
-        memory_connection_to_dedicated_os_ratio=0.3, # [0, 1]. Default is 0.3. This is estimation and not big impact
+        memory_connection_to_dedicated_os_ratio=0.7, # [0, 1]. Default is 0.7. This is estimation and not big impact
 
         # Memory Utilization (Basic)
         effective_cache_size_available_ratio=0.985, # [0.95, 1.0]. Default is 0.985 (98.5%).
@@ -90,9 +90,9 @@ if __name__ == "__main__":
 
         # Memory Utilization (Advanced)
         max_normal_memory_usage=0.45, # [0.35, 0.80]. Default is 0.45 (45%). The optimized ratio for normal memory usage
-        mem_pool_tuning_ratio=0.6, # [0.0, 1.0]. Default is 0.6 (60%). The optimized ratio for memory pool tuning
+        mem_pool_tuning_ratio=0.4, # [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
         # Maximum float allowed is [-60, 60] under 64-bit system
-        hash_mem_usage_level=-6, # [-50, 50]. Default is -6. The optimized ratio for hash memory usage level
+        hash_mem_usage_level=-5, # [-50, 50]. Default is -6. The optimized ratio for hash memory usage level
         mem_pool_parallel_estimate=True, # Default is True to assume the use of p
 
         # Logging behaviour (query size, and query runtime)
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         max_time_transaction_loss_allow_in_millisecond=650,
         max_num_stream_replicas_on_primary=0,
         max_num_logical_replicas_on_primary=0,
-        max_backup_replication_tool=2,
+        max_backup_replication_tool=PG_BACKUP_TOOL.PG_BASEBACKUP,
         offshore_replication=False,
     )
     rq = PG_TUNE_REQUEST(options=options, include_comment=False, custom_style=None)

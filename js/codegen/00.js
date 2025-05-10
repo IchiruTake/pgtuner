@@ -21,7 +21,6 @@ const __VERSION__ = __version__;
 const __AUTHOR__ = 'Ichiru Take';
 
 const APP_NAME = 'PGTUNER_DBA'; // This name is used on log.toml,
-const SUPPORTED_POSTGRES_VERSIONS = [13, 14, 15, 16, 17, 18];
 const APP_NAME_LOWER = APP_NAME.toLowerCase();
 const APP_NAME_UPPER = APP_NAME.toUpperCase();
 

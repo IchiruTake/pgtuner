@@ -94,3 +94,10 @@ const rewrite_items = (profiles) => {
     }
     return null;
 };
+const show_profile = (profile) => {
+    /* Show the profile data. */
+    for (const [key, value] of Object.entries(profile)) {
+        console.debug(key, value[1]);
+    }
+    return null;
+}

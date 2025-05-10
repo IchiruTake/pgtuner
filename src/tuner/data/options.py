@@ -46,7 +46,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'The supported range is [1, 3], default is 1.5. Higher value means less superuser reserved '
                     'connection as compared to the normal reserved connection.'
     )
-    single_memory_connection_overhead: ByteSize = Field(
+    single_memory_connection_overhead: ByteSize | PositiveInt = Field(
         default=5 * Mi, ge=2 * Mi, le=12 * Mi, frozen=True,
         description='The memory overhead for a single connection at idle state. The supported range is [2 MiB, 12 MiB], '
                     'default is 5 MiB in total. This value is used to estimate the memory usage for each connection; '
@@ -115,14 +115,14 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'background tasks.'
     )
     mem_pool_tuning_ratio: float = Field(
-        default=0.6, ge=0.0, le=1.0, frozen=True,
+        default=0.4, ge=0.0, le=1.0, frozen=True,
         description='The memory tuning ratio in correction tuning between shared_buffers and work_buffers. Supported '
-                    'value is [0, 1] and default is 0.6; Higher value meant that the tuning would prefer the '
+                    'value is [0, 1] and default is 0.4; Higher value meant that the tuning would prefer the '
                     ':arg`shared_buffers` over the :arg:`work_buffers`, and vice versa.'
     )
     # A too small or too large bound can lead to number overflow
     hash_mem_usage_level: int = Field(
-        default=-6, ge=-50, le=50, frozen=True,
+        default=-5, ge=-50, le=50, frozen=True,
         description='The *average* hash memory usage level to determine the average work_mem in use by multiply with '
                     ':func:`generalized_mean(1, hash_mem, level=hash_mem_usage_level)`. Higher value would assume that '
                     'all PostgreSQL connections, on average, do more hash-based operations than normal operations, and '
@@ -137,7 +137,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     )
 
     # Tune logging behaviour (query size, and query runtime)
-    max_query_length_in_bytes: ByteSize = Field(
+    max_query_length_in_bytes: ByteSize | PositiveInt = Field(
         default=2 * Ki, ge=64, le=64 * Mi, multiple_of=32, frozen=True,
         description='The maximum query length in bytes. The supported range is [64 B, 64 MiB], default to 2 KiB. '
                     'Default on PostgreSQL is 1 KiB. It is recommended to not set this value too high to prevent the '

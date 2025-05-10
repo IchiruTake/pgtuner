@@ -19,8 +19,8 @@ class PG_TUNE_USR_KWARGS {
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
         this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
-        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.6;
-        this.hash_mem_usage_level = options.hash_mem_usage_level ?? -6;
+        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.4;
+        this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
         // Tune logging behaviour
         this.max_query_length_in_bytes = options.max_query_length_in_bytes ?? (2 * Ki);

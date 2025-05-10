@@ -13,7 +13,7 @@ const _DB17_LOG_PROFILE = {
 const _DB17_VACUUM_PROFILE = {
     "vacuum_buffer_usage_limit": {
         "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         "default": 2 * Mi,
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -54,9 +54,15 @@ if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepmerge(DB17_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            // deepmerge(DB17_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB17_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
         }
     }
     rewrite_items(DB17_CONFIG_PROFILE);
 }
-// console.debug(`DB17_CONFIG_PROFILE: ${JSON.stringify(DB17_CONFIG_PROFILE, null, 2)}`);
+// console.debug(`DB17_CONFIG_PROFILE: `);
+// show_profile(DB17_CONFIG_PROFILE);

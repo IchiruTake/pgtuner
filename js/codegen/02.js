@@ -17,6 +17,7 @@ const _max_total_items_per_default_conf = (() => {
     return total;
 })();
 const _max_total_items_per_addition_conf = (num_args) => 32 * Math.max(num_args, _max_num_conf);
+const _max_num_items_in_depth = (depth = Math.floor(_max_depth / 2 + 1)) => Math.max(_min_num_base_item_in_layer, Math.floor(_max_num_base_item_in_layer / (4 ** depth)));
 
 // Actions for immutable types (level1) and copy actions
 // Possible values (as strings): 'override', 'bypass', 'terminate'
@@ -33,53 +34,66 @@ class RecursionError extends Error {
     }
 }
 
-function checkVariableType(variable) {
+
+function _is_immutable_type(value) {
+    // Check if the value is immutable (string, number, boolean, or null).
+    return value === null || ["number", "string", "boolean", "function"].includes(typeof value);
+}
+
+function _check_mutable_detail(variable) {
     if (Array.isArray(variable)) {
         return "list";
-    } else if (variable instanceof Map) {
-        return "map";
     } else if (typeof variable === 'object' &&
         variable !== null &&
         variable.constructor === Object) {
         return "hashmap";
+    } else if (variable instanceof Map) {
+        return "map";
     } else {
         return "other";
     }
 }
 
 
-function _max_num_items_in_depth(depth = Math.floor(_max_depth / 2 + 1)) {
-    return Math.max(_min_num_base_item_in_layer, Math.floor(_max_num_base_item_in_layer / (4 ** depth)));
-}
-
 // Compute depth count: for objects and arrays.
 function _depth_count(a) {
-    if (a !== null && typeof a === "object") {
-        let values;
-        if (Array.isArray(a)) {
-            values = a;
-        } else {
-            values = Object.values(a);
+    if (_is_immutable_type(a)) {
+        return 0;
+    }
+    const type_a = _check_mutable_detail(a);
+    if (type_a === 'hashmap' || type_a === 'map') {
+        // For objects and maps, we need to check the values.
+        if (Object.keys(a).length === 0) {
+            return 1;
         }
-        if (values.length === 0) {
-            return 0;
-        }
+        const values = Object.values(a);
         return 1 + Math.max(...values.map(_depth_count));
+    } else if (type_a === 'list') {
+        // For arrays, we need to check the elements.
+        if (a.length === 0) {
+            return 1;
+        }
+        return 1 + Math.max(...a.map(_depth_count));
     }
     return 0;
 }
 
 // Compute the total number of items recursively in an object.
 function _item_total_count(a) {
-    if (a !== null && typeof a === "object") {
-        let count = Array.isArray(a) ? a.length : Object.keys(a).length;
-        let values;
-        if (Array.isArray(a)) {
-            values = a;
-        } else {
-            values = Object.values(a);
+    if (_is_immutable_type(a)) {
+        return 0;
+    }
+    const type_a = _check_mutable_detail(a);
+    if (type_a === 'hashmap' || type_a === 'map') {
+        // For objects and maps, we need to check the values.
+        let count = Object.keys(a).length;
+        for (const v of Object.values(a)) {
+            count += _item_total_count(v);
         }
-        for (const v of values) {
+        return count;
+    } else if (type_a === 'list') {
+        let count = a.length;
+        for (const v of a) {
             count += _item_total_count(v);
         }
         return count;
@@ -89,18 +103,32 @@ function _item_total_count(a) {
 
 // A simple shallow copy function. For arrays and plain objects.
 function _copy(value) {
-    if (Array.isArray(value)) {
+    if (_is_immutable_type(value)) {
         return value.slice();
-    } else if (value !== null && typeof value === "object") {
-        return Object.assign({}, value);
     }
-    return value;
+    const type_value = _check_mutable_detail(value);
+    if (type_value === 'list') {
+        return [...value];
+    } else if (type_value === 'hashmap' || type_value === 'map') {
+        return {...value}
+    } else {
+        return new Error(`Unsupported type: ${type_value}`);
+    }
 }
 
 // A simple deep copy function using JSON methods.
 function _deepcopy(value) {
-    // Note: This works if the object is JSON-compatible.
-    return JSON.parse(JSON.stringify(value));
+    if (_is_immutable_type(value)) {
+        return value;
+    }
+    const type_value = _check_mutable_detail(value);
+    if (type_value === 'list') {
+        return JSON.parse(JSON.stringify(value));
+    } else if (type_value === 'hashmap' || type_value === 'map') {
+        return JSON.parse(JSON.stringify(value));
+    } else {
+        return new Error(`Unsupported type: ${type_value}`);
+    }
 }
 
 /**
@@ -173,9 +201,9 @@ function _deepmerge(
         const bvalue = b[bkey];
         if (!(bkey in a)) {
             // Key not present in a.
-            if (bvalue === null || ["number", "string", "boolean"].includes(typeof bvalue)) {
+            if (_is_immutable_type(bvalue)) {
                 _trigger_update(result, bkey, bvalue, not_available_immutable_action);
-            } else if (typeof bvalue === "object") {
+            } else if (_check_mutable_detail(bvalue) !== 'other') {
                 _trigger_update(result, bkey, bvalue, not_available_mutable_action);
             }
             else if (!skiperror) {
@@ -183,28 +211,32 @@ function _deepmerge(
             }
         } else {
             let abkey_value = a[bkey];
-            // Both are primitives (immutable)
-            if (
-                (abkey_value === null || ["number", "string", "boolean"].includes(typeof abkey_value)) &&
-                (bvalue === null || ["number", "string", "boolean"].includes(typeof bvalue))
-            ) {
+            // If both are immutable types, perform the action of :var:`immutable_action` on result with the value in B
+            // If one is primitive and the other is object — heterogeneous types. (Error here)
+
+            if ( _is_immutable_type(abkey_value) && _is_immutable_type(bvalue)) {
                 _trigger_update(result, bkey, bvalue, available_immutable_action);
-            }
-            // One is primitive and the other is object — heterogeneous types.
-            else if (
-                ((abkey_value === null || ["number", "string", "boolean"].includes(typeof abkey_value)) &&
-                    (bvalue !== null && typeof bvalue === "object")) ||
-                ((abkey_value !== null && typeof abkey_value === "object") &&
-                    (bvalue === null || ["number", "string", "boolean"].includes(typeof bvalue)))
-            ) {
+            } else if (_is_immutable_type(abkey_value) && _check_mutable_detail(bvalue) !== 'other') {
+                // I am not sure if we have JSON reference here
                 if (!skiperror) {
                     throw new TypeError(`Conflict at ${path.slice(0, curdepth).join("->")} in the #${merged_index_item} configuration as value in both sides are heterogeneous of type`);
+                } else {
+                    // result[bkey] = deepcopy(bvalue)
+                }
+            } else if (_is_immutable_type(bvalue) && _check_mutable_detail(abkey_value) !== 'other' ) {
+                // I am not sure if we have JSON reference here
+                if (!skiperror) {
+                    throw new TypeError(`Conflict at ${path.slice(0, curdepth).join("->")} in the #${merged_index_item} configuration as value in both sides are heterogeneous of type`);
+                } else {
+                    // result[bkey] = deepcopy(bvalue)
                 }
             }
             // Both are objects (mutable)
-            else if ((abkey_value !== null && typeof abkey_value === "object") && (bvalue !== null && typeof bvalue === "object")) {
-                // If both are plain objects, recursively merge.
-                if (!Array.isArray(abkey_value) && !Array.isArray(bvalue)) {
+            else if (_check_mutable_detail(abkey_value) !== 'other' && _check_mutable_detail(bvalue) !== 'other') {
+                // If the key value is a dict, both in A and in B, merge the dicts recursively.
+                const type_abkey_value = _check_mutable_detail(abkey_value);
+                const type_bvalue = _check_mutable_detail(bvalue);
+                if (type_abkey_value !== 'list' && type_bvalue !== 'list') {
                     _deepmerge(
                         abkey_value, bvalue, result[bkey], [...path],
                         merged_index_item, curdepth, maxdepth,
@@ -214,16 +246,12 @@ function _deepmerge(
                     );
                 }
                 // If both are arrays, trigger list conflict update.
-                else if (Array.isArray(abkey_value) && Array.isArray(bvalue)) {
+                else if (type_abkey_value === 'list' && type_bvalue === 'list') {
                     _trigger_update(result, bkey, bvalue, list_conflict_action);
                 }
                 else if (!skiperror) {
                     throw new TypeError(`Conflict at ${path.slice(0, curdepth).join("->")} in the #${merged_index_item} configuration as value in both sides are heterogeneous or unsupported types`);
                 }
-            }
-            // If the values are equal, do nothing.
-            else if (JSON.stringify(abkey_value) === JSON.stringify(bvalue)) {
-                // Do nothing.
             }
             // Edge-case: values not equal
             else if (!skiperror) {

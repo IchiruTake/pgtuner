@@ -4,4 +4,5 @@
  */
 
 const DB13_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE };
-// console.debug(`DB13_CONFIG_PROFILE: ${JSON.stringify(DB13_CONFIG_PROFILE, null, 2)}`);
+// console.debug(`DB13_CONFIG_PROFILE`);
+// show_profile(DB13_CONFIG_PROFILE);

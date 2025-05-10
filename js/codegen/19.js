@@ -145,7 +145,6 @@ class PG_TUNE_RESPONSE {
         max_total_memory_used_with_parallel += temp_buffers * num_user_conns;
         const max_total_memory_used_with_parallel_ratio = max_total_memory_used_with_parallel / usable_ram_noswap;
         const max_total_memory_used_with_parallel_hr = bytesize_to_hr(max_total_memory_used_with_parallel);
-        const _epsilon_scale = use_full_connection ? 4 : 2;
 
         if (ignore_report && _kwargs.mem_pool_parallel_estimate) {
             return ['', max_total_memory_used_with_parallel];
@@ -393,8 +392,9 @@ best performance and reliability of the database system.
         const num_parallel_workers = Math.min(managed_cache['max_parallel_workers'], managed_cache['max_worker_processes']);
 
         // How many sessions can be in parallel
-        const num_sessions = Math.floor(num_parallel_workers / managed_cache['max_parallel_workers_per_gather']);
         const remain_workers = num_parallel_workers % managed_cache['max_parallel_workers_per_gather'];
+
+        const num_sessions = Math.floor((num_parallel_workers - remain_workers) / managed_cache['max_parallel_workers_per_gather']);
         const num_sessions_in_parallel = num_sessions + (remain_workers > 0 ? 1 : 0);
 
         // Ensure the number of active user connections always larger than the num_sessions

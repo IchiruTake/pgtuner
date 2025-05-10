@@ -171,7 +171,6 @@ class PG_TUNE_RESPONSE(BaseModel):
         max_total_memory_used_with_parallel += temp_buffers * num_user_conns
         max_total_memory_used_with_parallel_ratio = max_total_memory_used_with_parallel / usable_ram_noswap
         max_total_memory_used_with_parallel_hr = bytesize_to_hr(max_total_memory_used_with_parallel)
-        _epsilon_scale = 4 if use_full_connection else 2
 
         if ignore_report and _kwargs.mem_pool_parallel_estimate:
             return '', max_total_memory_used_with_parallel

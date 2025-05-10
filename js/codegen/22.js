@@ -22,7 +22,7 @@ kw = new PG_TUNE_USR_KWARGS(
         user_max_connections: 0, // Default to let pgtuner manage the number of connections
         superuser_reserved_connections_scale_ratio: 1.5, // [1, 3]. Higher for less superuser reserved connections
         single_memory_connection_overhead: 5 * Mi, // [2, 12]. Default is 5 MiB. This is estimation and not big impact
-        memory_connection_to_dedicated_os_ratio: 0.3, // [0, 1]. Default is 0.3. This is estimation and not big impact
+        memory_connection_to_dedicated_os_ratio: 0.7, // [0, 1]. Default is 0.3. This is estimation and not big impact
 
         // Memory Utilization (Basic)
         effective_cache_size_available_ratio: 0.985, // [0.95, 1.0]. Default is 0.985 (98.5%).
@@ -33,9 +33,9 @@ kw = new PG_TUNE_USR_KWARGS(
 
         // Memory Utilization (Advanced)
         max_normal_memory_usage: 0.45, // [0.35, 0.80]. Default is 0.45 (45%). The optimized ratio for normal memory usage
-        mem_pool_tuning_ratio: 0.6, // [0.0, 1.0]. Default is 0.6 (60%). The optimized ratio for memory pool tuning
+        mem_pool_tuning_ratio: 0.4, // [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
         // Maximum float allowed is [-60, 60] under 64-bit system
-        hash_mem_usage_level: -6, // [-50, 50]. Default is -6. The optimized ratio for hash memory usage level
+        hash_mem_usage_level: -5, // [-50, 50]. Default is -5. The optimized ratio for hash memory usage level
         mem_pool_parallel_estimate: true, // Default is True to assume the use of p
 
         // Logging behaviour (query size, and query runtime)
@@ -81,17 +81,12 @@ options = new PG_TUNE_USR_OPTIONS(
         max_time_transaction_loss_allow_in_millisecond: 650,
         max_num_stream_replicas_on_primary: 0,
         max_num_logical_replicas_on_primary: 0,
-        max_backup_replication_tool: 2,
+        max_backup_replication_tool: PG_BACKUP_TOOL.PG_BASE_BACKUP,
         offshore_replication: false,
     }
 )
 
 rq = new PG_TUNE_REQUEST({ options: options, include_comment: false, custom_style: null} )
 response = new PG_TUNE_RESPONSE()
-for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
-    console.debug(value[1]);
-}
-
-// Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
-// correction_tune(rq, response);
-
+Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
+correction_tune(rq, response);

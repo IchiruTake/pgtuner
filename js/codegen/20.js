@@ -34,7 +34,6 @@ function _MakeItm(key, before, after, trigger, tuneEntry, hardwareScope) {
 
 function _GetFnDefault(key, tune_entry, hw_scope) {
     let msg = '';
-    console.log(tune_entry);
     if (!(tune_entry.hasOwnProperty('instructions'))) { // No profile-based tuning
         msg = `DEBUG: Profile-based tuning is not found for this item ${key} -> Use the general tuning instead.`;
         console.debug(msg);
@@ -95,12 +94,11 @@ function Optimize(request, response, target, target_items) {
             const [fn, default_value, msg] = _GetFnDefault(key, tune_entry, hw_scope_value);
             const [result, triggering] = _VarTune(request, response, group_cache, global_cache, fn, default_value);
             const itm = _MakeItm(key, null, result !== null ? result : tune_entry['default'], triggering, tune_entry, [hw_scope_term, hw_scope_value]);
-            console.log(fn, default_value, result, triggering);
+            console.debug(key, tune_entry, '-->', itm);
             if (itm === null || itm.after === null) {
                 console.warn(`WARNING: Error in tuning the variable as default value is not found or set to null for '${key}' -> Skipping and not adding to the final result.`);
                 continue;
             }
-            console.log(itm);
 
             // Perform post-condition check
             if (tune_entry.hasOwnProperty('post-condition') && typeof tune_entry['post-condition'] === 'function') {
@@ -121,7 +119,7 @@ function Optimize(request, response, target, target_items) {
             group_cache[key] = itm.after;
             const post_condition_all_fn = tune_entry.hasOwnProperty('post-condition-all') ? tune_entry['post-condition-all'] : null;
             group_itm.push([itm, post_condition_all_fn]);
-            console.info(`Variable '${key}' has been tuned from ${itm.before} to ${itm.out_display()}.`);
+            console.debug(`Variable '${key}' has been tuned from ${itm.before} to ${itm.out_display()}.`);
 
             // Clone tuning items for the same result
             for (const k of keys.slice(1)) {
@@ -129,7 +127,7 @@ function Optimize(request, response, target, target_items) {
                 const cloned_itm = _MakeItm(sub_key, null, result || tune_entry.default, triggering, tune_entry, [hw_scope_term, hw_scope_value]);
                 group_cache[sub_key] = cloned_itm.after;
                 group_itm.push([cloned_itm, post_condition_all_fn]);
-                console.info(`Variable '${sub_key}' has been tuned from ${cloned_itm.before} to ${cloned_itm.out_display()} by copying the tuning result from '${key}'.`);
+                console.debug(`Variable '${sub_key}' has been tuned from ${cloned_itm.before} to ${cloned_itm.out_display()} by copying the tuning result from '${key}'.`);
             }
         }
 

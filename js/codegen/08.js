@@ -59,7 +59,7 @@ function _GetMemConnInTotal(options, response, use_reserved_connection = false, 
     */
     let num_conns = _GetNumConnections(options, response, use_reserved_connection, use_full_connection);
     let mem_conn_overhead = options.tuning_kwargs.single_memory_connection_overhead;
-    return Math.ceil(num_conns * mem_conn_overhead);
+    return Math.floor(num_conns * mem_conn_overhead);
 }
 
 function _CalcSharedBuffers(options) {
@@ -72,7 +72,7 @@ function _CalcSharedBuffers(options) {
     if (shared_buffers === 128 * Mi) {
         console.warn('No benefit is found on tuning this variable');
     }
-    shared_buffers = realign_value(Math.ceil(shared_buffers), DB_PAGE_SIZE)[options.align_index];
+    shared_buffers = realign_value(Math.floor(shared_buffers), DB_PAGE_SIZE)[options.align_index];
     console.debug(`shared_buffers: ${bytesize_to_hr(shared_buffers)}`);
     return shared_buffers;
 }
@@ -628,7 +628,7 @@ _DB_LOG_PROFILE = {
     'log_recovery_conflict_waits': { 'default': 'on', },
     'log_statement': { 'default': 'mod', },
     'log_replication_commands': { 'default': 'on', },
-    'log_min_duration_statement': { 'default': 2 * K10, 'partial_func': (value) => `{value}ms`, },
+    'log_min_duration_statement': { 'default': 2 * K10, 'partial_func': (value) => `${value}ms`, },
     'log_min_error_statement': { 'default': 'ERROR', },
     'log_parameter_max_length': {
         'tune_op': (group_cache, global_cache, options, response) => global_cache['track_activity_query_size'],

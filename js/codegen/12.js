@@ -47,9 +47,15 @@ if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepmerge(DB16_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            // deepmerge(DB16_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB16_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
         }
     }
     rewrite_items(DB16_CONFIG_PROFILE);
 }
-// console.debug(`DB16_CONFIG_PROFILE: ${JSON.stringify(DB16_CONFIG_PROFILE, null, 2)}`);
+// console.debug(`DB16_CONFIG_PROFILE`);
+// show_profile(DB17_CONFIG_PROFILE);

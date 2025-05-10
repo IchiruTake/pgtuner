@@ -15,10 +15,10 @@ if __name__ == "__main__":
         os.remove(codegen_output_filepath)
 
     # List all filename in the input directory, and sorted based on the number
-    files = []
-    for filename in os.listdir(codegen_input_dirpath):
-        if filename.endswith('.js'):
-            files.append(filename)
+
+    extra_condition = lambda x: int(x.split('.')[0]) <= 13
+    files = [filename for filename in os.listdir(codegen_input_dirpath)
+             if filename.endswith('.js')]
     files.sort(key=lambda x: int(x.split('.')[0]))
     # print(files)
 
@@ -26,9 +26,6 @@ if __name__ == "__main__":
         for filename in files:
             codegen_input_filepath = os.path.join(codegen_input_dirpath, filename)
             with open(codegen_input_filepath, 'r', encoding='utf8') as codegen_input_file:
-                codegen_output_file.write(codegen_input_file.read())
+                data = codegen_input_file.read()
+                codegen_output_file.write(data)
                 codegen_output_file.write('\n\n')
-
-
-
-

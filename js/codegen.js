@@ -21,7 +21,6 @@ const __VERSION__ = __version__;
 const __AUTHOR__ = 'Ichiru Take';
 
 const APP_NAME = 'PGTUNER_DBA'; // This name is used on log.toml,
-const SUPPORTED_POSTGRES_VERSIONS = [13, 14, 15, 16, 17, 18];
 const APP_NAME_LOWER = APP_NAME.toLowerCase();
 const APP_NAME_UPPER = APP_NAME.toUpperCase();
 
@@ -254,6 +253,7 @@ const _max_total_items_per_default_conf = (() => {
     return total;
 })();
 const _max_total_items_per_addition_conf = (num_args) => 32 * Math.max(num_args, _max_num_conf);
+const _max_num_items_in_depth = (depth = Math.floor(_max_depth / 2 + 1)) => Math.max(_min_num_base_item_in_layer, Math.floor(_max_num_base_item_in_layer / (4 ** depth)));
 
 // Actions for immutable types (level1) and copy actions
 // Possible values (as strings): 'override', 'bypass', 'terminate'
@@ -270,53 +270,66 @@ class RecursionError extends Error {
     }
 }
 
-function checkVariableType(variable) {
+
+function _is_immutable_type(value) {
+    // Check if the value is immutable (string, number, boolean, or null).
+    return value === null || ["number", "string", "boolean", "function"].includes(typeof value);
+}
+
+function _check_mutable_detail(variable) {
     if (Array.isArray(variable)) {
         return "list";
-    } else if (variable instanceof Map) {
-        return "map";
     } else if (typeof variable === 'object' &&
         variable !== null &&
         variable.constructor === Object) {
         return "hashmap";
+    } else if (variable instanceof Map) {
+        return "map";
     } else {
         return "other";
     }
 }
 
 
-function _max_num_items_in_depth(depth = Math.floor(_max_depth / 2 + 1)) {
-    return Math.max(_min_num_base_item_in_layer, Math.floor(_max_num_base_item_in_layer / (4 ** depth)));
-}
-
 // Compute depth count: for objects and arrays.
 function _depth_count(a) {
-    if (a !== null && typeof a === "object") {
-        let values;
-        if (Array.isArray(a)) {
-            values = a;
-        } else {
-            values = Object.values(a);
+    if (_is_immutable_type(a)) {
+        return 0;
+    }
+    const type_a = _check_mutable_detail(a);
+    if (type_a === 'hashmap' || type_a === 'map') {
+        // For objects and maps, we need to check the values.
+        if (Object.keys(a).length === 0) {
+            return 1;
         }
-        if (values.length === 0) {
-            return 0;
-        }
+        const values = Object.values(a);
         return 1 + Math.max(...values.map(_depth_count));
+    } else if (type_a === 'list') {
+        // For arrays, we need to check the elements.
+        if (a.length === 0) {
+            return 1;
+        }
+        return 1 + Math.max(...a.map(_depth_count));
     }
     return 0;
 }
 
 // Compute the total number of items recursively in an object.
 function _item_total_count(a) {
-    if (a !== null && typeof a === "object") {
-        let count = Array.isArray(a) ? a.length : Object.keys(a).length;
-        let values;
-        if (Array.isArray(a)) {
-            values = a;
-        } else {
-            values = Object.values(a);
+    if (_is_immutable_type(a)) {
+        return 0;
+    }
+    const type_a = _check_mutable_detail(a);
+    if (type_a === 'hashmap' || type_a === 'map') {
+        // For objects and maps, we need to check the values.
+        let count = Object.keys(a).length;
+        for (const v of Object.values(a)) {
+            count += _item_total_count(v);
         }
-        for (const v of values) {
+        return count;
+    } else if (type_a === 'list') {
+        let count = a.length;
+        for (const v of a) {
             count += _item_total_count(v);
         }
         return count;
@@ -326,18 +339,32 @@ function _item_total_count(a) {
 
 // A simple shallow copy function. For arrays and plain objects.
 function _copy(value) {
-    if (Array.isArray(value)) {
+    if (_is_immutable_type(value)) {
         return value.slice();
-    } else if (value !== null && typeof value === "object") {
-        return Object.assign({}, value);
     }
-    return value;
+    const type_value = _check_mutable_detail(value);
+    if (type_value === 'list') {
+        return [...value];
+    } else if (type_value === 'hashmap' || type_value === 'map') {
+        return {...value}
+    } else {
+        return new Error(`Unsupported type: ${type_value}`);
+    }
 }
 
 // A simple deep copy function using JSON methods.
 function _deepcopy(value) {
-    // Note: This works if the object is JSON-compatible.
-    return JSON.parse(JSON.stringify(value));
+    if (_is_immutable_type(value)) {
+        return value;
+    }
+    const type_value = _check_mutable_detail(value);
+    if (type_value === 'list') {
+        return JSON.parse(JSON.stringify(value));
+    } else if (type_value === 'hashmap' || type_value === 'map') {
+        return JSON.parse(JSON.stringify(value));
+    } else {
+        return new Error(`Unsupported type: ${type_value}`);
+    }
 }
 
 /**
@@ -410,9 +437,9 @@ function _deepmerge(
         const bvalue = b[bkey];
         if (!(bkey in a)) {
             // Key not present in a.
-            if (bvalue === null || ["number", "string", "boolean"].includes(typeof bvalue)) {
+            if (_is_immutable_type(bvalue)) {
                 _trigger_update(result, bkey, bvalue, not_available_immutable_action);
-            } else if (typeof bvalue === "object") {
+            } else if (_check_mutable_detail(bvalue) !== 'other') {
                 _trigger_update(result, bkey, bvalue, not_available_mutable_action);
             }
             else if (!skiperror) {
@@ -420,28 +447,32 @@ function _deepmerge(
             }
         } else {
             let abkey_value = a[bkey];
-            // Both are primitives (immutable)
-            if (
-                (abkey_value === null || ["number", "string", "boolean"].includes(typeof abkey_value)) &&
-                (bvalue === null || ["number", "string", "boolean"].includes(typeof bvalue))
-            ) {
+            // If both are immutable types, perform the action of :var:`immutable_action` on result with the value in B
+            // If one is primitive and the other is object — heterogeneous types. (Error here)
+
+            if ( _is_immutable_type(abkey_value) && _is_immutable_type(bvalue)) {
                 _trigger_update(result, bkey, bvalue, available_immutable_action);
-            }
-            // One is primitive and the other is object — heterogeneous types.
-            else if (
-                ((abkey_value === null || ["number", "string", "boolean"].includes(typeof abkey_value)) &&
-                    (bvalue !== null && typeof bvalue === "object")) ||
-                ((abkey_value !== null && typeof abkey_value === "object") &&
-                    (bvalue === null || ["number", "string", "boolean"].includes(typeof bvalue)))
-            ) {
+            } else if (_is_immutable_type(abkey_value) && _check_mutable_detail(bvalue) !== 'other') {
+                // I am not sure if we have JSON reference here
                 if (!skiperror) {
                     throw new TypeError(`Conflict at ${path.slice(0, curdepth).join("->")} in the #${merged_index_item} configuration as value in both sides are heterogeneous of type`);
+                } else {
+                    // result[bkey] = deepcopy(bvalue)
+                }
+            } else if (_is_immutable_type(bvalue) && _check_mutable_detail(abkey_value) !== 'other' ) {
+                // I am not sure if we have JSON reference here
+                if (!skiperror) {
+                    throw new TypeError(`Conflict at ${path.slice(0, curdepth).join("->")} in the #${merged_index_item} configuration as value in both sides are heterogeneous of type`);
+                } else {
+                    // result[bkey] = deepcopy(bvalue)
                 }
             }
             // Both are objects (mutable)
-            else if ((abkey_value !== null && typeof abkey_value === "object") && (bvalue !== null && typeof bvalue === "object")) {
-                // If both are plain objects, recursively merge.
-                if (!Array.isArray(abkey_value) && !Array.isArray(bvalue)) {
+            else if (_check_mutable_detail(abkey_value) !== 'other' && _check_mutable_detail(bvalue) !== 'other') {
+                // If the key value is a dict, both in A and in B, merge the dicts recursively.
+                const type_abkey_value = _check_mutable_detail(abkey_value);
+                const type_bvalue = _check_mutable_detail(bvalue);
+                if (type_abkey_value !== 'list' && type_bvalue !== 'list') {
                     _deepmerge(
                         abkey_value, bvalue, result[bkey], [...path],
                         merged_index_item, curdepth, maxdepth,
@@ -451,16 +482,12 @@ function _deepmerge(
                     );
                 }
                 // If both are arrays, trigger list conflict update.
-                else if (Array.isArray(abkey_value) && Array.isArray(bvalue)) {
+                else if (type_abkey_value === 'list' && type_bvalue === 'list') {
                     _trigger_update(result, bkey, bvalue, list_conflict_action);
                 }
                 else if (!skiperror) {
                     throw new TypeError(`Conflict at ${path.slice(0, curdepth).join("->")} in the #${merged_index_item} configuration as value in both sides are heterogeneous or unsupported types`);
                 }
-            }
-            // If the values are equal, do nothing.
-            else if (JSON.stringify(abkey_value) === JSON.stringify(bvalue)) {
-                // Do nothing.
             }
             // Edge-case: values not equal
             else if (!skiperror) {
@@ -696,7 +723,13 @@ const rewrite_items = (profiles) => {
     }
     return null;
 };
-
+const show_profile = (profile) => {
+    /* Show the profile data. */
+    for (const [key, value] of Object.entries(profile)) {
+        console.debug(key, value[1]);
+    }
+    return null;
+}
 
 // ================================================================================
 /**
@@ -1210,8 +1243,8 @@ class PG_TUNE_USR_KWARGS {
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
         this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
-        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.6;
-        this.hash_mem_usage_level = options.hash_mem_usage_level ?? -6;
+        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.4;
+        this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
         // Tune logging behaviour
         this.max_query_length_in_bytes = options.max_query_length_in_bytes ?? (2 * Ki);
@@ -1496,7 +1529,7 @@ function _GetMemConnInTotal(options, response, use_reserved_connection = false, 
     */
     let num_conns = _GetNumConnections(options, response, use_reserved_connection, use_full_connection);
     let mem_conn_overhead = options.tuning_kwargs.single_memory_connection_overhead;
-    return Math.ceil(num_conns * mem_conn_overhead);
+    return Math.floor(num_conns * mem_conn_overhead);
 }
 
 function _CalcSharedBuffers(options) {
@@ -1509,7 +1542,7 @@ function _CalcSharedBuffers(options) {
     if (shared_buffers === 128 * Mi) {
         console.warn('No benefit is found on tuning this variable');
     }
-    shared_buffers = realign_value(Math.ceil(shared_buffers), DB_PAGE_SIZE)[options.align_index];
+    shared_buffers = realign_value(Math.floor(shared_buffers), DB_PAGE_SIZE)[options.align_index];
     console.debug(`shared_buffers: ${bytesize_to_hr(shared_buffers)}`);
     return shared_buffers;
 }
@@ -2065,7 +2098,7 @@ _DB_LOG_PROFILE = {
     'log_recovery_conflict_waits': { 'default': 'on', },
     'log_statement': { 'default': 'mod', },
     'log_replication_commands': { 'default': 'on', },
-    'log_min_duration_statement': { 'default': 2 * K10, 'partial_func': (value) => `{value}ms`, },
+    'log_min_duration_statement': { 'default': 2 * K10, 'partial_func': (value) => `${value}ms`, },
     'log_min_error_statement': { 'default': 'ERROR', },
     'log_parameter_max_length': {
         'tune_op': (group_cache, global_cache, options, response) => global_cache['track_activity_query_size'],
@@ -2159,8 +2192,8 @@ type_validation(DB0_CONFIG_PROFILE);
  */
 
 const DB13_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE };
-// console.debug(`DB13_CONFIG_PROFILE: ${JSON.stringify(DB13_CONFIG_PROFILE, null, 2)}`);
-
+// console.debug(`DB13_CONFIG_PROFILE`);
+// show_profile(DB13_CONFIG_PROFILE);
 
 // ==================================================================================
 /**
@@ -2194,13 +2227,18 @@ if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepmerge(DB14_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            // deepmerge(DB14_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB14_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
         }
     }
     rewrite_items(DB14_CONFIG_PROFILE);
 }
-// console.debug(`DB14_CONFIG_PROFILE: ${JSON.stringify(DB14_CONFIG_PROFILE, null, 2)}`);
-
+// console.debug(`DB14_CONFIG_PROFILE`);
+// show_profile(DB14_CONFIG_PROFILE);
 
 // ==================================================================================
 /**
@@ -2239,13 +2277,18 @@ if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepmerge(DB15_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            // deepmerge(DB15_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB15_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
         }
     }
     rewrite_items(DB15_CONFIG_PROFILE);
 }
-// console.debug(`DB15_CONFIG_PROFILE: ${JSON.stringify(DB15_CONFIG_PROFILE, null, 2)}`);
-
+// console.debug(`DB15_CONFIG_PROFILE`);
+// show_profile(DB15_CONFIG_PROFILE);
 
 // ==================================================================================
 /**
@@ -2296,13 +2339,18 @@ if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepmerge(DB16_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            // deepmerge(DB16_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB16_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
         }
     }
     rewrite_items(DB16_CONFIG_PROFILE);
 }
-// console.debug(`DB16_CONFIG_PROFILE: ${JSON.stringify(DB16_CONFIG_PROFILE, null, 2)}`);
-
+// console.debug(`DB16_CONFIG_PROFILE`);
+// show_profile(DB17_CONFIG_PROFILE);
 
 // ==================================================================================
 /**
@@ -2319,7 +2367,7 @@ const _DB17_LOG_PROFILE = {
 const _DB17_VACUUM_PROFILE = {
     "vacuum_buffer_usage_limit": {
         "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         "default": 2 * Mi,
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -2360,12 +2408,18 @@ if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {
             // Merge the second element of the tuple (the profile dict)
-            deepmerge(DB17_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            // deepmerge(DB17_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB17_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
         }
     }
     rewrite_items(DB17_CONFIG_PROFILE);
 }
-// console.debug(`DB17_CONFIG_PROFILE: ${JSON.stringify(DB17_CONFIG_PROFILE, null, 2)}`);
+// console.debug(`DB17_CONFIG_PROFILE: `);
+// show_profile(DB17_CONFIG_PROFILE);
 
 
 
@@ -2660,7 +2714,6 @@ class PG_TUNE_RESPONSE {
         max_total_memory_used_with_parallel += temp_buffers * num_user_conns;
         const max_total_memory_used_with_parallel_ratio = max_total_memory_used_with_parallel / usable_ram_noswap;
         const max_total_memory_used_with_parallel_hr = bytesize_to_hr(max_total_memory_used_with_parallel);
-        const _epsilon_scale = use_full_connection ? 4 : 2;
 
         if (ignore_report && _kwargs.mem_pool_parallel_estimate) {
             return ['', max_total_memory_used_with_parallel];
@@ -2908,8 +2961,9 @@ best performance and reliability of the database system.
         const num_parallel_workers = Math.min(managed_cache['max_parallel_workers'], managed_cache['max_worker_processes']);
 
         // How many sessions can be in parallel
-        const num_sessions = Math.floor(num_parallel_workers / managed_cache['max_parallel_workers_per_gather']);
         const remain_workers = num_parallel_workers % managed_cache['max_parallel_workers_per_gather'];
+
+        const num_sessions = Math.floor((num_parallel_workers - remain_workers) / managed_cache['max_parallel_workers_per_gather']);
         const num_sessions_in_parallel = num_sessions + (remain_workers > 0 ? 1 : 0);
 
         // Ensure the number of active user connections always larger than the num_sessions
@@ -2965,7 +3019,6 @@ function _MakeItm(key, before, after, trigger, tuneEntry, hardwareScope) {
 
 function _GetFnDefault(key, tune_entry, hw_scope) {
     let msg = '';
-    console.log(tune_entry);
     if (!(tune_entry.hasOwnProperty('instructions'))) { // No profile-based tuning
         msg = `DEBUG: Profile-based tuning is not found for this item ${key} -> Use the general tuning instead.`;
         console.debug(msg);
@@ -3026,12 +3079,11 @@ function Optimize(request, response, target, target_items) {
             const [fn, default_value, msg] = _GetFnDefault(key, tune_entry, hw_scope_value);
             const [result, triggering] = _VarTune(request, response, group_cache, global_cache, fn, default_value);
             const itm = _MakeItm(key, null, result !== null ? result : tune_entry['default'], triggering, tune_entry, [hw_scope_term, hw_scope_value]);
-            console.log(fn, default_value, result, triggering);
+            console.debug(key, tune_entry, '-->', itm);
             if (itm === null || itm.after === null) {
                 console.warn(`WARNING: Error in tuning the variable as default value is not found or set to null for '${key}' -> Skipping and not adding to the final result.`);
                 continue;
             }
-            console.log(itm);
 
             // Perform post-condition check
             if (tune_entry.hasOwnProperty('post-condition') && typeof tune_entry['post-condition'] === 'function') {
@@ -3052,7 +3104,7 @@ function Optimize(request, response, target, target_items) {
             group_cache[key] = itm.after;
             const post_condition_all_fn = tune_entry.hasOwnProperty('post-condition-all') ? tune_entry['post-condition-all'] : null;
             group_itm.push([itm, post_condition_all_fn]);
-            console.info(`Variable '${key}' has been tuned from ${itm.before} to ${itm.out_display()}.`);
+            console.debug(`Variable '${key}' has been tuned from ${itm.before} to ${itm.out_display()}.`);
 
             // Clone tuning items for the same result
             for (const k of keys.slice(1)) {
@@ -3060,7 +3112,7 @@ function Optimize(request, response, target, target_items) {
                 const cloned_itm = _MakeItm(sub_key, null, result || tune_entry.default, triggering, tune_entry, [hw_scope_term, hw_scope_value]);
                 group_cache[sub_key] = cloned_itm.after;
                 group_itm.push([cloned_itm, post_condition_all_fn]);
-                console.info(`Variable '${sub_key}' has been tuned from ${cloned_itm.before} to ${cloned_itm.out_display()} by copying the tuning result from '${key}'.`);
+                console.debug(`Variable '${sub_key}' has been tuned from ${cloned_itm.before} to ${cloned_itm.out_display()} by copying the tuning result from '${key}'.`);
             }
         }
 
@@ -3100,7 +3152,7 @@ function _TriggerAutoTune(keys, request, response) {
                 continue
             }
             const t_itm = managed_items[key]
-            if (t_itm !== null && typeof t_itm.trigger !== 'function') {
+            if (t_itm !== null && typeof t_itm.trigger === 'function') {
                 console.log(t_itm);
                 const old_result = managed_cache[key]
                 t_itm.after = t_itm.trigger(managed_cache, managed_cache, request.options, response)
@@ -3588,12 +3640,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     const _failsafe_data_size = (2 * _fsm_vm_size + 2 * _data_size)
     let _failsafe_hour = (2 * _fsm_vm_size / (_data_tput * _wraparound_effective_io)) / HOUR
     _failsafe_hour += (_failsafe_data_size / (_data_tput * _wraparound_effective_io)) / HOUR
-    console.log(`In the worst-case scenario (where failsafe triggered and cost-based vacuum is disabled), the amount 
-        of data read and write is usually twice the data files, resulting in ${_failsafe_data_size} MiB with effective 
-        throughput of ${(_wraparound_effective_io * 100).toFixed(1)}% or 
-        ${(_data_tput * _wraparound_effective_io).toFixed(1)} MiB/s; Thereby having a theoretical 
-        worst-case of ${_failsafe_hour.toFixed(1)} hours for failsafe vacuuming, and a safety scale factor 
-        of ${_future_data_scaler.toFixed(1)} times the worst-case scenario.`)
+    console.log(`In the worst-case scenario (where failsafe triggered and cost-based vacuum is disabled), the amount of data read and write is usually twice the data files, resulting in ${_failsafe_data_size} MiB with effective throughput of ${(_wraparound_effective_io * 100).toFixed(1)}% or ${(_data_tput * _wraparound_effective_io).toFixed(1)} MiB/s; Thereby having a theoretical worst-case of ${_failsafe_hour.toFixed(1)} hours for failsafe vacuuming, and a safety scale factor of ${_future_data_scaler.toFixed(1)} times the worst-case scenario.`)
 
     let _norm_hour = (2 * _fsm_vm_size / (_data_tput * _wraparound_effective_io)) / HOUR
     _norm_hour += ((_data_size + _index_size) / (_data_tput * _wraparound_effective_io)) / HOUR
@@ -3602,10 +3649,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     const _worst_data_vacuum_time = _data_vacuum_time * _future_data_scaler
 
     console.info(
-        `WARNING: The anti-wraparound vacuuming time is estimated to be ${_data_vacuum_time.toFixed(1)} hours and scaled 
-        time of ${_worst_data_vacuum_time.toFixed(1)} hours, either you should (1) upgrade the data volume to have a 
-        better performance with higher IOPS and throughput, or (2) leverage pg_cron, pg_timetable, or any cron-scheduled 
-        alternative to schedule manual vacuuming when age is coming to normal vacuuming threshold.`
+        `WARNING: The anti-wraparound vacuuming time is estimated to be ${_data_vacuum_time.toFixed(1)} hours and scaled time of ${_worst_data_vacuum_time.toFixed(1)} hours, either you should (1) upgrade the data volume to have a better performance with higher IOPS and throughput, or (2) leverage pg_cron, pg_timetable, or any cron-scheduled alternative to schedule manual vacuuming when age is coming to normal vacuuming threshold.`
     )
 
     /**
@@ -3916,7 +3960,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
 
     _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
-    console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} flush time is estimated to be ${wal_time_report} ms.`)
+    console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} -> ${wal_time_report}.`)
     return null
 }
 
@@ -3987,10 +4031,9 @@ function _wrk_mem_tune(request, response) {
     console.info(`===== Memory Usage Tuning =====`)
     _hash_mem_adjust(request, response)
     if (request.options.opt_mem_pool === PG_PROFILE_OPTMODE.NONE ) {
-        // Disable the additional memory tuning as these workload does not make benefits when increase the memory
-        console.warn(`WARNING: The memory pool tuning is disabled by the user -> Skip the extra tuning.`)
         return null;
     }
+
     console.info(`Start tuning the memory usage based on the specific workload profile. \nImpacted attributes: shared_buffers, temp_buffers, work_mem, vacuum_buffer_usage_limit, effective_cache_size, maintenance_work_mem`)
     const _kwargs = request.options.tuning_kwargs
     let ram = request.options.usable_ram
@@ -4022,9 +4065,7 @@ function _wrk_mem_tune(request, response) {
     let _mem_check_string = Object.entries(_get_wrk_mem_func())
         .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
         .join('; ');
-    console.info(`The working memory usage based on memory profile is ${_mem_check_string} before tuning. 
-        NOTICE: Expected maximum memory usage in normal condition: ${(stop_point * 100).toFixed(2)} (%) of
-        ${srv_mem_str} or ${bytesize_to_hr(Math.floor(ram * stop_point))}.`)
+    console.info(`The working memory usage based on memory profile is ${_mem_check_string} before tuning. NOTICE: Expected maximum memory usage in normal condition: ${(stop_point * 100).toFixed(2)} (%) of ${srv_mem_str} or ${bytesize_to_hr(Math.floor(ram * stop_point))}.`)
 
     // Trigger the tuning
     const shared_buffers_ratio_increment = boost_ratio * 2.0 * _kwargs.mem_pool_tuning_ratio
@@ -4100,12 +4141,11 @@ function _wrk_mem_tune(request, response) {
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
         decay_step += 1
     }
-
-    // Now we have the optimal point
     console.debug(`DEBUG: The optimal point is found after ${bump_step} bump steps and ${decay_step} decay steps`)
     if (bump_step + decay_step >= 3) {
         console.debug(`DEBUG: The memory pool tuning algorithm is incorrect. Revise algorithm to be more accurate`)
     }
+
     console.info(`The shared_buffers_ratio is now ${_kwargs.shared_buffers_ratio.toFixed(5)}.`)
     console.info(`The max_work_buffer_ratio is now ${_kwargs.max_work_buffer_ratio.toFixed(5)}.`)
     _show_tuning_result('Result (after): ')
@@ -4138,8 +4178,7 @@ function _wrk_mem_tune(request, response) {
         Math.floor(managed_cache['max_wal_size'] / Ki),
     )  // Measured by MiB.
     let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
-    console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation 
-        of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
+    console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
     const after_checkpoint_timeout = realign_value(
         Math.max(managed_cache['checkpoint_timeout'] +
             Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
@@ -4232,7 +4271,7 @@ kw = new PG_TUNE_USR_KWARGS(
         user_max_connections: 0, // Default to let pgtuner manage the number of connections
         superuser_reserved_connections_scale_ratio: 1.5, // [1, 3]. Higher for less superuser reserved connections
         single_memory_connection_overhead: 5 * Mi, // [2, 12]. Default is 5 MiB. This is estimation and not big impact
-        memory_connection_to_dedicated_os_ratio: 0.3, // [0, 1]. Default is 0.3. This is estimation and not big impact
+        memory_connection_to_dedicated_os_ratio: 0.7, // [0, 1]. Default is 0.3. This is estimation and not big impact
 
         // Memory Utilization (Basic)
         effective_cache_size_available_ratio: 0.985, // [0.95, 1.0]. Default is 0.985 (98.5%).
@@ -4243,9 +4282,9 @@ kw = new PG_TUNE_USR_KWARGS(
 
         // Memory Utilization (Advanced)
         max_normal_memory_usage: 0.45, // [0.35, 0.80]. Default is 0.45 (45%). The optimized ratio for normal memory usage
-        mem_pool_tuning_ratio: 0.6, // [0.0, 1.0]. Default is 0.6 (60%). The optimized ratio for memory pool tuning
+        mem_pool_tuning_ratio: 0.4, // [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
         // Maximum float allowed is [-60, 60] under 64-bit system
-        hash_mem_usage_level: -6, // [-50, 50]. Default is -6. The optimized ratio for hash memory usage level
+        hash_mem_usage_level: -5, // [-50, 50]. Default is -5. The optimized ratio for hash memory usage level
         mem_pool_parallel_estimate: true, // Default is True to assume the use of p
 
         // Logging behaviour (query size, and query runtime)
@@ -4291,23 +4330,13 @@ options = new PG_TUNE_USR_OPTIONS(
         max_time_transaction_loss_allow_in_millisecond: 650,
         max_num_stream_replicas_on_primary: 0,
         max_num_logical_replicas_on_primary: 0,
-        max_backup_replication_tool: 2,
+        max_backup_replication_tool: PG_BACKUP_TOOL.PG_BASE_BACKUP,
         offshore_replication: false,
     }
 )
 
 rq = new PG_TUNE_REQUEST({ options: options, include_comment: false, custom_style: null} )
 response = new PG_TUNE_RESPONSE()
-for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
-    console.debug(value[1]);
-}
-
-// Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
-// correction_tune(rq, response);
-
-
-
-
-
-
+Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
+correction_tune(rq, response);
 

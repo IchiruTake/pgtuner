@@ -144,7 +144,7 @@ def _CalcTempBuffersAndWorkMem(group_cache, global_cache, options: PG_TUNE_USR_O
     max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio
     active_connections: int = _GetNumConnections(options, response, use_reserved_connection=False, 
                                                  use_full_connection=False)
-    total_buffers = int(pgmem_available * max_work_buffer_ratio) // active_connections
+    total_buffers = int(pgmem_available * max_work_buffer_ratio / active_connections)
 
     # Minimum to 1 MiB and maximum is varied between workloads
     max_cap: int = int(1.5 * Gi)
