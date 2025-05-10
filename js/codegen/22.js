@@ -81,7 +81,7 @@ options = new PG_TUNE_USR_OPTIONS(
         max_time_transaction_loss_allow_in_millisecond: 650,
         max_num_stream_replicas_on_primary: 0,
         max_num_logical_replicas_on_primary: 0,
-        max_backup_replication_tool: PG_BACKUP_TOOL.PG_BASE_BACKUP,
+        max_backup_replication_tool: PG_BACKUP_TOOL.PG_BASEBACKUP,
         offshore_replication: false,
     }
 )
@@ -90,3 +90,6 @@ rq = new PG_TUNE_REQUEST({ options: options, include_comment: false, custom_styl
 response = new PG_TUNE_RESPONSE()
 Optimize(rq, response, PGTUNER_SCOPE.DATABASE_CONFIG, DB17_CONFIG_PROFILE)
 correction_tune(rq, response);
+// console.log(response.generate_content(PGTUNER_SCOPE.DATABASE_CONFIG, rq, null, true, 'file'));
+// console.log(response.report(rq.options, false, false)[0]);
+// console.log(response.report(rq.options, true, false)[0]);

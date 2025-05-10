@@ -114,7 +114,7 @@ def optimize(request: PG_TUNE_REQUEST):
 # ==================================================================================================
 # Receive user tuning options
 def write(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE, scope: PGTUNER_SCOPE = PGTUNER_SCOPE.DATABASE_CONFIG,
-          output_format: Literal['json', 'text', 'file', 'conf'] = 'conf', output_file: str = None,
+          output_format: Literal['json', 'file', 'conf'] = 'conf', output_file: str = None,
           exclude_names: list[str] | set[str] = None, backup_settings: bool = True) -> str | dict | None:
     content = response.generate_content(target=scope, exclude_names=exclude_names, output_format=output_format,
                                         request=request, backup_settings=backup_settings)

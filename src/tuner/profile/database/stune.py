@@ -84,21 +84,26 @@ def _FlushLog(log_pool: list[str]) -> None:
     for log_text in log_pool:
         if log_text.startswith('DEBUG'):
             _flush_info()
+            _info_log_pool.clear()
             _logger.debug(log_text)
         elif log_text.startswith('WARN') or log_text.startswith('WARNING'):
             _flush_info()
+            _info_log_pool.clear()
             _logger.warning(log_text)
         elif log_text.startswith('ERROR'):
             _flush_info()
+            _info_log_pool.clear()
             _logger.error(log_text)
         elif log_text.startswith('CRITICAL'):
             _flush_info()
+            _info_log_pool.clear()
             _logger.critical(log_text)
         else:
             _info_log_pool.append(log_text)
 
     _info_log_pool.append('')  # Add a new line to separate the log
     _flush_info()  # Flush the remaining info log
+    _info_log_pool.clear()
     return None
 
 
@@ -1100,19 +1105,20 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     c = A + F * E * D - LIMIT
     x = ((-b + sqrt(b ** 2 - 4 * a * c)) / (2 * a))
     # print(a, b, c)
+    _logs.append(f'With A={A}, B={B}, C={C}, D={D}, E={E}, F={F}, LIMIT={LIMIT}, '
+                 f'The quadratic function is: {a}x^2 + {b}x + {c} = 0 '
+                 f'-> The number of steps to reach the optimal point or x is {x:.4f} steps.')
     _wrk_mem_tune_oneshot(request, response, _logs, shared_buffers_ratio_increment * x,
                           max_work_buffer_ratio_increment * x, tuning_items=keys)
     working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
-
     _mem_check_string = '; '.join([f'{scope}={bytesize_to_hr(func(request.options, response))}'
                                    for scope, func in _get_wrk_mem_func().items()])
     _logs.append('---------')
     _logs.append(
-        f'DEBUG: The working memory usage based on memory profile increased to {bytesize_to_hr(working_memory)} '
-        f'or {working_memory / ram * 100:.2f} (%) of {srv_mem_str} after {x:.2f} steps.'
+        f'The working memory usage based on memory profile increased to {bytesize_to_hr(working_memory)} '
+        f'or {working_memory / ram * 100:.2f} (%) of {srv_mem_str} after {x:.2f} steps. '
+        f'This results in memory usage of all profiles are {_mem_check_string} '
         )
-    _logs.append(f'DEBUG: The working memory usage based on memory profile on all profiles are {_mem_check_string} '
-                 f'after {x} steps.')
 
     # Now we trigger our one-step decay until we find the optimal point.
     bump_step = 0
@@ -1130,9 +1136,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
         decay_step += 1
 
     _logs.append('---------')
-    _logs.append(f'DEBUG: Optimal point is found after {bump_step} bump steps and {decay_step} decay steps')
-    if bump_step + decay_step >= 3:
-        _logs.append('DEBUG: The memory pool tuning algorithm is incorrect. Revise algorithm to be more accurate')
+    _logs.append(f'Optimal point is found after {bump_step} bump steps and {decay_step} decay steps (larger than 3 is a signal of incorrect algorithm).')
     _logs.append(f'The shared_buffers_ratio is now {_kwargs.shared_buffers_ratio:.5f}.')
     _logs.append(f'The max_work_buffer_ratio is now {_kwargs.max_work_buffer_ratio:.5f}.')
     _show_tuning_result('Result (after): ')

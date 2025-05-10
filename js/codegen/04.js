@@ -85,7 +85,7 @@ class PG_SIZING {
 const PG_BACKUP_TOOL = Object.freeze({
     DISK_SNAPSHOT: 0,
     PG_DUMP: 1,
-    PG_BASE_BACKUP: 2,
+    PG_BASEBACKUP: 2,
     PG_LOGICAL: 3,
 })
 

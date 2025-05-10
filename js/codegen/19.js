@@ -43,22 +43,23 @@ class PG_TUNE_RESPONSE {
         if (backup_settings) {
             content.push(`# User Options: ${JSON.stringify(request.options)}\n`);
         }
-        for (const [scope, items] of this.outcome.get(target)) {
+        for (const [scope, items] of Object.entries(this.outcome[target])) {
             content.push(`## ===== SCOPE: ${scope} ===== \n`);
-            for (const [item_name, item] of items) {
+            for (const [item_name, item] of Object.entries(items)) {
                 if (exclude_names === null || !exclude_names.has(item_name)) {
                     content.push(item.out(request.include_comment, request.custom_style));
+                    content.push(request.include_comment ? '\n\n' : '\n');
                 }
-                content.push('\n' + (request.include_comment ? '\n\n\n' : '\n'));
             }
+            content.push('\n' + (request.include_comment ? '\n\n' : ''));
         }
         return content.join('');
     }
 
     _generate_content_as_response(target, exclude_names = null, output_format = 'conf') {
         let content = {};
-        for (const [_, items] of this.outcome.get(target)) {
-            for (const [item_name, item] of items) {
+        for (const [_, items] of Object.entries(this.outcome[target])) {
+            for (const [item_name, item] of Object.entries(items)) {
                 if (exclude_names === null || !exclude_names.has(item_name)) {
                     content[item_name] = item.out_display(null);
                 }
@@ -382,6 +383,7 @@ As mentioned, consult with your developer, DBA, and system administrator to ensu
 best performance and reliability of the database system.
 # ===============================================================      
         `;
+        return [_report, (!_kwargs.mem_pool_parallel_estimate ? max_total_memory_used : max_total_memory_used_with_parallel)];
     }
 
     calc_worker_in_parallel(options, num_active_user_conns) {

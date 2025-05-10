@@ -20,7 +20,6 @@ function _TriggerAutoTune(keys, request, response) {
             }
             const t_itm = managed_items[key]
             if (t_itm !== null && typeof t_itm.trigger === 'function') {
-                console.log(t_itm);
                 const old_result = managed_cache[key]
                 t_itm.after = t_itm.trigger(managed_cache, managed_cache, request.options, response)
                 managed_cache[key] = t_itm.after
@@ -131,9 +130,9 @@ function _conn_cache_query_timeout_tune(request, response) {
     // Tune the default_statistics_target
     const default_statistics_target = 'default_statistics_target'
     let managed_items = response.get_managed_items(_TARGET_SCOPE, PG_SCOPE.QUERY_TUNING)
-    let after_default_statistics_target = managed_cache[default_statistics_target]
+    let after_default_statistics_target
     let default_statistics_target_hw_scope = managed_items[default_statistics_target].hardware_scope[1]
-    if (workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP]) {
+    if (workload_type === PG_WORKLOAD.OLAP || workload_type === PG_WORKLOAD.HTAP) {
         after_default_statistics_target = 200 + 125 * Math.max(default_statistics_target_hw_scope.num(), 0)
     } else {
         after_default_statistics_target = 200 + 100 * Math.max(default_statistics_target_hw_scope.num() - 1, 0)
@@ -641,7 +640,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         // Streaming replication (medium level)
         // The condition of num_replicas > 0 is to ensure that the user has set the replication slots
         after_wal_level = 'replica'
-    } else if (replication_level in [PG_BACKUP_TOOL.PG_DUMP, PG_BACKUP_TOOL.DISK_SNAPSHOT] && num_replicas === 0) {
+    } else if ((replication_level === PG_BACKUP_TOOL.PG_DUMP || replication_level === PG_BACKUP_TOOL.DISK_SNAPSHOT) && num_replicas === 0) {
         after_wal_level = 'minimal'
     }
     _ApplyItmTune('wal_level', after_wal_level, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
@@ -836,10 +835,10 @@ function _wal_integrity_buffer_size_tune(request, response) {
 function _get_wrk_mem_func() {
     let result = {
         [PG_PROFILE_OPTMODE.SPIDEY]: (options, response) => response.report(options, true, true)[1],
-        [PG_PROFILE_OPTMODE.OPTIMUS_PRIME]: (options, response) => response.report(options, false, true)[1]
+        [PG_PROFILE_OPTMODE.PRIMORDIAL]: (options, response) => response.report(options, false, true)[1]
     }
-    result[PG_PROFILE_OPTMODE.PRIMORDIAL] = (options, response) => {
-        return (result[PG_PROFILE_OPTMODE.SPIDEY](options, response) + result[PG_PROFILE_OPTMODE.OPTIMUS_PRIME](options, response)) / 2
+    result[PG_PROFILE_OPTMODE.OPTIMUS_PRIME] = (options, response) => {
+        return (result[PG_PROFILE_OPTMODE.SPIDEY](options, response) + result[PG_PROFILE_OPTMODE.PRIMORDIAL](options, response)) / 2
     }
     return result
 }
@@ -855,13 +854,14 @@ function _hash_mem_adjust(request, response) {
     const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     const current_work_mem = managed_cache['work_mem']
     let after_hash_mem_multiplier = 2.0
-    if (request.options.workload_type in [PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP, PG_WORKLOAD.VECTOR]) {
-        after_hash_mem_multiplier = Math.min(2.0 + 0.125 * (current_work_mem / (40 * Mi)), 3.0)
-    } else if (request.options.workload_type in [PG_WORKLOAD.OLAP]) {
-        after_hash_mem_multiplier = Math.min(2.0 + 0.150 * (current_work_mem / (40 * Mi)), 3.0)
+    let workload_type = request.options.workload_type
+    if (workload_type === PG_WORKLOAD.HTAP || workload_type === PG_WORKLOAD.OLTP || workload_type === PG_WORKLOAD.VECTOR) {
+        after_hash_mem_multiplier = Math.min(2.0 + 0.125 * Math.floor(current_work_mem / (40 * Mi)), 3.0)
+    } else if (workload_type === PG_WORKLOAD.OLAP) {
+        after_hash_mem_multiplier = Math.min(2.0 + 0.150 * Math.floor(current_work_mem / (40 * Mi)), 3.0)
     }
     _ApplyItmTune('hash_mem_multiplier', after_hash_mem_multiplier, PG_SCOPE.MEMORY, response,
-        `by workload: ${request.options.workload_type} and working memory ${current_work_mem}`)
+        `by workload: ${workload_type} and working memory ${current_work_mem}`)
     return null;
 }
 
@@ -981,14 +981,15 @@ function _wrk_mem_tune(request, response) {
     const b = B + F * C * E - B * D * F
     const c = A + F * E * D - LIMIT
     const x = ((-b + Math.sqrt(b ** 2 - 4 * a * c)) / (2 * a))
+    console.log(`With A=${A}, B=${B}, C=${C}, D=${D}, E=${E}, F=${F}, LIMIT=${LIMIT} -> The quadratic function is: ${a}x^2 + ${b}x + ${c} = 0 -> The number of steps to reach the optimal point is ${x.toFixed(4)} steps.`)
     _wrk_mem_tune_oneshot(request, response, shared_buffers_ratio_increment * x,
         max_work_buffer_ratio_increment * x, keys)
     let working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
     _mem_check_string = Object.entries(_get_wrk_mem_func())
         .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
         .join('; ');
-    console.debug(
-        `DEBUG: The working memory usage based on memory profile increased to ${bytesize_to_hr(working_memory)} 
+    console.info(
+        `The working memory usage based on memory profile increased to ${bytesize_to_hr(working_memory)} 
         or ${(working_memory / ram * 100).toFixed(2)} (%) of ${srv_mem_str} after ${x.toFixed(2)} steps. This 
         results in memory usage of all profiles are ${_mem_check_string} `
     );
@@ -1008,11 +1009,7 @@ function _wrk_mem_tune(request, response) {
         working_memory = _get_wrk_mem(request.options.opt_mem_pool, request.options, response)
         decay_step += 1
     }
-    console.debug(`DEBUG: The optimal point is found after ${bump_step} bump steps and ${decay_step} decay steps`)
-    if (bump_step + decay_step >= 3) {
-        console.debug(`DEBUG: The memory pool tuning algorithm is incorrect. Revise algorithm to be more accurate`)
-    }
-
+    console.info(`The optimal point is found after ${bump_step} bump steps and ${decay_step} decay steps (larger than 3 is a signal of incorrect algorithm).`)
     console.info(`The shared_buffers_ratio is now ${_kwargs.shared_buffers_ratio.toFixed(5)}.`)
     console.info(`The max_work_buffer_ratio is now ${_kwargs.max_work_buffer_ratio.toFixed(5)}.`)
     _show_tuning_result('Result (after): ')
