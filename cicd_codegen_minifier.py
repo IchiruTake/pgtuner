@@ -4,15 +4,21 @@ This code snippets are made to minimize the extremely large size of the Javascri
 
 Remember to set working directory to be equal to this file.
 
+Installation Requirements:
+minify-html
+mincss
+rjsmin
+-> pip install minify-html mincss rjsmin
+
 """
 
 import os
 import os.path
 import shutil
-from typing import Literal
+from time import perf_counter
+from typing import Literal, Any
 import httpx
 import asyncio
-from typing import Any
 
 def cleanup_css_local(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
     try:
@@ -44,12 +50,11 @@ def cleanup_css_local(website_url: str, store_path: str = './web/ui/static', bac
 
 def _write_minified_file(content: Any, original_filepath: str, extra_newline: bool = False):
     dirname: str = os.path.dirname(original_filepath)
-    filename: str = os.path.basename(original_filepath)
-    extension: str = os.path.splitext(filename)[1]
+    filename, extension = os.path.splitext(os.path.basename(original_filepath))
     minified_filepath = os.path.join(dirname, filename + '.min' + extension)
     if os.path.exists(minified_filepath):
         os.remove(minified_filepath)
-    with open(minified_filepath, 'w') as f_min:
+    with open(minified_filepath, 'w', encoding='utf8') as f_min:
         f_min.write(content)
         if extra_newline:
             f_min.write('\n')
@@ -66,7 +71,7 @@ def cleanup_html_local(html_file: str):
         print('Please install minify_html package')
         return None
 
-    with open(html_file, 'r') as f:
+    with open(html_file, 'r', encoding='utf8') as f:
         minified_html = minify_html.minify(code=f.read(), minify_css=True, minify_js=True)
         return _write_minified_file(minified_html, html_file)
 
@@ -77,7 +82,7 @@ def cleanup_js_local(js_file: str):
         print('Please install jsmin package')
         return None
 
-    with open(js_file, 'r') as f:
+    with open(js_file, 'r', encoding='utf8') as f:
         minified_js = rjsmin.jsmin(f.read())
         return _write_minified_file(minified_js, js_file)
 
@@ -117,18 +122,21 @@ def migrate(src_path: str, tgt_path: str,
     for root, dirs, files in os.walk(tgt_path):
         for file in files:
             src_filepath: str = os.path.join(root, file)
-            src_file_extension = os.path.splitext(src_filepath)[1]
+            src_file_extension = os.path.splitext(src_filepath)
+            if '.min.' in file:
+                # Skip the minified files
+                continue
             minified_filepath = None
-            if src_file_extension.endswith('html'):
+            if src_file_extension[1].endswith('html'):
                 minified_filepath = cleanup_html_local(src_filepath)
                 _resolve_old_asset(src_filepath, minified_filepath, old_html_treatment)
-            elif src_file_extension.endswith('js'):
+            elif src_file_extension[1].endswith('js'):
                 minified_filepath = cleanup_js_local(src_filepath)
                 _resolve_old_asset(src_filepath, minified_filepath, old_js_treatment)
             if minified_filepath is None:
                 continue
-            print(f'Found {src_file_extension.upper()[1:]} file: {src_filepath} --> {minified_filepath}'
-                  f'\n\t-> Resolve legacy {src_file_extension.upper()[1:]} file by {old_html_treatment}')
+            print(f'Found {src_file_extension[1].upper()[1:]} file: {src_filepath} --> {minified_filepath}'
+                  f'\n\t-> Resolve legacy {src_file_extension[1].upper()[1:]} file by {old_html_treatment}')
     return None
 
 
@@ -140,7 +148,9 @@ if __name__ == "__main__":
     prod_path = 'ui/prod/static'
 
     # --------------------------------------------------
-    # [01]: Javascript-backend Code generator
+    # [01]: Javascript-backend CodeGen Merging and Minification
+    t = perf_counter()
+    print('Start merging the codegen files ...')
     if not os.path.exists(codegen_input_dirpath):
         raise FileNotFoundError(f"Input directory '{codegen_input_dirpath}' does not exist.")
     if os.path.exists(codegen_output_filepath):
@@ -160,8 +170,19 @@ if __name__ == "__main__":
                 data = codegen_input_file.read()
                 codegen_output_file.write(data)
                 codegen_output_file.write('\n\n')
+    cleanup_js_local(codegen_output_filepath)
+    print(f'Codegen merging and minification completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
     # --------------------------------------------------
     # [02]: Assets Minification
+    t = perf_counter()
+    print('-' * 40)
+    print(f'Start minifying the assets from {dev_path} to {prod_path} ...')
     migrate(dev_path, prod_path, old_html_treatment='remove', old_js_treatment='remove')
+    print(f'Assets minification from {dev_path} to {prod_path} completed in {1e3 * (perf_counter() - t):.2f} ms.')
+
+    t = perf_counter()
+    print('-' * 40)
+    print(f'Start minifying the assets from {dev_path} to {dev_path} ...')
     migrate(dev_path, dev_path, old_html_treatment='skip', old_js_treatment='skip')
+    print(f'Assets minification from {dev_path} to {dev_path} completed in {1e3 * (perf_counter() - t):.2f} ms.')
