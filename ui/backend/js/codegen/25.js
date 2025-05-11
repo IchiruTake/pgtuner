@@ -1,5 +1,6 @@
 function _get_text_element(element) {
     let el = document.getElementById(element)
+    // console.log(element, el);
     if (el.type === 'range' || el.type === 'number') {
         // parseFloat if element.step in string has dot, parseInt
         return el.step.includes('.') ? parseFloat(el.value) : parseInt(el.value);
@@ -13,6 +14,7 @@ function _get_text_element(element) {
 
 function _get_checkbox_element(element) {
     let el = document.getElementById(element)
+    // console.log(element, el);
     if (el.type === 'checkbox') {
         return el.checked;
     }
@@ -148,9 +150,9 @@ function _build_options_from_backend(data) {
             'max_backup_replication_tool': data.max_backup_replication_tool,
             'opt_transaction_lost': data.opt_transaction_lost,
             'opt_wal_buffers': data.opt_wal_buffers,
-            'max_time_transaction_loss_allow_in_second': data.max_time_transaction_loss_allow_in_second,
-            'max_num_stream_replicas_on_standby': data.max_num_stream_replicas_on_standby,
-            'max_num_logical_replicas_on_standby': data.max_num_logical_replicas_on_standby,
+            'max_time_transaction_loss_allow_in_millisecond': data.max_time_transaction_loss_allow_in_millisecond,
+            'max_num_stream_replicas_on_primary': data.max_num_stream_replicas_on_primary,
+            'max_num_logical_replicas_on_primary': data.max_num_logical_replicas_on_primary,
             'offshore_replication': data.offshore_replication,
 
             // Database tuning options
@@ -159,7 +161,6 @@ function _build_options_from_backend(data) {
             // Anti-wraparound vacuum tuning options
             'database_size_in_gib': data.database_size_in_gib,
             'num_write_transaction_per_hour_on_workload': data.num_write_transaction_per_hour_on_workload,
-
 
             // System tuning flags
             'enable_database_general_tuning': data.enable_database_general_tuning,
@@ -203,15 +204,15 @@ function _build_options_from_html() {
         'max_backup_replication_tool': PG_BACKUP_TOOL[_get_text_element(`max_backup_replication_tool`).toUpperCase()],
         'opt_transaction_lost': PG_PROFILE_OPTMODE[_get_text_element(`opt_transaction_lost`).toUpperCase()],
         'opt_wal_buffers': PG_PROFILE_OPTMODE[_get_text_element(`opt_wal_buffers`).toUpperCase()],
-        'max_time_transaction_loss_allow_in_second': parseInt(_get_text_element(`max_time_transaction_loss_allow_in_second`)),
-        'max_num_stream_replicas_on_standby': parseInt(_get_text_element(`${name}.max_num_stream_replicas_on_standby`)),
-        'max_num_logical_replicas_on_standby': parseInt(_get_text_element(`${name}.max_num_logical_replicas_on_standby`)),
-        'offshore_replication': _get_checkbox_element(`${name}.offshore_replication`) ?? false,
+        'max_time_transaction_loss_allow_in_millisecond': parseInt(_get_text_element(`max_time_transaction_loss_allow_in_millisecond`)),
+        'max_num_stream_replicas_on_primary': parseInt(_get_text_element(`max_num_stream_replicas_on_primary`)),
+        'max_num_logical_replicas_on_primary': parseInt(_get_text_element(`max_num_logical_replicas_on_primary`)),
+        'offshore_replication': _get_checkbox_element(`offshore_replication`) ?? false,
 
         // System tuning flags
         'enable_database_general_tuning': _get_checkbox_element(`enable_database_general_tuning`) ?? true,
         'enable_database_correction_tuning': _get_checkbox_element(`enable_database_correction_tuning`) ?? true,
-        'align_index': _get_text_element(`align_index`) ?? 1,
+        'align_index': 1,
     }
 }
 
@@ -219,7 +220,7 @@ function _build_options_from_html() {
 function _build_request_from_backend(data) {
     return new PG_TUNE_REQUEST(
         {
-            'options': data.options,
+            'options': _build_options_from_backend(data.options),
             'include_comment': data.include_comment ?? false,
             'custom_style': data.custom_style ?? null,
             'backup_settings': data.backup_settings ?? false,
@@ -232,7 +233,7 @@ function _build_request_from_backend(data) {
 
 function _build_request_from_html() {
     let alter_style = _get_checkbox_element(`alter_style`) ?? false;
-    let custom_style = !alter_style ? 'ALTER SYSTEM SET $1 = $2;' : null
+    let custom_style = !alter_style ? null : 'ALTER SYSTEM SET $1 = $2;'
     return {
         'options': _build_options_from_html(),
         'include_comment': _get_checkbox_element(`include_comment`) ?? false,
@@ -259,6 +260,8 @@ function web_optimize(request) {
     if (tuning_items === null || tuning_items === undefined) {
         tuning_items = DB13_CONFIG_PROFILE;
     }
+    console.log(request);
+    console.log(request.options);
     Optimize(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, tuning_items);
     if (request.options.enable_database_correction_tuning) {
         correction_tune(request, response);

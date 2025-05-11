@@ -23,7 +23,7 @@
     <!-- min_wal_size_ratio -->
     <div class="col-4 mb-3">
         <div class="d-flex justify-content-between align-items-center">
-            <label class="form-label" for="keywords.min_wal_ratio_scale"> Min WAL Ratio Scale </label>
+            <label class="form-label" for="keywords.min_wal_size_ratio"> Min WAL Size Ratio </label>
             <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
                data-bs-content="'The ratio of the min_wal_size against the total WAL volume. The supported range is [0.0, 0.15], default to 0.05 (5% of WAL volume). This value meant that by default of 5%, if the WAL usage is already around 95% of disk usage, 5% is reserved to handle spikes in WAL usage, allowing time for CHECKPOINT and ARCHIVE to run to cleanup WAL archive, ensuring the WAL is not in full, data files are updated, WAL files are archived (without cleanup), and cleanup later on. Internally, the min_wal_size has an internal lower bound of 32 WAL files or 2 GiB and an upper bound of 1.05x of max_wal_size (since the max_wal_size is a soft limit), ensuring the CHECKPOINT can apply and ARCHIVE (without cleanup) can run."
@@ -31,13 +31,13 @@
             </i>
         </div>
         <div class="d-flex align-items-center">
-            <input class="form-range me-3" name="keywords.min_wal_ratio_scale"
-                   id="keywords.min_wal_ratio_scale_range"
+            <input class="form-range me-3" name="keywords.min_wal_size_ratio"
+                   id="keywords.min_wal_size_ratio_range"
                    max="0.15" min="0.0" step="0.005" value="0.05" type="range"
-                   onchange="syncSliderToNumber('keywords.min_wal_ratio_scale')">
-            <input class="form-control w-auto" id="keywords.min_wal_ratio_scale"
+                   onchange="syncSliderToNumber('keywords.min_wal_size_ratio')">
+            <input class="form-control w-auto" id="keywords.min_wal_size_ratio"
                    max="0.15" min="0.0" step="0.005" value="0.05" type="number"
-                   onchange="syncNumberToSlider('keywords.min_wal_ratio_scale')">
+                   onchange="syncNumberToSlider('keywords.min_wal_size_ratio')">
         </div>
     </div>
     <!-- max_wal_size_ratio -->

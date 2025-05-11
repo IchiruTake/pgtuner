@@ -165,9 +165,9 @@ if __name__ == "__main__":
         os.remove(codegen_output_filepath)
 
     # List all filename in the input directory, and sorted based on the number
-    extra_condition = lambda x: int(x.split('.')[0]) <= 13
+    extra_condition = lambda x: int(x.split('.')[0]) < 99
     codegen_files = [filename for filename in os.listdir(codegen_input_dirpath)
-                     if filename.endswith('.js')]
+                     if filename.endswith('.js') and extra_condition(filename)]
     codegen_files.sort(key=lambda x: int(x.split('.')[0]))
     # print(files)
 
