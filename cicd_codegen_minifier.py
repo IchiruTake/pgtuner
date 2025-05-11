@@ -17,7 +17,6 @@ import os.path
 import shutil
 from time import perf_counter
 from typing import Literal, Any
-import jinja2
 from jinja2 import Environment, FileSystemLoader
 
 def cleanup_css_local(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
@@ -139,14 +138,22 @@ def migrate(src_path: str, tgt_path: str,
     return None
 
 
-
 if __name__ == "__main__":
     codegen_input_dirpath = 'ui/backend/js/codegen'
     codegen_output_filepath = 'ui/backend/js/codegen.js'
-    dev_path = 'ui/dev/static'
-    prod_path = 'ui/prod/static'
-    jinja_src_path = 'ui/dev/static/jinja2'
-    jinja_tgt_path = 'ui/backend/'
+    dev_path = 'ui/dev'
+    prod_path = 'ui/prod'
+    jinja_src_path = 'ui/dev/jinja2'
+    jinja_tgt_path = 'ui/frontend/html'
+    jinja_files = [
+        ('tuner.html', 'tuner.html'),
+        ('error/index.html', 'error.html'),
+        ('changelog.html', 'changelog.html'),
+    ]
+    jinja_cleanup_file = True   # Set to False to keep up the intermediate files
+
+    jinja_js_min_dirpath = 'ui/frontend/js'
+    jinja_js_min_files = ['ui/backend/js/pgtuner.js', 'ui/backend/js/ui.js']
 
     # --------------------------------------------------
     # [01]: Javascript-backend CodeGen Merging and Minification
@@ -190,13 +197,40 @@ if __name__ == "__main__":
 
     # --------------------------------------------------
     # [03]: Compile the Jinja2 template
+    t = perf_counter()
+    print('-' * 40)
+    print(f'Start compiling the Jinja2 template from {jinja_src_path} to {jinja_tgt_path} ...')
+    os.makedirs(jinja_tgt_path, exist_ok=True)
     env = Environment(loader=FileSystemLoader(jinja_src_path), cache_size=400 * 10)
-    # template = env.get_template('tuner.html')
-    # with open(os.path.join(jinja_tgt_path, 'tuner.html'), "w", encoding='utf8') as fh:
-    #     fh.write(template.render())
-    #
-    # template = env.get_template('error/index.html')
-    # with open(os.path.join(jinja_tgt_path, 'error.html'), "w", encoding='utf8') as fh:
-    #     fh.write(template.render())
+    for jinja_src_file, jinja_tgt_file in jinja_files:
+        template = env.get_template(jinja_src_file)
+        jinja_tgt_filepath = os.path.join(jinja_tgt_path, jinja_tgt_file)
+        if os.path.exists(jinja_tgt_filepath):
+            os.remove(jinja_tgt_filepath)
+        with open(jinja_tgt_filepath, "w", encoding='utf8') as fh:
+            fh.write(template.render())
+        jinja_tgt_min_filepath = cleanup_html_local(jinja_tgt_filepath)
+        if jinja_cleanup_file:
+            # Remove the intermediate file
+            os.remove(jinja_tgt_filepath) # Cleanup to free up some space
 
+        print('Compiled Jinja2 template:', jinja_src_file, '->', jinja_tgt_file, '->', jinja_tgt_min_filepath)
+    print(f'Jinja2 template compilation completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
+    # -------------------------------------------------
+    # [04]: Minify and Copy the JS to frontend
+    t = perf_counter()
+    print('-' * 40)
+    print(f'Start minifying the JS files to {jinja_js_min_dirpath}')
+    jinja_js_min_files.append(codegen_output_filepath)
+    os.makedirs(jinja_js_min_dirpath, exist_ok=True)
+    for jinja_js_file in jinja_js_min_files:
+        jinja_js_min_filepath = cleanup_js_local(jinja_js_file)
+        # Move the file to the target directory
+        if jinja_js_min_filepath is None:
+            print('Error: Failed to minify the JS file:', jinja_js_file)
+            continue
+        shutil.copy(jinja_js_min_filepath, jinja_js_min_dirpath)
+        if os.path.exists(jinja_js_min_filepath):
+            os.remove(jinja_js_min_filepath)
+        print('The JS backend file has been minified and copied to:', jinja_js_min_dirpath)
