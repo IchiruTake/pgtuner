@@ -1,19 +1,6 @@
 // ==================================================================================
 /**
  * Original Source File: ./src/tuner/profile/database/gtune_0.py
- *
- * The layout is split between category which shared this format:
- _<Scope>_<Description>_PROFILE = {
- "<tuning_item_name>": {
- 'tune_op': Callable(),          # Optional, used to define the function to calculate the value
- 'default': <default_value>,     # Must have and a constant and not a function
- 'comment': "<description>",     # An optional description
- 'instructions': {
- "*_default": <default_value>,  # Optional, used to define the default value for each tuning profile
- "*": Callable(),               # Optional, used to define the function to calculate the value
- }
- }
- }
  */
 
 const __BASE_RESERVED_DB_CONNECTION = 3;

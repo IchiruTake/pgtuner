@@ -163,7 +163,7 @@ _logger.info('The middlewares have been added to the application ...')
 # ----------------------------------------------------------------------------------------------
 _logger.info('Mounting the static files to the application ...')
 _logger.info(f'Developer Mode: {_app_dev_mode}')
-_env_tag = 'dev' if _app_dev_mode else 'prd'
+_env_tag = 'dev' if _app_dev_mode else 'prod'
 _default_path = f'./web/ui/{_env_tag}/static'
 _static_mapper = {
     '/static': _default_path,
