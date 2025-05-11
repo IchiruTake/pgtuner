@@ -256,20 +256,13 @@ PG_DISK_SIZING.ALL = [
 class PG_DISK_PERF {
     constructor(data = {}) {
         // Set defaults. Assumes PG_DISK_SIZING, RANDOM_IOPS, THROUGHPUT, Gi, Mi, DB_PAGE_SIZE are defined globally.
-        this.random_iops_spec = (typeof data.random_iops_spec !== 'undefined') ?
-            data.random_iops_spec : PG_DISK_SIZING.SANv1.iops();
-        this.random_iops_scale_factor = (typeof data.random_iops_scale_factor !== 'undefined') ?
-            data.random_iops_scale_factor : 0.9;
-        this.throughput_spec = (typeof data.throughput_spec !== 'undefined') ?
-            data.throughput_spec : PG_DISK_SIZING.SANv1.throughput();
-        this.throughput_scale_factor = (typeof data.throughput_scale_factor !== 'undefined') ?
-            data.throughput_scale_factor : 0.9;
-        this.per_scale_in_raid = (typeof data.per_scale_in_raid !== 'undefined') ?
-            data.per_scale_in_raid : 0.75;
-        this.num_disks = (typeof data.num_disks !== 'undefined') ?
-            data.num_disks : 1;
-        this.disk_usable_size = (typeof data.disk_usable_size !== 'undefined') ?
-            data.disk_usable_size : 20 * Gi;
+        this.random_iops_spec = data.random_iops_spec ?? PG_DISK_SIZING.SANv1.iops();
+        this.random_iops_scale_factor = data.random_iops_scale_factor ?? 0.9;
+        this.throughput_spec = data.throughput_spec ?? PG_DISK_SIZING.SANv1.throughput();
+        this.throughput_scale_factor = data.throughput_scale_factor ?? 0.9;
+        this.per_scale_in_raid = data.per_scale_in_raid ?? 0.75;
+        this.num_disks = data.num_disks ?? 1;
+        this.disk_usable_size = data.disk_usable_size ?? 20 * Gi;
     }
 
     raid_scale_factor() {

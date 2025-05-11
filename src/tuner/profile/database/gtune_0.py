@@ -683,7 +683,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers_per_gather': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu // 3), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
         'comment': 'Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. '
                    'Parallel workers are taken from the pool of processes established by max_worker_processes, limited '
@@ -696,7 +696,7 @@ _DB_ASYNC_CPU_PROFILE = {
 
     'max_parallel_maintenance_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu // 2), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
         'comment': "Sets the maximum number of parallel workers that can be started by a single utility command. "
                    "Currently, the parallel utility commands that support the use of parallel workers are CREATE INDEX "

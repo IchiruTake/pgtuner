@@ -17,8 +17,8 @@ import os.path
 import shutil
 from time import perf_counter
 from typing import Literal, Any
-import httpx
-import asyncio
+import jinja2
+from jinja2 import Environment, FileSystemLoader
 
 def cleanup_css_local(website_url: str, store_path: str = './web/ui/static', backup: bool = False):
     try:
@@ -86,7 +86,6 @@ def cleanup_js_local(js_file: str):
         minified_js = rjsmin.jsmin(f.read())
         return _write_minified_file(minified_js, js_file)
 
-
 def migrate(src_path: str, tgt_path: str,
             old_html_treatment: Literal['replace', 'backup', 'remove', 'skip', 'override'] = 'replace',
             old_js_treatment: Literal['replace', 'backup', 'remove', 'skip', 'override'] = 'replace'):
@@ -146,6 +145,8 @@ if __name__ == "__main__":
     codegen_output_filepath = 'ui/backend/js/codegen.js'
     dev_path = 'ui/dev/static'
     prod_path = 'ui/prod/static'
+    jinja_src_path = 'ui/dev/static/jinja2'
+    jinja_tgt_path = 'ui/backend/'
 
     # --------------------------------------------------
     # [01]: Javascript-backend CodeGen Merging and Minification
@@ -186,3 +187,16 @@ if __name__ == "__main__":
     print(f'Start minifying the assets from {dev_path} to {dev_path} ...')
     migrate(dev_path, dev_path, old_html_treatment='skip', old_js_treatment='skip')
     print(f'Assets minification from {dev_path} to {dev_path} completed in {1e3 * (perf_counter() - t):.2f} ms.')
+
+    # --------------------------------------------------
+    # [03]: Compile the Jinja2 template
+    env = Environment(loader=FileSystemLoader(jinja_src_path), cache_size=400 * 10)
+    # template = env.get_template('tuner.html')
+    # with open(os.path.join(jinja_tgt_path, 'tuner.html'), "w", encoding='utf8') as fh:
+    #     fh.write(template.render())
+    #
+    # template = env.get_template('error/index.html')
+    # with open(os.path.join(jinja_tgt_path, 'error.html'), "w", encoding='utf8') as fh:
+    #     fh.write(template.render())
+
+

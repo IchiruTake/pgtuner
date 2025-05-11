@@ -357,7 +357,7 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     exclude_names = ['archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
                      'log_directory']
     if request.ignore_non_performance_setting:
-        exclude_names.extend(['statement_timeout', 'lock_timeout', 'deadlock_timeout', 'transaction_timeout',
+        exclude_names.extend(['deadlock_timeout', 'transaction_timeout',
                               'idle_session_timeout', 'log_line_prefix'])
 
     if backend_request.options.operating_system == 'windows':
@@ -376,7 +376,7 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
                                  ignore_report=False)[0]
 
     return ORJSONResponse(
-        content={'mem_report': mem_report, 'config': content},
+        content={'mem_report': mem_report, 'content': content},
         status_code=status.HTTP_200_OK,
         headers={
             'Content-Type': 'application/json',

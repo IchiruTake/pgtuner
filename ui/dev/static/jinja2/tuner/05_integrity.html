@@ -13,10 +13,10 @@
                 </i>
             </div>
             <select class="form-select" id="max_backup_replication_tool" name="max_backup_replication_tool">
-                <option value="disk_snapshot">0: Backup by Disk Snapshot</option>
-                <option value="pg_dump">1: pg_dump/pg_dumpall for logical-textual backup</option>
-                <option selected value="pg_basebackup">2: pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup</option>
-                <option value="pg_logical">3: pg_logical and alike: Logical replication</option>
+                <option value="DISK_SNAPSHOT">0: Backup by Disk Snapshot</option>
+                <option value="PG_DUMP">1: pg_dump/pg_dumpall for logical-textual backup</option>
+                <option selected value="PG_BASEBACKUP">2: pg_basebackup [--incremental] or streaming replication (byte-capture change): Byte-level backup</option>
+                <option value="PG_LOGICAL">3: pg_logical and alike: Logical replication</option>
             </select>
         </div>
         <!-- opt_transaction_lost -->
@@ -30,10 +30,10 @@
                 </i>
             </div>
             <select class="form-select" id="opt_transaction_lost" name="opt_transaction_lost">
-                <option selected value="none">NONE: Ignore Optimization </option>
-                <option value="lightweight">SPIDEY: Light-weight Optimization</option>
-                <option value="general">OPTIMUS PRIME: General Optimization </option>
-                <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
+                <option selected value="NONE">NONE: Ignore Optimization </option>
+                <option value="SPIDEY">SPIDEY: Light-weight Optimization</option>
+                <option value="OPTIMUS_PRIME">OPTIMUS PRIME: General Optimization </option>
+                <option value="PRIMORDIAL">PRIMORDIAL: Extreme Optimization</option>
             </select>
         </div>
         <!-- opt_wal_buffers -->
@@ -47,10 +47,10 @@
                 </i>
             </div>
             <select class="form-select" id="opt_wal_buffers" name="opt_wal_buffers">
-                <option value="none">NONE: Ignore Optimization </option>
-                <option selected value="lightweight">SPIDEY: Light-weight Optimization</option>
-                <option value="general">OPTIMUS PRIME: General Optimization </option>
-                <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
+                <option value="NONE">NONE: Ignore Optimization </option>
+                <option selected value="SPIDEY">SPIDEY: Light-weight Optimization</option>
+                <option value="OPTIMUS_PRIME">OPTIMUS PRIME: General Optimization </option>
+                <option value="PRIMORDIAL">PRIMORDIAL: Extreme Optimization</option>
             </select>
         </div>
         <!-- max_num_stream_replicas_on_primary -->
@@ -110,10 +110,10 @@
             <div class="d-flex align-items-center">
                 <input class="form-range me-3" name="max_time_transaction_loss_allow_in_millisecond"
                        id="max_time_transaction_loss_allow_in_millisecond_range"
-                       max="10000" min="1" step="1" value="650" type="range"
+                       max="10000" min="100" step="50" value="650" type="range"
                        onchange="syncSliderToNumber('max_time_transaction_loss_allow_in_millisecond')">
                 <input class="form-control w-auto" id="max_time_transaction_loss_allow_in_millisecond"
-                       max="10000" min="1" step="1" value="650" type="number"
+                       max="10000" min="100" step="50" value="650" type="number"
                        onchange="syncNumberToSlider('max_time_transaction_loss_allow_in_millisecond')">
             </div>
         </div>

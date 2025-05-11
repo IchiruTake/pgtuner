@@ -33,8 +33,8 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     # generalized. Even on PostgreSQL 14, the scaling is significant when the PostgreSQL server is not virtualized and
     # have a lot of CPU to use (> 32 - 96|128 cores).
     cpu_to_connection_scale_ratio: PositiveFloat = Field(
-        default=4, ge=1, le=8, frozen=True,
-        description='The scale ratio of the CPU to the number of connections. The supported range is [1, 8], default '
+        default=4, ge=2.5, le=10, frozen=True,
+        description='The scale ratio of the CPU to the number of connections. The supported range is [2.5, 10], default '
                     'is 4. This value is used to estimate the number of connections that can be handled by the server '
                     'based on the number of CPU cores. The higher value means more connections can be handled by the '
                     'server. From modern perspective, the good ratio is between 4-6, but default to 4 for optimal ' \
@@ -182,11 +182,11 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     min_wal_size_ratio: PositiveFloat = Field(
         default=0.05, ge=0.0, le=0.15, frozen=True,
         description='The ratio of the min_wal_size against the total WAL volume. The supported range is [0.0, 0.15], '
-                    'default to 0.03 (3% of the WAL volume), meaning that 3% of the WAL volume is reserved to handle '
+                    'default to 0.05 (5% of the WAL volume), meaning that 5% of the WAL volume is reserved to handle '
                     'spikes in WAL usage, allowing time for CHECKPOINT and ARCHIVE to run to cleanup WAL archive, '
                     'ensuring the non-full WAL (for SATA/NVME SSD to have write cache) and updated data files. '
                     'Internally, the :arg:`min_wal_size` has an internal lower bound of 32 WAL files or 2 GiB and an '
-                    'upper bound of 1.05x of :arg:`min_wal_size` (since the :arg:`min_wal_size` is a soft limit). '
+                    'upper bound of 1.05x of :arg:`max_wal_size` (since the :arg:`max_wal_size` is a soft limit). '
     )
     max_wal_size_ratio: PositiveFloat = Field(
         default=0.05, ge=0.0, le=0.30, frozen=True,

@@ -1262,20 +1262,13 @@ PG_DISK_SIZING.ALL = [
 class PG_DISK_PERF {
     constructor(data = {}) {
         // Set defaults. Assumes PG_DISK_SIZING, RANDOM_IOPS, THROUGHPUT, Gi, Mi, DB_PAGE_SIZE are defined globally.
-        this.random_iops_spec = (typeof data.random_iops_spec !== 'undefined') ?
-            data.random_iops_spec : PG_DISK_SIZING.SANv1.iops();
-        this.random_iops_scale_factor = (typeof data.random_iops_scale_factor !== 'undefined') ?
-            data.random_iops_scale_factor : 0.9;
-        this.throughput_spec = (typeof data.throughput_spec !== 'undefined') ?
-            data.throughput_spec : PG_DISK_SIZING.SANv1.throughput();
-        this.throughput_scale_factor = (typeof data.throughput_scale_factor !== 'undefined') ?
-            data.throughput_scale_factor : 0.9;
-        this.per_scale_in_raid = (typeof data.per_scale_in_raid !== 'undefined') ?
-            data.per_scale_in_raid : 0.75;
-        this.num_disks = (typeof data.num_disks !== 'undefined') ?
-            data.num_disks : 1;
-        this.disk_usable_size = (typeof data.disk_usable_size !== 'undefined') ?
-            data.disk_usable_size : 20 * Gi;
+        this.random_iops_spec = data.random_iops_spec ?? PG_DISK_SIZING.SANv1.iops();
+        this.random_iops_scale_factor = data.random_iops_scale_factor ?? 0.9;
+        this.throughput_spec = data.throughput_spec ?? PG_DISK_SIZING.SANv1.throughput();
+        this.throughput_scale_factor = data.throughput_scale_factor ?? 0.9;
+        this.per_scale_in_raid = data.per_scale_in_raid ?? 0.75;
+        this.num_disks = data.num_disks ?? 1;
+        this.disk_usable_size = data.disk_usable_size ?? 20 * Gi;
     }
 
     raid_scale_factor() {
@@ -1349,8 +1342,18 @@ class PG_TUNE_USR_KWARGS {
 class PG_TUNE_USR_OPTIONS {
     constructor(options = {}) {
         // Basic profile for system tuning
+        this.workload_type = options.workload_type ?? PG_WORKLOAD.HTAP;
         this.workload_profile = options.workload_profile ?? PG_SIZING.LARGE;
         this.pgsql_version = options.pgsql_version ?? 17;
+
+        // System parameters
+        this.operating_system = options.operating_system ?? 'linux';
+        this.vcpu = options.vcpu ?? 4;
+        this.total_ram = options.total_ram ?? (16 * Gi);
+        this.base_kernel_memory_usage = options.base_kernel_memory_usage ?? -1;
+        this.base_monitoring_memory_usage = options.base_monitoring_memory_usage ?? -1;
+        this.opt_mem_pool = options.opt_mem_pool ?? PG_PROFILE_OPTMODE.OPTIMUS_PRIME;
+
         // Disk options for data partitions (required)
         this.data_index_spec = options.data_index_spec; // Expected to be an instance of PG_DISK_PERF
         this.wal_spec = options.wal_spec; // Expected to be an instance of PG_DISK_PERF
@@ -1363,22 +1366,16 @@ class PG_TUNE_USR_OPTIONS {
         this.max_num_logical_replicas_on_standby = options.max_num_logical_replicas_on_standby ?? 0;
         this.offshore_replication = options.offshore_replication ?? false;
         // Database tuning options
-        this.workload_type = options.workload_type ?? PG_WORKLOAD.HTAP;
-        this.opt_mem_pool = options.opt_mem_pool ?? PG_PROFILE_OPTMODE.OPTIMUS_PRIME;
+
         this.tuning_kwargs = options.tuning_kwargs ?? new PG_TUNE_USR_KWARGS();
         // Anti-wraparound vacuum tuning options
         this.database_size_in_gib = options.database_size_in_gib ?? 0;
         this.num_write_transaction_per_hour_on_workload = options.num_write_transaction_per_hour_on_workload ?? (50 * K10);
-        // System parameters
-        this.operating_system = options.operating_system ?? 'linux';
-        this.vcpu = options.vcpu ?? 4;
-        this.total_ram = options.total_ram ?? (16 * Gi);
-        this.base_kernel_memory_usage = options.base_kernel_memory_usage ?? -1;
-        this.base_monitoring_memory_usage = options.base_monitoring_memory_usage ?? -1;
+
         // System tuning flags
         this.enable_database_general_tuning = options.enable_database_general_tuning ?? true;
         this.enable_database_correction_tuning = options.enable_database_correction_tuning ?? true;
-        this.align_index = options.align_index ?? 0;
+        this.align_index = options.align_index ?? 1;
 
         // Run post-initialization adjustments
         this.model_post_init();
@@ -1831,12 +1828,12 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * 1.25), 4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 3), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
     },
     'max_parallel_maintenance_workers': {
@@ -2554,6 +2551,10 @@ class PG_TUNE_REQUEST {
         this.options = options.options || {};
         this.include_comment = options.include_comment || false;
         this.custom_style = options.custom_style || null;
+        this.backup_settings = options.backup_settings || false;
+        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || false;
+        this.ignore_non_performance_setting = options.ignore_non_performance_setting || false;
+        this.output_format = options.output_format || 'file';
     }
 }
 
@@ -3387,10 +3388,11 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
             PG_DISK_SIZING.matchDiskSeriesInRange(wal_tput, THROUGHPUT, 'ssd', 'nvme')) {
             after_wal_writer_flush_after = 2 * Mi
+            if (request.options.workload_profile >= PG_SIZING.LARGE) {
+                after_wal_writer_flush_after *= 2
+            }
         }
-        if (request.options.workload_profile >= PG_SIZING.LARGE) {
-            after_wal_writer_flush_after *= 2
-        }
+
         _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
         let after_backend_flush_after = Math.min(managed_cache['checkpoint_flush_after'], managed_cache['bgwriter_flush_after'])
         _ApplyItmTune('backend_flush_after', after_backend_flush_after, PG_SCOPE.OTHERS, response)
@@ -3908,22 +3910,9 @@ function _wal_integrity_buffer_size_tune(request, response) {
     // Now we need to estimate how much time required to flush the full WAL buffers to disk (assuming we
     // have no write after the flush or wal_writer_delay is being waken up or 2x of wal_buffers are synced)
     // No low scale factor because the WAL disk is always active with one purpose only (sequential write)
-    // Force enable the WAL buffers adjustment minimally to SPIDEY when the WAL disk throughput is too weak and
-    // non-critical workload.
-    if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.NONE) {
-        request.options.opt_wal_buffers = PG_PROFILE_OPTMODE.SPIDEY
-        console.warn(`WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.`)
-    }
     const wal_tput = request.options.wal_spec.perf()[0]
-    let data_amount_ratio_input = 1
-    let transaction_loss_ratio = 2 / 3.25  // Not 2x of delay at 1 full WAL buffers
-    if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.OPTIMUS_PRIME) {
-        data_amount_ratio_input = 1.5
-        transaction_loss_ratio = 3 / 3.25
-    } else if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.PRIMORDIAL) {
-        data_amount_ratio_input = 2
-        transaction_loss_ratio = 3 / 3.25
-    }
+    const data_amount_ratio_input = 0.5 + 0.5 * request.options.opt_wal_buffers
+    const transaction_loss_ratio = (2 + Math.floor(request.options.opt_wal_buffers / 2)) / 3.25
 
     const decay_rate = 16 * DB_PAGE_SIZE
     let current_wal_buffers = realign_value(
@@ -4223,6 +4212,300 @@ function correction_tune(request, response) {
 // Sample
 
 
+function _get_text_element(element) {
+    let el = document.getElementById(element)
+    if (el.type === 'range' || el.type === 'number') {
+        // parseFloat if element.step in string has dot, parseInt
+        return el.step.includes('.') ? parseFloat(el.value) : parseInt(el.value);
+    } else if (el.type === 'text') {
+        return el.value;
+    } else if (el.type === 'select-one') {
+        return el.value;
+    }
+    return '';
+}
+
+function _get_checkbox_element(element) {
+    let el = document.getElementById(element)
+    if (el.type === 'checkbox') {
+        return el.checked;
+    }
+    return '';
+}
+
+// ---------------------------------------------------------------------------------
+function _build_disk_from_backend(data) {
+    return new PG_DISK_PERF(
+        {
+            'random_iops_spec': data.random_iops_spec,
+            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 1.0,
+            'throughput_spec': data.throughput_spec,
+            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 1.0,
+            'disk_usable_size': data.disk_usable_size,
+            'num_disks': data.num_disks !== null ? data.num_disks : 1,
+            'per_scale_in_raid': data.per_scale_in_raid !== null ? data.per_scale_in_raid : 0.75
+        }
+    )
+}
+
+function _build_disk_from_html(name = 'data_index_spec') {
+    return {
+        'random_iops_spec': _get_text_element(`${name}.random_iops`),
+        'throughput_spec': _get_text_element(`${name}.throughput`),
+        'disk_usable_size': _get_text_element(`${name}.disk_usable_size_in_gib`) * Gi,
+    };
+}
+
+// ---------------------------------------------------------------------------------
+function _build_keywords_from_backend(data) {
+    return new PG_TUNE_USR_KWARGS(
+        {
+            // Connection
+            user_max_connections: data.user_max_connections,
+            cpu_to_connection_scale_ratio: data.cpu_to_connection_scale_ratio,
+            superuser_reserved_connections_scale_ratio: data.superuser_reserved_connections_scale_ratio,
+            single_memory_connection_overhead: data.single_memory_connection_overhead,
+            memory_connection_to_dedicated_os_ratio: data.memory_connection_to_dedicated_os_ratio,
+
+            // Memory Utilization (Basic)
+            effective_cache_size_available_ratio: data.effective_cache_size_available_ratio,
+            shared_buffers_ratio: data.shared_buffers_ratio,
+            max_work_buffer_ratio: data.max_work_buffer_ratio,
+            effective_connection_ratio: data.effective_connection_ratio,
+            temp_buffers_ratio: data.temp_buffers_ratio,
+
+            // Memory Utilization (Advanced)
+            max_normal_memory_usage: data.max_normal_memory_usage,
+            mem_pool_tuning_ratio: data.mem_pool_tuning_ratio,
+            hash_mem_usage_level: data.hash_mem_usage_level,
+            mem_pool_parallel_estimate: data.mem_pool_parallel_estimate,
+
+            // Logging behaviour (query size, and query runtime)
+            max_query_length_in_bytes: data.max_query_length_in_bytes,
+            max_runtime_ms_to_log_slow_query: data.max_runtime_ms_to_log_slow_query,
+            max_runtime_ratio_to_explain_slow_query: data.max_runtime_ratio_to_explain_slow_query,
+
+            // WAL control parameters -> Change this when you initdb with custom wal_segment_size (not recommended)
+            wal_segment_size: BASE_WAL_SEGMENT_SIZE,
+            min_wal_size_ratio: data.min_wal_size_ratio,
+            max_wal_size_ratio: data.max_wal_size_ratio,
+            wal_keep_size_ratio: data.wal_keep_size_ratio,
+            // Vacuum Tuning
+            autovacuum_utilization_ratio: data.autovacuum_utilization_ratio,
+            vacuum_safety_level: data.vacuum_safety_level
+        }
+    )
+}
+
+function _build_keywords_from_html(name = 'keywords') {
+    return {
+        // Connection or ./tuner/adv.conn.html
+        'user_max_connections': _get_text_element(`${name}.user_max_connections`),
+        'cpu_to_connection_scale_ratio': _get_text_element(`${name}.cpu_to_connection_scale_ratio`),
+        'superuser_reserved_connections_scale_ratio': _get_text_element(`${name}.superuser_reserved_connections_scale_ratio`),
+        'single_memory_connection_overhead': _get_text_element(`${name}.single_memory_connection_overhead_in_kib`) * Ki,
+        'memory_connection_to_dedicated_os_ratio': _get_text_element(`${name}.memory_connection_to_dedicated_os_ratio`),
+
+        // Memory Utilization (Basic)
+        'effective_cache_size_available_ratio': _get_text_element(`${name}.effective_cache_size_available_ratio`),
+        'shared_buffers_ratio': _get_text_element(`${name}.shared_buffers_ratio`),
+        'max_work_buffer_ratio': _get_text_element(`${name}.max_work_buffer_ratio`),
+        'effective_connection_ratio': _get_text_element(`${name}.effective_connection_ratio`),
+        'temp_buffers_ratio': _get_text_element(`${name}.temp_buffers_ratio`),
+
+        // Memory Utilization (Advanced)
+        'max_normal_memory_usage': _get_text_element(`${name}.max_normal_memory_usage`),
+        'mem_pool_tuning_ratio': _get_text_element(`${name}.mem_pool_tuning_ratio`),
+        'hash_mem_usage_level': _get_text_element(`${name}.hash_mem_usage_level`),
+        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? true,
+
+        // Logging behaviour (query size, and query runtime)
+        'max_query_length_in_bytes': _get_text_element(`${name}.max_query_length_in_bytes`),
+        'max_runtime_ms_to_log_slow_query': _get_text_element(`${name}.max_runtime_ms_to_log_slow_query`),
+        'max_runtime_ratio_to_explain_slow_query': _get_text_element(`${name}.max_runtime_ratio_to_explain_slow_query`),
+
+        // WAL control parameters -> Change this when you initdb with custom wal_segment_size (not recommended)
+        // https://postgrespro.com/list/thread-id/1898949
+        'wal_segment_size': BASE_WAL_SEGMENT_SIZE * Math.pow(2, (_get_text_element(`${name}.wal_segment_size_scale`))),
+        'min_wal_size_ratio': _get_text_element(`${name}.min_wal_size_ratio`),
+        'max_wal_size_ratio': _get_text_element(`${name}.max_wal_size_ratio`),
+        'wal_keep_size_ratio': _get_text_element(`${name}.wal_keep_size_ratio`),
+
+        // Vacuum Tuning & Others
+        'autovacuum_utilization_ratio': _get_text_element(`${name}.autovacuum_utilization_ratio`),
+        'vacuum_safety_level': _get_text_element(`${name}.vacuum_safety_level`),
+    }
+}
+
+// ---------------------------------------------------------------------------------
+function _build_options_from_backend(data) {
+    return new PG_TUNE_USR_OPTIONS(
+        {
+            // Basic profile for system tuning
+            'workload_type': data.workload_type,
+            'workload_profile': data.workload_profile,
+            'pgsql_version': data.pgsql_version,
+
+            // System parameters
+            'operating_system': data.operating_system,
+            'vcpu': data.vcpu,
+            'total_ram': data.total_ram,
+            'base_kernel_memory_usage': data.base_kernel_memory_usage,
+            'base_monitoring_memory_usage': data.base_monitoring_memory_usage,
+            'opt_mem_pool': data.opt_mem_pool,
+
+            // Disk options for data partitions (required)
+            'data_index_spec': _build_disk_from_backend(data.data_index_spec),
+            'wal_spec': _build_disk_from_backend(data.wal_spec),
+
+            // Data Integrity, Transaction, Recovery, and Replication
+            'max_backup_replication_tool': data.max_backup_replication_tool,
+            'opt_transaction_lost': data.opt_transaction_lost,
+            'opt_wal_buffers': data.opt_wal_buffers,
+            'max_time_transaction_loss_allow_in_second': data.max_time_transaction_loss_allow_in_second,
+            'max_num_stream_replicas_on_standby': data.max_num_stream_replicas_on_standby,
+            'max_num_logical_replicas_on_standby': data.max_num_logical_replicas_on_standby,
+            'offshore_replication': data.offshore_replication,
+
+            // Database tuning options
+            'tuning_kwargs': _build_keywords_from_backend(data.tuning_kwargs),
+
+            // Anti-wraparound vacuum tuning options
+            'database_size_in_gib': data.database_size_in_gib,
+            'num_write_transaction_per_hour_on_workload': data.num_write_transaction_per_hour_on_workload,
+
+
+            // System tuning flags
+            'enable_database_general_tuning': data.enable_database_general_tuning,
+            'enable_database_correction_tuning': data.enable_database_correction_tuning,
+            'align_index': data.align_index ?? 1,
+        }
+    )
+}
+
+function _build_options_from_html() {
+    // If -1 then output is -1, if larger than zero then multiply with MiB
+    let monitoring_memory = parseInt(_get_text_element(`base_monitoring_memory_usage_in_mib`));
+    monitoring_memory = Math.min(monitoring_memory, Math.max(monitoring_memory, monitoring_memory * Mi));
+    let kernel_memory = parseInt(_get_text_element(`base_kernel_memory_usage_in_mib`));
+    kernel_memory = Math.min(kernel_memory, Math.max(kernel_memory, kernel_memory * Mi));
+
+    return {
+        // Workload
+        'workload_type': PG_WORKLOAD[_get_text_element(`workload_type`).toUpperCase()],
+        'workload_profile': PG_SIZING.fromString(_get_text_element(`workload_profile`)),
+        'pgsql_version': parseInt(_get_text_element(`pgsql_version`)),
+
+        // System Parameters
+        'operating_system': _get_text_element(`operating_system`),
+        'vcpu': _get_text_element(`vcpu`),
+        'total_ram': _get_text_element(`total_ram_in_gib`) * Gi,
+        'base_kernel_memory_usage': kernel_memory,
+        'base_monitoring_memory_usage': monitoring_memory,
+        'opt_mem_pool': PG_PROFILE_OPTMODE[_get_text_element(`opt_mem_pool`).toUpperCase()],
+        'tuning_kwargs': _build_keywords_from_html(`keywords`),
+
+        // Disk options for data partitions (required)
+        'data_index_spec': _build_disk_from_html(`data_index_spec`),
+        'wal_spec': _build_disk_from_html(`wal_spec`),
+
+        // Anti-wraparound vacuum tuning options
+        'database_size_in_gib': parseInt(_get_text_element(`database_size_in_gib`)),
+        'num_write_transaction_per_hour_on_workload': _get_text_element(`num_write_transaction_per_hour_on_workload`),
+
+        // Data Integrity, Transaction, Recovery, and Replication
+        'max_backup_replication_tool': PG_BACKUP_TOOL[_get_text_element(`max_backup_replication_tool`).toUpperCase()],
+        'opt_transaction_lost': PG_PROFILE_OPTMODE[_get_text_element(`opt_transaction_lost`).toUpperCase()],
+        'opt_wal_buffers': PG_PROFILE_OPTMODE[_get_text_element(`opt_wal_buffers`).toUpperCase()],
+        'max_time_transaction_loss_allow_in_second': parseInt(_get_text_element(`max_time_transaction_loss_allow_in_second`)),
+        'max_num_stream_replicas_on_standby': parseInt(_get_text_element(`${name}.max_num_stream_replicas_on_standby`)),
+        'max_num_logical_replicas_on_standby': parseInt(_get_text_element(`${name}.max_num_logical_replicas_on_standby`)),
+        'offshore_replication': _get_checkbox_element(`${name}.offshore_replication`) ?? false,
+
+        // System tuning flags
+        'enable_database_general_tuning': _get_checkbox_element(`enable_database_general_tuning`) ?? true,
+        'enable_database_correction_tuning': _get_checkbox_element(`enable_database_correction_tuning`) ?? true,
+        'align_index': _get_text_element(`align_index`) ?? 1,
+    }
+}
+
+// ---------------------------------------------------------------------------------
+function _build_request_from_backend(data) {
+    return new PG_TUNE_REQUEST(
+        {
+            'options': data.options,
+            'include_comment': data.include_comment ?? false,
+            'custom_style': data.custom_style ?? null,
+            'backup_settings': data.backup_settings ?? false,
+            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? false,
+            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? true,
+            'output_format': data.output_format ?? 'file',
+        }
+    )
+}
+
+function _build_request_from_html() {
+    let alter_style = _get_checkbox_element(`alter_style`) ?? false;
+    let custom_style = !alter_style ? 'ALTER SYSTEM SET $1 = $2;' : null
+    return {
+        'options': _build_options_from_html(),
+        'include_comment': _get_checkbox_element(`include_comment`) ?? false,
+        'custom_style': custom_style,
+        'backup_settings': _get_checkbox_element(`backup_settings`) ?? false,
+        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? false,
+        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? true,
+        'output_format': _get_text_element(`output_format`) ?? 'file',
+    }
+}
+
+// ---------------------------------------------------------------------------------
+function web_optimize(request) {
+    let response = new PG_TUNE_RESPONSE();
+    // We assume the request must be the :class:`PG_TUNE_REQUEST` object
+    let items = {
+        13: DB13_CONFIG_PROFILE,
+        14: DB14_CONFIG_PROFILE,
+        15: DB15_CONFIG_PROFILE,
+        16: DB16_CONFIG_PROFILE,
+        17: DB17_CONFIG_PROFILE,
+    }
+    let tuning_items = items[parseInt(request.options.pgsql_version)];
+    if (tuning_items === null || tuning_items === undefined) {
+        tuning_items = DB13_CONFIG_PROFILE;
+    }
+    Optimize(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, tuning_items);
+    if (request.options.enable_database_correction_tuning) {
+        correction_tune(request, response);
+    }
+    let exclude_names = [
+        'archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
+        'log_directory',
+    ];
+    if (request.ignore_non_performance_setting) {
+        exclude_names.push(
+            'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout',
+            'log_autovacuum_min_duration', 'log_checkpoints', 'log_connections', 'log_disconnections',
+            'log_duration', 'log_error_verbosity', 'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits',
+            'log_statement', 'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
+            )
+    }
+    if (request.options.operating_system === 'windows') {
+        exclude_names.push('checkpoint_flush_after', 'bgwriter_flush_after', 'wal_writer_flush_after',
+            'backend_flush_after');
+    }
+    const content = response.generate_content(
+        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names, request.backup_settings, request.output_format
+    );
+    const mem_report = response.report(
+        request.options, request.analyze_with_full_connection_use, false
+    )[0];
+    return {
+        'content': content,
+        'mem_report': mem_report,
+        'response': response,
+    }
+}
+
 data_index_disk = new PG_DISK_PERF(
     {
         'random_iops_spec': 5 * K10,
@@ -4261,7 +4544,7 @@ kw = new PG_TUNE_USR_KWARGS(
         mem_pool_tuning_ratio: 0.4, // [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
         // Maximum float allowed is [-60, 60] under 64-bit system
         hash_mem_usage_level: -5, // [-50, 50]. Default is -5. The optimized ratio for hash memory usage level
-        mem_pool_parallel_estimate: true, // Default is True to assume the use of p
+        mem_pool_parallel_estimate: true, // Default is True to assume the use of parallel work_mem
 
         // Logging behaviour (query size, and query runtime)
         max_query_length_in_bytes: 2 * Ki, // [64, 64 * Mi]. Default is 2 KiB. The maximum query length in bytes
@@ -4288,7 +4571,8 @@ options = new PG_TUNE_USR_OPTIONS(
         enable_sysctl_general_tuning: false, enable_sysctl_correction_tuning: false,
         enable_database_general_tuning: true, enable_database_correction_tuning: true,
         // User-Tuning Profiles
-        workload_profile: PG_SIZING.LARGE, pgsql_version: 17,
+        workload_type: PG_WORKLOAD.HTAP, workload_profile: PG_SIZING.LARGE, pgsql_version: 17,
+
         database_size_in_gib: 0, // [0, 1000]. Default is 0 GiB for maximum of 60% of data disk
         num_write_transaction_per_hour_on_workload: 50 * K10, // [K10, 20 * M10]. Default is 50 * K10 (50K).
         align_index: 1, // [0, 1]. Default is 1. Choose the higher number during alignment
@@ -4296,7 +4580,7 @@ options = new PG_TUNE_USR_OPTIONS(
         data_index_spec: data_index_disk, wal_spec: wal_disk,
 
         // PostgreSQL Tuning Configuration
-        tuning_kwargs: kw, workload_type: PG_WORKLOAD.HTAP, operating_system: 'containerd',
+        tuning_kwargs: kw,operating_system: 'containerd',
         base_kernel_memory_usage: -1, base_monitoring_memory_usage: -1,   // To let pgtuner manage the memory usage
         vcpu: 8, total_ram: 8 * 5 * Gi,
         opt_mem_pool: PG_PROFILE_OPTMODE.OPTIMUS_PRIME,

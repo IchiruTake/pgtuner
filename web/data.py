@@ -63,7 +63,7 @@ class PG_WEB_TUNE_USR_KWARGS(BaseModel):
     max_runtime_ratio_to_explain_slow_query: PositiveFloat = Field(default=1.5, ge=0.1, le=10.0)
 
     # Vacuum Tuning
-    autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.50, le=0.95)
+    autovacuum_utilization_ratio: PositiveFloat = Field(default=0.80, gt=0.30, le=0.95)
     vacuum_safety_level: PositiveInt = Field(default=2, ge=0, le=12)
 
     def to_backend(self) -> PG_TUNE_USR_KWARGS:

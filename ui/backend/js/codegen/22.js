@@ -8,6 +8,10 @@ class PG_TUNE_REQUEST {
         this.options = options.options || {};
         this.include_comment = options.include_comment || false;
         this.custom_style = options.custom_style || null;
+        this.backup_settings = options.backup_settings || false;
+        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || false;
+        this.ignore_non_performance_setting = options.ignore_non_performance_setting || false;
+        this.output_format = options.output_format || 'file';
     }
 }
 

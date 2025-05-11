@@ -1,6 +1,44 @@
 <div class="my-4">
-    <h4 class="mb-3">Workload and Optimization Mode</h4>
+    <h4 class="mb-3">System, Workload and Optimization Mode</h4>
     <div class="row">
+        <!-- Overall Profile -->
+        <div class="col-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="workload_profile"> Workload Sizing </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Choose your workload sizing suited for your system. Higher profile level means that the amount of data change is larger, with more running complex queries and connections ... "
+                   title="Workload Sizing">
+                </i>
+            </div>
+            <select class="form-select" id="workload_profile" name="workload_profile">
+                <option value="mini">Mini: Self-hosted or Development</option>
+                <option value="medium">Medium: Mini website or Small internal usage</option>
+                <option selected value="large">Large: City-level Scale </option>
+                <option value="mall">Mall: Metropolis-level or Country-level Scale</option>
+                <option value="bigt">BigTech: Multinational-level Scale</option>
+            </select>
+        </div>
+
+        <!-- PostgreSQL Version (Similar format) -->
+        <div class="col-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="pgsql_version">PostgreSQL Version</label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="Select the PostgreSQL version for system tuning. Supported versions are 13 -> 17 (latest)"
+                   title="PostgreSQL version">
+                </i>
+            </div>
+            <select class="form-select" id="pgsql_version" name="pgsql_version">
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+                <option value="16">16</option>
+                <option selected value="17">17</option>
+            </select>
+        </div>
+
         <!-- Workload Type -->
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
@@ -12,32 +50,11 @@
                 </i>
             </div>
             <select class="form-select" id="workload_type" name="workload_type">
-                <option value="soltp">SOLTP: Only for database feature. </option>
-                <option value="log">LOG: Logging or Log Data Ingestion</option>
-                <option value="tst">TST: Time Series Data of OLTP or IoT</option>
+                <option value="tsr_iot">TST: Time Series Data of OLTP or IoT</option>
                 <option value="oltp">OLTP: Online Transaction Processing</option>
                 <option selected value="htap">HTAP: Hybrid Transactional/Analytical Processing</option>
                 <option value="olap">OLAP: Online Analytical Processing</option>
-                <option value="dw">DW: Data Warehouse</option>
                 <option value="vector">Vector: Full-Text Search, RAG, Geospatial Data</option>
-            </select>
-        </div>
-
-        <!-- Memory Pool Optimization Mode -->
-        <div class="col-4 mb-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label" for="opt_mem_pool"> Memory Pool Optimization Mode </label>
-                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                   data-bs-content="If not NONE, it would proceed the extra tuning to increase the memory usage to reach to your expectation (shared_buffers, work_mem, temp_buffer, ...); by altering the pool allocation. If the initial value of the pool are too large, then it would refuse to take action including reducing the pool size."
-                   title="Memory Pool Optimization Mode">
-                </i>
-            </div>
-            <select class="form-select" id="opt_mem_pool" name="opt_mem_pool">
-                <option value="none">NONE: Ignore Optimization </option>
-                <option value="lightweight">SPIDEY: Light-weight Optimization</option>
-                <option selected value="general">OPTIMUS PRIME: General Optimization </option>
-                <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
             </select>
         </div>
 
@@ -54,29 +71,32 @@
             <select class="form-select" id="operating_system" name="operating_system" onchange="ram_calculator()">
                 <option selected value="linux">Linux</option>
                 <option value="windows">Windows</option>
+                <option value="macos">MacOS</option>
                 <option value="containerd">Container (K8s, Docker, containerd)</option>
                 <option value="PaaS">PaaS (Cloud or 3rd-Party)</option>
             </select>
         </div>
+
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
-                <label class="form-label" for="logical_cpu"> Number of vCPUs </label>
+                <label class="form-label" for="vcpu"> Number of vCPUs </label>
                 <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                    data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-                   data-bs-content="Select the number of logical CPUs for system tuning. This can bond together with the CPU profile"
+                   data-bs-content="The number of logical CPUs."
                    title="Number of vCPUs">
                 </i>
             </div>
             <div class="d-flex align-items-center">
-                <input class="form-range me-3" name="logical_cpu" id="logical_cpu_range"
+                <input class="form-range me-3" name="vcpu" id="vcpu_range"
                        max="128" min="1" step="1" value="4" type="range"
                        placeholder="Enter the number of logical CPUs"
-                       onchange="syncSliderToNumber('logical_cpu')">
-                <input class="form-control w-25" id="logical_cpu"
+                       onchange="syncSliderToNumber('vcpu')">
+                <input class="form-control w-25" id="vcpu"
                        max="128" min="1" step="1" value="4" type="number"
-                       onchange="syncNumberToSlider('logical_cpu')">
+                       onchange="syncNumberToSlider('vcpu')">
             </div>
         </div>
+
         <div class="col-4 mb-3">
             <div class="d-flex justify-content-between align-items-center">
                 <label class="form-label" for="total_ram_in_gib"> Total RAM Size (GiB) </label>
@@ -150,6 +170,25 @@
                        onload="ram_calculator()">
             </div>
         </div>
+
+        <!-- Memory Pool Optimization Mode -->
+        <div class="col-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="opt_mem_pool"> Memory Pool Optimization Mode </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="If not NONE, it would proceed the extra tuning to increase the memory usage to reach to your expectation (shared_buffers, work_mem, temp_buffer, ...); by altering the pool allocation. If the initial value of the pool are too large, then it would refuse to take action including reducing the pool size."
+                   title="Memory Pool Optimization Mode">
+                </i>
+            </div>
+            <select class="form-select" id="opt_mem_pool" name="opt_mem_pool">
+                <option value="none">NONE: Ignore Optimization </option>
+                <option value="lightweight">SPIDEY: Light-weight Optimization</option>
+                <option selected value="general">OPTIMUS PRIME: General Optimization </option>
+                <option value="aggressive">PRIMORDIAL: Extreme Optimization</option>
+            </select>
+        </div>
+
 
     </div>
 </div>

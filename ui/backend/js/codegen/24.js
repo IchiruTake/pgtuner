@@ -275,10 +275,11 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
             PG_DISK_SIZING.matchDiskSeriesInRange(wal_tput, THROUGHPUT, 'ssd', 'nvme')) {
             after_wal_writer_flush_after = 2 * Mi
+            if (request.options.workload_profile >= PG_SIZING.LARGE) {
+                after_wal_writer_flush_after *= 2
+            }
         }
-        if (request.options.workload_profile >= PG_SIZING.LARGE) {
-            after_wal_writer_flush_after *= 2
-        }
+
         _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
         let after_backend_flush_after = Math.min(managed_cache['checkpoint_flush_after'], managed_cache['bgwriter_flush_after'])
         _ApplyItmTune('backend_flush_after', after_backend_flush_after, PG_SCOPE.OTHERS, response)
@@ -796,22 +797,9 @@ function _wal_integrity_buffer_size_tune(request, response) {
     // Now we need to estimate how much time required to flush the full WAL buffers to disk (assuming we
     // have no write after the flush or wal_writer_delay is being waken up or 2x of wal_buffers are synced)
     // No low scale factor because the WAL disk is always active with one purpose only (sequential write)
-    // Force enable the WAL buffers adjustment minimally to SPIDEY when the WAL disk throughput is too weak and
-    // non-critical workload.
-    if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.NONE) {
-        request.options.opt_wal_buffers = PG_PROFILE_OPTMODE.SPIDEY
-        console.warn(`WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.`)
-    }
     const wal_tput = request.options.wal_spec.perf()[0]
-    let data_amount_ratio_input = 1
-    let transaction_loss_ratio = 2 / 3.25  // Not 2x of delay at 1 full WAL buffers
-    if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.OPTIMUS_PRIME) {
-        data_amount_ratio_input = 1.5
-        transaction_loss_ratio = 3 / 3.25
-    } else if (request.options.opt_wal_buffers === PG_PROFILE_OPTMODE.PRIMORDIAL) {
-        data_amount_ratio_input = 2
-        transaction_loss_ratio = 3 / 3.25
-    }
+    const data_amount_ratio_input = 0.5 + 0.5 * request.options.opt_wal_buffers
+    const transaction_loss_ratio = (2 + Math.floor(request.options.opt_wal_buffers / 2)) / 3.25
 
     const decay_rate = 16 * DB_PAGE_SIZE
     let current_wal_buffers = realign_value(

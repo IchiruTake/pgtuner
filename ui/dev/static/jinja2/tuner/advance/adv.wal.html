@@ -6,17 +6,17 @@
             <label class="form-label" for="keywords.wal_segment_size_scale"> WAL Segment Size Scale Factor (per 16 MiB) </label>
             <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
                data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-               data-bs-content="The WAL segment size scaler in PostgreSQL (in MiB), translated into the value of (16 x 2^scaler) MiB. Whilst the tuning of this value is not recommended as mentioned in due to some hard-coded in 3rd-party tools, slow WAL recovery on empty-large WAL files, archiving-transferring, etc. The benchmark from PostgreSQL team only show improvement on synthetic benchmark with high concurrent connections that write in large batch beyond a base value of 16 MiB. Increase this value only meant when (1) you have a lot of incoming WRITE beyond 16 MiB per transaction, (2) high WAL file rotation time during workload (usually at old kernel and old PostgreSQL version), (3) high archive transfer due to small files (a lot of 16 MiB files) that translated into a mix of random and sequential IOPS, and (4) low number of files in filesystem. Just to remember to adjust the max_wal_size, archive_timeout, wal_buffers, and checkpoint_timeout to better suit your workload."
+               data-bs-content="The WAL segment size scaler in PostgreSQL (in MiB), translated into the value of (16 x 2^scaler) MiB. Whilst the tuning of this value is not recommended as mentioned in due to some hard-coded in 3rd-party tools, slow WAL recovery on empty-large WAL files, archiving-transferring, etc. The benchmark from PostgreSQL team only show improvement on synthetic benchmark with high concurrent connections that write in large batch beyond a base value of 16 MiB. Increase this value only meant when (1) you have a lot of incoming WRITE beyond 16 MiB per transaction, (2) high WAL file rotation time during workload (usually at old kernel and old PostgreSQL version), (3) high archive transfer due to small files (a lot of 16 MiB files) that translated into a mix of random and sequential IOPS, and (4) low number of files in filesystem. Just to remember to adjust the max_wal_size, archive_timeout, wal_buffers, and checkpoint_timeout to better suit your workload. For best number, it is advised to keep it equal or below 3"
                title="WAL Segment Size Scaler">
             </i>
         </div>
         <div class="d-flex align-items-center">
             <input class="form-range me-3" name="keywords.wal_segment_size_scale"
                    id="keywords.wal_segment_size_scale_range"
-                   max="3" min="0" step="1" value="0" type="range"
+                   max="7" min="0" step="1" value="0" type="range"
                    onchange="syncSliderToNumber('keywords.wal_segment_size_scale')">
             <input class="form-control w-auto" id="keywords.wal_segment_size_scale"
-                   max="3" min="0" step="1" value="0" type="number"
+                   max="7" min="0" step="1" value="0" type="number"
                    onchange="syncNumberToSlider('keywords.wal_segment_size_scale')">
         </div>
     </div>

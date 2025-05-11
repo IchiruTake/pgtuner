@@ -41,8 +41,18 @@ class PG_TUNE_USR_KWARGS {
 class PG_TUNE_USR_OPTIONS {
     constructor(options = {}) {
         // Basic profile for system tuning
+        this.workload_type = options.workload_type ?? PG_WORKLOAD.HTAP;
         this.workload_profile = options.workload_profile ?? PG_SIZING.LARGE;
         this.pgsql_version = options.pgsql_version ?? 17;
+
+        // System parameters
+        this.operating_system = options.operating_system ?? 'linux';
+        this.vcpu = options.vcpu ?? 4;
+        this.total_ram = options.total_ram ?? (16 * Gi);
+        this.base_kernel_memory_usage = options.base_kernel_memory_usage ?? -1;
+        this.base_monitoring_memory_usage = options.base_monitoring_memory_usage ?? -1;
+        this.opt_mem_pool = options.opt_mem_pool ?? PG_PROFILE_OPTMODE.OPTIMUS_PRIME;
+
         // Disk options for data partitions (required)
         this.data_index_spec = options.data_index_spec; // Expected to be an instance of PG_DISK_PERF
         this.wal_spec = options.wal_spec; // Expected to be an instance of PG_DISK_PERF
@@ -55,22 +65,16 @@ class PG_TUNE_USR_OPTIONS {
         this.max_num_logical_replicas_on_standby = options.max_num_logical_replicas_on_standby ?? 0;
         this.offshore_replication = options.offshore_replication ?? false;
         // Database tuning options
-        this.workload_type = options.workload_type ?? PG_WORKLOAD.HTAP;
-        this.opt_mem_pool = options.opt_mem_pool ?? PG_PROFILE_OPTMODE.OPTIMUS_PRIME;
+
         this.tuning_kwargs = options.tuning_kwargs ?? new PG_TUNE_USR_KWARGS();
         // Anti-wraparound vacuum tuning options
         this.database_size_in_gib = options.database_size_in_gib ?? 0;
         this.num_write_transaction_per_hour_on_workload = options.num_write_transaction_per_hour_on_workload ?? (50 * K10);
-        // System parameters
-        this.operating_system = options.operating_system ?? 'linux';
-        this.vcpu = options.vcpu ?? 4;
-        this.total_ram = options.total_ram ?? (16 * Gi);
-        this.base_kernel_memory_usage = options.base_kernel_memory_usage ?? -1;
-        this.base_monitoring_memory_usage = options.base_monitoring_memory_usage ?? -1;
+
         // System tuning flags
         this.enable_database_general_tuning = options.enable_database_general_tuning ?? true;
         this.enable_database_correction_tuning = options.enable_database_correction_tuning ?? true;
-        this.align_index = options.align_index ?? 0;
+        this.align_index = options.align_index ?? 1;
 
         // Run post-initialization adjustments
         this.model_post_init();

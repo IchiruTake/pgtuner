@@ -338,8 +338,8 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         if (PG_DISK_SIZING.match_disk_series(wal_tput, THROUGHPUT, 'san', interval='strong') or
                 PG_DISK_SIZING.match_disk_series_in_range(wal_tput, THROUGHPUT, 'ssd', 'nvme')):
             after_wal_writer_flush_after = 2 * Mi
-        if request.options.workload_profile >= PG_SIZING.LARGE:
-            after_wal_writer_flush_after *= 2
+            if request.options.workload_profile >= PG_SIZING.LARGE:
+                after_wal_writer_flush_after *= 2
         _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
 
@@ -912,24 +912,9 @@ def _wal_integrity_buffer_size_tune(
     # Now we need to estimate how much time required to flush the full WAL buffers to disk (assuming we
     # have no write after the flush or wal_writer_delay is being waken up or 2x of wal_buffers are synced)
     # No low scale factor because the WAL disk is always active with one purpose only (sequential write)
-
-    # Force enable the WAL buffers adjustment minimally to SPIDEY when the WAL disk throughput is too weak and
-    # non-critical workload.
-    if request.options.opt_wal_buffers == PG_PROFILE_OPTMODE.NONE:
-        request.options.opt_wal_buffers = PG_PROFILE_OPTMODE.SPIDEY
-        _logs.append('WARNING: The WAL disk throughput is enforced from NONE to SPIDEY due to important workload.')
-
     wal_tput = request.options.wal_spec.perf()[0]
-    current_wal_buffers = int(managed_cache['wal_buffers'])  # Ensure a new copy
-    if request.options.opt_wal_buffers == PG_PROFILE_OPTMODE.OPTIMUS_PRIME:
-        data_amount_ratio_input = 1.5
-        transaction_loss_ratio = 3 / 3.25
-    elif request.options.opt_wal_buffers == PG_PROFILE_OPTMODE.PRIMORDIAL:
-        data_amount_ratio_input = 2
-        transaction_loss_ratio = 3 / 3.25
-    else:
-        data_amount_ratio_input = 1
-        transaction_loss_ratio = 2 / 3.25
+    data_amount_ratio_input = 0.5 + 0.5 * request.options.opt_wal_buffers.value
+    transaction_loss_ratio = (2 + request.options.opt_wal_buffers.value // 2) / 3.25
 
     decay_rate = 16 * DB_PAGE_SIZE
     current_wal_buffers = realign_value(

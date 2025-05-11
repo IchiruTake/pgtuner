@@ -15,10 +15,10 @@
         <div class="d-flex align-items-center">
             <input class="form-range me-3" name="keywords.effective_cache_size_available_ratio"
                    id="keywords.effective_cache_size_available_ratio_range"
-                   max="1.0" min="0.95" step="0.0025" value="0.985" type="range"
+                   max="1.0" min="0.95" step="0.005" value="0.985" type="range"
                    onchange="syncSliderToNumber('keywords.effective_cache_size_available_ratio')">
             <input class="form-control w-auto" id="keywords.effective_cache_size_available_ratio"
-                   max="1.0" min="0.95" step="0.0025" value="0.985" type="number"
+                   max="1.0" min="0.95" step="0.005" value="0.985" type="number"
                    onchange="syncNumberToSlider('keywords.effective_cache_size_available_ratio')">
         </div>
     </div>
@@ -143,10 +143,10 @@
         <div class="d-flex align-items-center">
             <input class="form-range me-3" name="keywords.mem_pool_tuning_ratio"
                    id="keywords.mem_pool_tuning_ratio_range"
-                   max="1.0" min="0.0" step="0.01" value="0.6" type="range"
+                   max="1.0" min="0.0" step="0.025" value="0.4" type="range"
                    onchange="syncSliderToNumber('keywords.mem_pool_tuning_ratio')">
             <input class="form-control w-auto" id="keywords.mem_pool_tuning_ratio"
-                   max="1.0" min="0.0" step="0.01" value="0.6" type="number"
+                   max="1.0" min="0.0" step="0.025" value="0.4" type="number"
                    onchange="syncNumberToSlider('keywords.mem_pool_tuning_ratio')">
         </div>
     </div>
@@ -181,10 +181,10 @@
         <div class="d-flex align-items-center">
             <input class="form-range me-3" name="keywords.hash_mem_usage_level"
                    id="keywords.hash_mem_usage_level_range"
-                   max="60" min="-60" step="1" value="-6" type="range"
+                   max="50" min="-50" step="1" value="-5" type="range"
                    onchange="syncSliderToNumber('keywords.hash_mem_usage_level')">
             <input class="form-control w-auto" id="keywords.hash_mem_usage_level"
-                   max="60" min="-60" step="1" value="-6" type="number"
+                   max="50" min="-50" step="1" value="-5" type="number"
                    onchange="syncNumberToSlider('keywords.hash_mem_usage_level')">
         </div>
     </div>
