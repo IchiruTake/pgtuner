@@ -144,7 +144,7 @@ if __name__ == "__main__":
     dev_path = 'ui/dev'
     prod_path = 'ui/prod'
     jinja_src_path = 'ui/dev/jinja2'
-    jinja_tgt_path = 'ui/frontend/html'
+    jinja_tgt_path = 'ui/frontend'
     jinja_files = [
         ('tuner.html', 'tuner.html'),
         ('error/index.html', 'error.html'),
