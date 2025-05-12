@@ -12,14 +12,15 @@ COPY /.pgtuner_dba /.pgtuner_dba
 COPY /log /log
 COPY /conf /conf
 COPY /src /src
+COPY /ui /ui
 COPY /web /web
 COPY /web.py /web.py
-COPY ./ui_deployment.py /ui_deployment.py
+COPY ./cicd_codegen_minifier.py /cicd_codegen_minifier.py
 
 # Expose or override the port using $PORT environment variable
 ENV PORT=8001
 EXPOSE $PORT
 
 # Execute the UI deployment script
-RUN python ui_deployment.py
+RUN python cicd_codegen_minifier.py
 CMD ["python", "web.py"]
