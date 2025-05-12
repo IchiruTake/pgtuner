@@ -230,12 +230,14 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # ----------------------------------------------------------------------------------------------
     # Tune the random_page_cost
     data_iops = request.options.data_index_spec.perf()[1]
-    if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'hdd'):
+    if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'hdd', interval='weak'):
         after_random_page_cost = 2.60
-    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san'):
-        after_random_page_cost = 1.50
+    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'hdd', interval='strong'):
+        after_random_page_cost = 2.20
+    elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san', interval='weak'):
+        after_random_page_cost = 1.75
     elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san', interval='strong'):
-        after_random_page_cost = 1.35
+        after_random_page_cost = 1.50
     elif PG_DISK_SIZING.match_one_disk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.SSDv1):
         after_random_page_cost = 1.25
     elif PG_DISK_SIZING.match_one_disk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.SSDv2):
