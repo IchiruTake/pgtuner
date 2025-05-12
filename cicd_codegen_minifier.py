@@ -59,7 +59,7 @@ def _write_minified_file(content: Any, original_filepath: str, extra_newline: bo
             f_min.write('\n')
     src_filesize = os.path.getsize(original_filepath)
     minified_filesize = os.path.getsize(minified_filepath)
-    print(f'Compression: {minified_filesize / src_filesize * 100:.2f}% -> '
+    print(f'Compression on {original_filepath}: {minified_filesize / src_filesize * 100:.2f}% -> '
           f'Saving {src_filesize - minified_filesize} bytes')
     return minified_filepath
 
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     ]
     jinja_cleanup_file = True   # Set to False to keep up the intermediate files
 
-    jinja_js_min_dirpath = 'ui/frontend/js'
+    jinja_js_min_dirpath = f'{jinja_tgt_path}/js'
     jinja_js_min_files = ['ui/backend/js/pgtuner.js', 'ui/backend/js/ui.js']
 
     # --------------------------------------------------
@@ -213,7 +213,9 @@ if __name__ == "__main__":
         if jinja_cleanup_file:
             # Remove the intermediate file
             os.remove(jinja_tgt_filepath) # Cleanup to free up some space
-
+        if jinja_tgt_file.startswith('tuner'):
+            # Copy it to index.html (tuner.min.html -> index.html)
+            shutil.copy(jinja_tgt_min_filepath, os.path.join(jinja_tgt_path, 'index.html'))
         print('Compiled Jinja2 template:', jinja_src_file, '->', jinja_tgt_file, '->', jinja_tgt_min_filepath)
     print(f'Jinja2 template compilation completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
@@ -233,4 +235,15 @@ if __name__ == "__main__":
         shutil.copy(jinja_js_min_filepath, jinja_js_min_dirpath)
         if os.path.exists(jinja_js_min_filepath):
             os.remove(jinja_js_min_filepath)
-        print('The JS backend file has been minified and copied to:', jinja_js_min_dirpath)
+        print(f'The JS backend file {jinja_js_file} has been minified and copied to: {jinja_js_min_dirpath}')
+
+    # -------------------------------------------------
+    # [05]: Deploy to GitHub pages
+    t = perf_counter()
+    print('-' * 40)
+    print(f'Start deploying to GitHub pages ...')
+    gh_page_dirpath = './docs'
+    if os.path.exists(gh_page_dirpath):
+        shutil.rmtree(gh_page_dirpath)
+    shutil.copytree(jinja_tgt_path, gh_page_dirpath)
+    print(f'GitHub pages deployment completed in {1e3 * (perf_counter() - t):.2f} ms.')
