@@ -27,13 +27,3 @@ This project is licensed under the MIT License. See the `LICENSE` file for more 
 Build your Docker container in Dockerfile; or create a virtual environment with Python 3.12 and install the dependencies from `requirements.*.txt`. The project is tested on Python 3.12+, but you can free to run at Python 3.11 on local machine. Its web interface is run on the port 8001 by default, but it can be changed by the environment variable `PORT` in the environment file `web.*.env`.
 
 If you decide to work on its backend only, install the `requirements.bump.cli.txt`. If you attempt to improve the frontend server hosting, then install the `requirements.bump.web.txt`. For full development, including the UI change, install both the `requirements.bump.web.txt` and `requirements.html.txt` (for HTML/CSS/JS minification).
-
-## Upcoming Features
-
-Probably in the future, we want to write a full Javascript tuning to host as the static webpages, to provide an easy-to-go tuning guideline for the users around the world. But some difficulties:
-- Lambda function with caching during general tuning and correction tuning
-- Input validation (not the biggest obstacle) and error handling
-- Insertion-ordered dictionary (from Python 3.7+)
-- Numeric formating and f-string
-- Type-hint for future development
-
