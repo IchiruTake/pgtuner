@@ -163,11 +163,12 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     # https://postgrespro.com/list/thread-id/1898949
     # TODO: Whilst PostgreSQL allows up to 2 GiB, my recommendation is to limited below 128 MiB
     # Either I enforce constraint to prevent non optimal configuration or I let user to do it.
+    # TODO: Update docs
     wal_segment_size: PositiveInt = Field(
         default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=BASE_WAL_SEGMENT_SIZE * (2 ** 7), frozen=True,
         multiple_of=BASE_WAL_SEGMENT_SIZE,
         description='The WAL segment size in PostgreSQL (in MiB). Whilst theoretically, PostgreSQL allows up to 2 GiB, '
-                    'our recommendation is to limit below 128 MiB (2^3 more of 16 MiB). The tuning of this value is '
+                    'The tuning of this value is '
                     'not recommended as mentioned in [36-39] due to some hard-coded in 3rd-party tools, slow WAL '
                     'recovery on empty-large WAL files, archiving-transferring, etc; unless for high WRITE-intensive '
                     'workload with large concurrent connections. The supported range is [16 MiB (default), 128 MiB]. '

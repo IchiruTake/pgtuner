@@ -3,7 +3,7 @@
     <h2 class="accordion-header" id="hdr000105">
         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse000105"
                 aria-expanded="true" aria-controls="collapse000105">
-            v0.1.5 (RC1) - Expected Date: May 12th 2025
+            v0.1.5 - Expected Date: May 12th 2025
         </button>
     </h2>
     <div id="collapse000105" class="accordion-collapse collapse show" aria-labelledby="hdr000105"
@@ -11,61 +11,64 @@
         <div class="accordion-body">
             <ul>
                 <li>
-                    Algorithm Changes:
-                    - BGWRITER: Add the condition for `bgwriter_lru_maxpages` to be well-adapted with associated workload
-                    - TIMEOUT: The two parameters `statement_timeout` and `lock_timeout` is reduced significantly.
-                    - TIMEOUT: The parameter `archive_timeout` is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.
-                    - WAL: The parameter `wal_buffers` would be first scaled to a multiple of `wal_segment_size` (maximum of 64 MiB) during the correction tuning phase, but the adjustment of WAL buffers to alleviate transaction loss is maintained
-
-
-
-                    Generic
+                    Generic:
+                    The codebase has been refactored with the decision of hosting dual-backend in the same repository. Multiple functions has been revised to reduce performance noise,
+                    and multiple optimizations has been added to the codebase
                     <ul>
-                        <li>Backend: Now input added the `frozen` attribute to indicate whether the parameter expect changes or not.</li>
-                        <li>DOC (UI & Backend): Most documentations from the backend and UI are better understanding, helping new developers and users understand what formula is calculated inside.</li>
+                        <li>APP: We has completed the transition from Python and Javascript, with the decision of hosting dual-backend in the same repository.</li>
+                        <li>APP: Adding the support to PostgreSQL 18</li>
                     </ul>
                 </li>
 
                 <li>
                     Input Changes
                     <ul>
-                        <li>The default of parameter `temp_buffers_ratio` is changed from 1/3 (0.33) to 1/4 (0.25)</li>
-                        <li>The upper bound of parameter `max_normal_memory_usage` is changed from 0.85 to 0.80</li>
-                        <li>The parameters `mem_pool_epsilon_to_rollback` and `mem_pool_tuning_increment` is removed from user input, and hard-coded as 0.0075 and 1/560 in the correction tuning phase.</li>
-                        <li>The default parameter of `mem_pool_tuning_ratio` is changed from 0.5 to 0.6</li>
-                        <li>The default parameter of `hash_mem_usage_level` is changed from -4 to -6 -> If the PostgreSQL configuration is 2.0, the working memory usage per connection for one arbitrary operation is reduced from 1.2635 to 1.1400)</li>
-                        <li>The default parameter `mem_pool_parallel_estimate` is changed from False to True to assume at any time, PostgreSQL can use parallel operation in general, thereby hopefully reduce the working memory per connection for one arbitrary operation by around `vCPU+3` unit of `work_mem * average_ratio`.</li>
-                        <li>The upper bound of `wal_segment_size` is reduced from 2 GiB to 128 MiB. The reason of change is added directly from the code `Increase this value is only beneficial when (1) you have a lot of incoming WRITE beyond 16 MiB per transaction, (2) high WAL file rotation time during workload (usually at old kernel and old PostgreSQL version), (3) high archive transfer due to small files (a lot of 16 MiB files) that translated into a mix of random and sequential IOPS, and (4) low number of allowed files in filesystem`</li>
-                        <li>Fix the underlying meaning of `min_wal_size`, `max_wal_size`, and `wal_keep_size` in our PostgreSQL understanding by introducing new algorithm that is based on the WAL volume capacity, ensuring checkpoint can be run in a timely manner, during burst workload, and maintained a reasonable number WAL records for streaming replication.</li>
-                        <li>Drop the parameter `max_wal_size_remain_upper_size`</li>
-                        <li>The lower bound of parameter `autovacuum_utilization_ratio` is changed from 0.50 to 0.30</li>
-                        <li>Move the parameter of `num_write_transaction_per_hour_on_workload` from advanced configuration to basic configuration.</li>
-                        <li>The default of parameter `num_write_transaction_per_hour_on_workload` is changed from 1M (1 million) to 50K (50 thousand) -> This is translated from 270 attempted WRITE transactions to 13.5 attempted WRITE transactions.</li>
-                        <li>Drop the parameter `repurpose_wal_buffers` as it makes zero contribution against small server, unless you having too little RAM and a low-end HDD on the WAL partition.</li>
-                        <li>Introduce the parameter `database_size_in_gib` in the basic configuration (default to 10 GiB and maximum at 32 TiB). This is used in the anti-wraparound tuning to be served as the minimum boundary hopefully the data volume can scan randomly at 30% WRITE IOPS on the full data files (not index files). If user don't know the amount of data they would have (for example new on-boarded application), then set to zero value meant a 60% of used volume in the data partition.</li>
+                        <li>PY_BKE: Now user has to self-supplied the configuration they wanted rather than naively use the default input. See `./pgtuner_cli.py` for usage</li>
+                        <li>CONF: Introduce the parameter `cpu_to_connection_scale_ratio` with default to 4 (range from [2.5, 10]) to support the variety of scaling the number of connections in the general optimization phase.</li>
+                        <li>CONF: Increase the parameter `memory_connection_to_dedicated_os_ratio` from 0.3 to 0.7</li>
+                        <li>CONF: Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multipler is 2.0, the working memory usage per connection for one arbitrary operation is reduced from 1.1196 to 1.1417 </li>
+                        <li>CONF: Revert the upper bound parameter of `wal_segment_size` to 2 GiB instead of 128 MiB (scale from 3 to 7)</li>
+                        <li>CONF: Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.05</li>
+                        <li>CONF: Remove all `*_profile` parameters except the `workload_profile` parameter.</li>
+                        <li>CONF: The supported PostgreSQL version is using the integer instead of string (including the term 'latest').</li>
+                        <li>CONF: Remove parameters of the OS and DB Log disk </li>
+                        <li>CONF: Enumeration the backup tool from string to :enum:`PG_BACKUP_TOOL`</li>
+                        <li>CONF: The only supported operating system is 'linux', 'windows', 'macos', 'containerd', and 'PaaS'</li>
+                        <li>CONF: Remove the workload of SOLTP, LOG, DW in :enum:`PG_WORKLOAD`</li>
                     </ul>
                 </li>
 
                 <li>
                     Algorithm Changes
                     <ul>
-                        <li>Add small warning if the server is not MINI and available RAM is lower than 4 GiB instead of hard-coded 2 GiB for any profile</li>
-                        <li>The parameter `autovacuum_naptime` is now 15 second for one worker and 30 seconds for each additional worker.</li>
-                        <li>The autovacuum parameter when INSERT (*_insert_threshold and *_insert_scale_factor) is now share same value as when normal autovacuum.</li>
-                        <li>Reduce the `max_wal_size` parameter on general tuning phase.</li>
-                        <li>The parameter `archive_timeout` is 15 minutes on large system and 30 to 1 hour on small system in general tuning phase</li>
-                        <li>The parameter `checkpoint_timeout` is 30 minutes on MINI profile instead of 15 minutes in general tuning phase</li>
-                        <li>The parameter `wal_keep_size` is default to 25 base WAL files (400 MiB as Azure)</li>
-                        <li>Introduce the parameter `max_slot_wal_keep_size` (default to -1)</li>
-                        <li>Un-necessary workloads are grouped: SEARCH / RAG / GEO --> VECTOR; TSR_HTAP --> HTAP; TSR_OLAP --> OLAP</li>
-                        <li>The parameter `default_statistics_target` has minor change.</li>
-                        <li>The parameter `checkpoint_flush_after` is backed to 256 KiB at general tuning phase, and bump to 512 KiB and 1 MiB if data volume is strong.</li>
-                        <li>Revise failsafe at anti-wraparound tuning</li>
-                        <li>Fix the underlying meaning of `min_wal_size`, `max_wal_size`, and `wal_keep_size` in our PostgreSQL understanding by introducing new algorithm that is based on the WAL volume capacity, ensuring checkpoint can be run in a timely manner, during burst workload, and maintained a reasonable number WAL records for streaming replication.</li>
-                        <li>The parameter `archive_timeout` is scaled by extra 10 minutes for one unit of larger WAL size (capped at 2 hour)</li>
-                        <li>The parameter `checkpoint_timeout` added the minimum time of finishing the checkpoint (at 70 % of mixed data IOPS) depending on the type of workload (workload scale is independent) in the correction tuning phase.</li>
-                        <li>The parameter `bgwriter_lru_maxpages` is increased when the disk performance is SSD or stronger.</li>
-                        <li>The four parameters `*_flush_after` is added into the correction tuning phase</li>
+                        <li>PY_BKE: Disable SYSCTL tuning if the OS is not Linux</li>
+                        <li>GTUNE: Add the condition for `bgwriter_lru_maxpages` to be well-adapted with associated workload</li>
+                        <li>GTUNE: The parameter `archive_timeout` is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.</li>
+                        <li>GTUNE: Add the configurations of `join_collapse_limit`, `from_collapse_limit`, and `plan_cache_mode`.</li>
+                        <li>GTUNE: Rework the self-tuning of `parallel_tuple_cost` configuration</li>
+                        <li>STUNE: Reduce the result of `cpu_tuple_cost` and `parallel_tuple_cost`</li>
+                        <li>STUNE: Simplify (reduce) configuration value of `default_statistics_target`</li>
+                        <li>STUNE: Simplify (reduce) configuration value of `after_commit_delay` to be workload-based rather than disk-based</li>
+                        <li>STUNE: Simplify (increase) configuration value of `bgwriter_delay` (8ms reduction per 1000 IOPS than 10ms)</li>
+                        <li>STUNE: Reduce the upper bound of `vacuum_*_min_age` from 25% of associated `vacuum_*_max_age` to 15%</li>
+                        <li>STUNE: Stop enforce the option `opt_wal_buffers` to be higher than `PG_PROFILE_OPTMODE.NONE`</li>
+                        <li>STUNE: Reduce by half the alignment size of `min_wal_size`, `max_wal_size`, and `wal_keep_size` (The configuration would be better detailed).</li>
+                        <li>STUNE: The two parameters `statement_timeout` and `lock_timeout` is reduced significantly.</li>
+                        <li>STUNE: A typo in `backend_flsuh_after` has been corrected from 512 MiB to 512 KiB.</li>
+                    </ul>
+                </li>
+
+                <li>
+                    Others
+                    <ul>
+                        <li>PY_BKE: The GC has been pushed more with better GC management.</li>
+                        <li>PY_WEB: The request's limit has been bumped from 15 reqs per window to 250 reqs (on DEV) and 180 (on PROD) </li>
+                        <li>PY_BKE: The initialization on `./src/__init__.py` is improved with better logic. This includes the change in the `./src/utils`, `./src/static` (removed), `./src/tuner/data`, ... modules </li>
+                        <li>PY_BKE: The general optimizer has been moved out-of-class to be functional</li>
+                        <li>PY_BKE: Add the method :func:`PG_TUNE_ITEM.__repr__()` and remove the argument `output_if_difference_only` in :func:`PG_TUNE_ITEM.out()`/</li>
+                        <li>PY_BKE: Enforce the warning when the database has less than 4 GiB of RAM</li>
+                        <li>CONF: Remove the scope of :enum:`PGTUNER_SCOPE.KERNEL_BOOT` optimize the boot settings for database</li>
+                        <li>CONF: Refactor the enum `PG_SIZING`</li>
                     </ul>
                 </li>
             </ul>
