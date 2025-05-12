@@ -97,7 +97,7 @@ async def app_lifespan(application: ASGIApp | FastAPI):
 
 
 # ==================================================================================================
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 app: FastAPI = FastAPI(
     debug=False,
     title=APP_NAME_UPPER,
@@ -185,6 +185,7 @@ _logger.info('The middlewares have been added to the application ...')
 _logger.info('Mounting the static files to the application ...')
 _logger.info(f'Developer Mode: {_APP_IN_DEVELOPMENT}')
 _static_mapper = {
+    '/': f'./ui/frontend',
     '/resource': f'./ui/frontend/resource',
     '/css': f'./ui/frontend/css',
     # '/js': './web/ui/js',
