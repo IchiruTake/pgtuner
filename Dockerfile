@@ -1,7 +1,7 @@
 FROM python:3.12-alpine
-# Load the environment variables in /conf/web.prd.env by executing bash shell command
+# Load the environment variables in /conf/web.prod.env by executing bash shell command
 COPY /conf /conf
-RUN bash -c 'source ./conf/web.prd.env'
+RUN bash -c 'source ./conf/web.prod.env'
 
 # Copy and Install the depenedencies first
 COPY requirements.bump.web.txt .

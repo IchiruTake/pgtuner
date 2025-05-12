@@ -1,12 +1,11 @@
 from typing import Literal
 
-import uvicorn
 import uvicorn.config
 import web
 import os
 
-from src.static.vars import YEAR
-from src.utils.env import OsGetEnvBool
+from src.utils.static import YEAR
+from web.env import OsGetEnvBool
 
 if __name__ == "__main__":
     if os.getenv(f'PORT') is not None:

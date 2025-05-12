@@ -3,11 +3,11 @@ from copy import deepcopy
 
 from pydantic import ByteSize
 
-from src.static.vars import APP_NAME_UPPER
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation, rewrite_items
 from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
 from src.utils.dict_deepmerge import deepmerge
+from src.utils.static import APP_NAME_UPPER
 
 __all__ = ['DB14_CONFIG_PROFILE']
 _SIZING = ByteSize | int | float
@@ -65,8 +65,6 @@ _DB_VACUUM_PROFILE = {
                    "vacuuming) are bypassed.",
     }
 }
-
-
 
 # =============================================================================
 # Trigger the merge

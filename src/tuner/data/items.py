@@ -1,13 +1,15 @@
 import string
 from pprint import pformat
 from typing import Any, Callable
-from src.tuner.data.sizing import PG_SIZING
+from src.tuner.data.workload import PG_SIZING
 from pydantic import BaseModel, Field
 
 __all__ = ['PG_TUNE_ITEM']
 
 # =============================================================================
 # This section is managed by the application
+_FLOAT_PRECISION = 4
+
 class PG_TUNE_ITEM(BaseModel):
     key: str = Field(..., description="The key of the sysctl configuration", frozen=True)
     before: Any = Field(..., description="The system information value before tuning", frozen=True)
@@ -31,10 +33,7 @@ class PG_TUNE_ITEM(BaseModel):
                           "its associated level (mini, medium, large, mall, bigt, ...)")
     )
 
-    def out(self, output_if_difference_only: bool = False, include_comment: bool = False,
-            custom_style: str | None = None) -> str:
-        if output_if_difference_only and self.before == self.after:
-            return ''
+    def out(self, include_comment: bool = False, custom_style: str | None = None) -> str:
         texts = []
         if include_comment:
             comment = str(pformat(self.comment)).replace('\n', '\n# ')
@@ -57,8 +56,7 @@ class PG_TUNE_ITEM(BaseModel):
         if self.partial_func is not None:  # This function is used when we have hard-coded the output format already
             after = self.partial_func(after)
         elif isinstance(after, float):
-            precision = self.float_precision()
-            after = f'{round(after, precision):.{precision}f}'
+            after = f'{round(after, _FLOAT_PRECISION):.{_FLOAT_PRECISION}f}'
         if not isinstance(after, str):  # Force to be the string for easy text wrap-up
             after = str(after)
         if '.' in after:
@@ -72,10 +70,10 @@ class PG_TUNE_ITEM(BaseModel):
             after = f"'{after}'"
         return after
 
-    @staticmethod
-    def float_precision() -> int:
-        return 4
-
     def transform_keyname(self) -> str:
         # Text Transformation: Remove underscores to whitespace and capitalize the first character of each letter
         return ' '.join([x.capitalize() for x in self.key.split('_')])
+
+    def __repr__(self):
+        return (f"PG_TUNE_ITEM(key={self.key}, before={self.before}, style={self.style}, trigger={self.trigger}, "
+                f"after={self.after}, partial_func={self.partial_func}, hardware_scope={self.hardware_scope})")

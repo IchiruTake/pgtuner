@@ -23,14 +23,14 @@ from math import ceil
 
 from pydantic import ByteSize
 
-from src.static.vars import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
-    SECOND, PG_LOG_DIR, BASE_WAL_SEGMENT_SIZE, M10
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.data.workload import PG_WORKLOAD
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation
 from src.utils.pydantic_utils import (bytesize_to_hr, realign_value, cap_value, )
+from src.utils.static import Ki, K10, Mi, Gi, APP_NAME_UPPER, DB_PAGE_SIZE, PG_ARCHIVE_DIR, DAY, MINUTE, HOUR, \
+    SECOND, BASE_WAL_SEGMENT_SIZE, M10
 
 __all__ = ['DB0_CONFIG_PROFILE', ]
 
@@ -45,29 +45,22 @@ if DB_PAGE_SIZE != 8 * Ki:
 # =============================================================================
 # Don't change these constant
 __BASE_RESERVED_DB_CONNECTION: int = 3
-# This could be increased if your database server is not under hypervisor and run under Xeon_v6, recent AMD EPYC (2020)
-# or powerful ARM CPU, or AMD Threadripper (2020+). But in most cases, the 4x scale factor here is enough to be
-# generalized. Even on PostgreSQL 14, the scaling is significant when the PostgreSQL server is not virtualized and
-# have a lot of CPU to use (> 32 - 96|128 cores).
-__SCALE_FACTOR_CPU_TO_CONNECTION: int = 4
 __DESCALE_FACTOR_RESERVED_DB_CONNECTION: int = 4
 
 
-def __get_num_connections(
+def _GetNumConnections(
         options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
         use_reserved_connection: bool = False, use_full_connection: bool = False
 ) -> int:
-    """
-    This function is used to calculate the number of connections that can be used by the PostgreSQL server. The number
-    of connections is calculated based on the number of logical CPU cores available on the system and the scale factor.
-
-    """
+    # This function is used to calculate the number of connections that can be used by the PostgreSQL server. The number
+    # of connections is calculated based on the number of logical CPU cores available on the system and the scale factor.
     managed_cache: dict = response.get_managed_cache(PGTUNER_SCOPE.DATABASE_CONFIG)
     try:
         total_connections: int = managed_cache['max_connections']
         reserved_connections = managed_cache['reserved_connections'] + managed_cache['superuser_reserved_connections']
-    except KeyError as e:
-        _logger.error(f"This function required the connection must be triggered and placed in the managed cache.")
+    except (IndexError, ValueError, KeyError) as e:
+        _logger.error(
+            f"This function required the connection must be triggered and placed in the managed cache: See error \n{e}.")
         return -1
     if not use_reserved_connection:
         total_connections -= reserved_connections
@@ -79,15 +72,15 @@ def __get_num_connections(
     return ceil(total_connections)
 
 
-def __get_mem_connections(
+def _GetMemConnInTotal(
         options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
         use_reserved_connection: bool = False, use_full_connection: bool = False
 ) -> int:
-    # The memory usage per connection is varied and some articles said it could range on scale 1.5 - 14 MiB,
-    # or 5 - 10 MiB so we just take this ratio. This memory is assumed to be on one connection without execute
-    # any query or transaction.
+    # The memory usage per connection is varied and some articles said it could range on scale 1.5 - 14 MiB based 
+    # on AWS report. Since it is not 100% contextually correct but giving good enough result, we can use the
+    # 5 - 10 MiB so we just take this ratio. 
     # References:
-    # - https://www.cybertec-postgresql.com/en/postgresql-connection-memory-usage/
+    # - https://aws.amazon.com/blogs/database/resources-consumed-by-idle-postgresql-connections/
     # - https://cloud.ibm.com/docs/databases-for-postgresql?topic=databases-for-postgresql-managing-connections
     # - https://techcommunity.microsoft.com/blog/adforpostgresql/analyzing-the-limits-of-connection-scalability-in-postgres/1757266
     # - https://techcommunity.microsoft.com/blog/adforpostgresql/improving-postgres-connection-scalability-snapshots/1806462
@@ -96,12 +89,12 @@ def __get_mem_connections(
     # could be significant on small system, especially during the OLTP workload.
     # - Idle connections leads to more frequent context switches, harmful to the system with less vCPU core. And
     # degrade not only the transaction throughput but also the latency.
-    num_conns: int = __get_num_connections(options, response, use_reserved_connection, use_full_connection)
+    num_conns: int = _GetNumConnections(options, response, use_reserved_connection, use_full_connection)
     mem_conn_overhead = options.tuning_kwargs.single_memory_connection_overhead
     return int(num_conns * mem_conn_overhead)
 
 
-def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
+def _CalcSharedBuffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
     shared_buffers_ratio = options.tuning_kwargs.shared_buffers_ratio
     if shared_buffers_ratio < 0.25:
         _logger.warning('The shared_buffers_ratio is too low, which official PostgreSQL documentation recommended '
@@ -111,60 +104,53 @@ def __shared_buffers(options: PG_TUNE_USR_OPTIONS) -> _SIZING:
     if shared_buffers == 128 * Mi:
         _logger.warning('No benefit is found on tuning this variable')
 
-    # Re-align the number (always use the lower bound for memory safety) -> We can set to 32-128 pages, or
-    # probably higher as when the system have much RAM, an extra 1 pages probably not a big deal
     shared_buffers = realign_value(int(shared_buffers), page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'shared_buffers: {bytesize_to_hr(shared_buffers)}')
     return shared_buffers
 
 
-def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
+def _CalcTempBuffersAndWorkMem(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
                                 response: PG_TUNE_RESPONSE) -> tuple[_SIZING, _SIZING]:
     """
     There are some online documentations that gives you a generic formula for work_mem (not the temp_buffers), besides
     some general formulas. For example:
     - [25]: work_mem = (RAM - shared_buffers) / (16 * vCPU cores).
     - pgTune: work_mem = (RAM - shared_buffers) / (3 * max_connections) / max_parallel_workers_per_gather
-    - Microsoft TechCommunity (*): RAM / max_connections / 16   (1/16 is conservative factors)
+    - MS TechCommunity (*): RAM / max_connections / 16   (1/16 is conservative factors)
+    - Azure: "Unlike shared buffers, which are in the shared memory area, work_mem is allocated in a per-session 
+    or per-query private memory space. By setting an adequate work_mem size, you can significantly improve the 
+    efficiency of these operations and reduce the need to write temporary data to disk"
 
-    Whilst these settings are good and bad, from Azure docs, "Unlike shared buffers, which are in the shared memory
-    area, work_mem is allocated in a per-session or per-query private memory space. By setting an adequate work_mem
-    size, you can significantly improve the efficiency of these operations and reduce the need to write temporary
-    data to disk". Whilst this advice is good in general, I believe not every applications have the ability to
-    change it on-the-fly due to the application design, database sizing, the number of connections and CPUs, and
-    the change of data after time of usage before considering specific tuning. Unless it is under interactive
-    sessions made by developers or DBA, those are not there.
+    Our: These formulas are not wrong, but they are not the best either as they are not taking into account the
+    workload dynamic, database sizing, the number of connections and CPUs quality, ... From PostgreSQL docs, 
+    we propose a better flexible formula that is more dynamic and prevents the system from being overloaded.
 
-    A good go-to setup way (if DB in use already) is to identify all queries and run EXPLAIN ANALYZE to calculate
-    the work_mem. Pick the highest value and future-proof it with 20 - 50% depending on your data size, RAM capacity,
-    or how long for your future-proofing before revise the value (obviously you will not revise it ...).
-
-    From our rationale, when we target on first on-board database, we don't know how the application will behave
-    on it wished queries, but we know its workload type, and it safeguard. So this is our solution.
-    work_mem = ratio * (RAM - shared_buffers - overhead_of_os_conn) * threshold / effective_user_connections
-
-    And then we cap it to below a 64 MiB - 1.5 GiB (depending on workload) to ensure our setup is don't
-    exceed the memory usage.
+    (1): Calculate the available dedicated memory: RAM - shared_buffers - overhead - wal_buffers (if have)
+    (2): Use a portion of the available memory and distribute across the number of *effective* connections to both 
+        work_mem and temp_buffers. A good portion is around 5-15% based on query complexity. Ignore the geometric 
+        mean caused by HASH-based operation.
+    (3) Capping the work_mem and temp_buffers value of each under 256 MiB to 8 GiB (workload dependent) to ensure the
+        PostgreSQL don't kill due to OOM
 
     * https://techcommunity.microsoft.com/blog/adforpostgresql/optimizing-query-performance-with-work-mem/4196408
 
     """
     pgmem_available = int(options.usable_ram) - group_cache['shared_buffers']
-    _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
+    _mem_conns = _GetMemConnInTotal(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
-    if 'wal_buffers' in global_cache:   # I don't know if this make significant impact?
+    if 'wal_buffers' in global_cache:  # I don't know if this make significant impact?
         pgmem_available -= global_cache['wal_buffers']
 
     max_work_buffer_ratio = options.tuning_kwargs.max_work_buffer_ratio
-    active_connections: int = __get_num_connections(options, response, use_reserved_connection=False,
-                                                    use_full_connection=False)
-    total_buffers = int(pgmem_available * max_work_buffer_ratio) // active_connections
+    active_connections: int = _GetNumConnections(options, response, use_reserved_connection=False, 
+                                                 use_full_connection=False)
+    total_buffers = int(pgmem_available * max_work_buffer_ratio / active_connections)
 
     # Minimum to 1 MiB and maximum is varied between workloads
     max_cap: int = int(1.5 * Gi)
-    if options.workload_type in (PG_WORKLOAD.SOLTP, PG_WORKLOAD.LOG, PG_WORKLOAD.TSR_IOT):
+    if options.workload_type in (PG_WORKLOAD.TSR_IOT, ):
         max_cap = 256 * Mi
-    if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLAP, PG_WORKLOAD.DATA_WAREHOUSE):
+    if options.workload_type in (PG_WORKLOAD.HTAP, PG_WORKLOAD.OLAP):
         # I don't think I will make risk beyond this number
         max_cap = 8 * Gi
 
@@ -180,17 +166,17 @@ def __temp_buffers_and_work_mem(group_cache, global_cache, options: PG_TUNE_USR_
     return temp_buffers, work_mem
 
 
-def __temp_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
-                   response: PG_TUNE_RESPONSE) -> _SIZING:
-    return __temp_buffers_and_work_mem(group_cache, global_cache, options, response)[0]
+def _CalcTempBuffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
+                     response: PG_TUNE_RESPONSE) -> _SIZING:
+    return _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response)[0]
 
 
-def __work_mem(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
-               response: PG_TUNE_RESPONSE) -> _SIZING:
-    return __temp_buffers_and_work_mem(group_cache, global_cache, options, response)[1]
+def _CalcWorkMem(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
+                 response: PG_TUNE_RESPONSE) -> _SIZING:
+    return _CalcTempBuffersAndWorkMem(group_cache, global_cache, options, response)[1]
 
 
-def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_conns: int, max_user_conns: int) -> int:
+def _GetMaxConns(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_conns: int, max_user_conns: int) -> int:
     total_reserved_connections: int = group_cache['reserved_connections'] + group_cache[
         'superuser_reserved_connections']
     if options.tuning_kwargs.user_max_connections != 0:
@@ -198,19 +184,17 @@ def __max_connections(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_
         allowed_connections = options.tuning_kwargs.user_max_connections
         return allowed_connections + total_reserved_connections
 
-    # Should I upscale here?
-    # Make a small upscale here to future-proof database scaling, and reduce the number of connections
-    _upscale: float = __SCALE_FACTOR_CPU_TO_CONNECTION  # / max(0.75, options.tuning_kwargs.effective_connection_ratio)
+    _upscale: float = options.tuning_kwargs.cpu_to_connection_scale_ratio
     _logger.debug(f'The max_connections variable is determined by the number of logical CPU count with the scale '
-                  f'factor of {__SCALE_FACTOR_CPU_TO_CONNECTION:.1f}x.')
+                  f'factor of {_upscale:.1f}x.')
     _minimum = max(min_user_conns, total_reserved_connections)
     max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections
     _logger.debug(f'max_connections: {max_connections}')
     return max_connections
 
 
-def __reserved_connections(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: int,
-                           superuser_mode: bool = False, base_reserved_connection: int = None) -> int:
+def _GetReservedConns(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: int, superuser_mode: bool = False, 
+                      base_reserved_connection: int = None) -> int:
     if base_reserved_connection is None:
         base_reserved_connection = __BASE_RESERVED_DB_CONNECTION
 
@@ -218,33 +202,30 @@ def __reserved_connections(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: 
     if not superuser_mode:
         reserved_connections: int = options.vcpu // __DESCALE_FACTOR_RESERVED_DB_CONNECTION
     else:
-        superuser_heuristic_percentage = options.tuning_kwargs.superuser_reserved_connections_scale_ratio
-        descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_heuristic_percentage
+        superuser_descale_ratio = options.tuning_kwargs.superuser_reserved_connections_scale_ratio
+        descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_descale_ratio
         reserved_connections: int = int(options.vcpu / descale_factor)
     return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection
 
 
-def __effective_cache_size(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS,
-                           response: PG_TUNE_RESPONSE) -> _SIZING:
-    # The following is following the setup made by the Azure PostgreSQL team. The reason is that their tuning
-    # guideline are better as compared as what I see in AWS PostgreSQL. The Azure guideline is to take the available
-    # memory (RAM - shared_buffers): https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/server-parameters-table-query-tuning-planner-cost-constants?pivots=postgresql-17#effective_cache_size
-    # and https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
-    # Default is half of physical RAM memory on most tuning guideline
-    pgmem_available = int(options.usable_ram)    # Make a copy
-    pgmem_available -= global_cache['shared_buffers']
-    _mem_conns = __get_mem_connections(options, response, use_reserved_connection=False, use_full_connection=True)
+def _CalcEffectiveCacheSize(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, 
+                            response: PG_TUNE_RESPONSE) -> _SIZING:
+    # The effective_cache_size determines the maximum amount of OS page cache to allow lookup when fetch data from 
+    # disk, with guideline about 50% to 75% of RAM due to the reduction of shared_buffers. 
+    # Our formula is : (RAM - shared_buffers - overhead) * effective_cache_size_ratio
+    # https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/server-parameters-table-query-tuning-planner-cost-constants?pivots=postgresql-17#effective_cache_size
+    # https://dba.stackexchange.com/questions/279348/postgresql-does-effective-cache-size-includes-shared-buffers
+    pgmem_available = int(options.usable_ram) - global_cache['shared_buffers']
+    _mem_conns = _GetMemConnInTotal(options, response, use_reserved_connection=False, use_full_connection=True)
     pgmem_available -= _mem_conns * options.tuning_kwargs.memory_connection_to_dedicated_os_ratio
-
-    # Re-align the number (always use the lower bound for memory safety)
     effective_cache_size = pgmem_available * options.tuning_kwargs.effective_cache_size_available_ratio
     effective_cache_size = realign_value(int(effective_cache_size), page_size=DB_PAGE_SIZE)[options.align_index]
     _logger.debug(f'effective_cache_size: {bytesize_to_hr(effective_cache_size)}')
     return effective_cache_size
 
 
-def __wal_buffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
-                  minimum: _SIZING, maximum: _SIZING) -> _SIZING:
+def _CalcWalBuffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, response: PG_TUNE_RESPONSE,
+                    minimum: _SIZING, maximum: _SIZING) -> _SIZING:
     # See this article https://www.cybertec-postgresql.com/en/wal_level-what-is-the-difference/
     # It is only benefit when you use COPY instead of SELECT. For other thing, the spawning of
     # WAL buffers is not necessary.
@@ -263,43 +244,36 @@ _DB_CONN_PROFILE = {
     'superuser_reserved_connections': {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 3, superuser_mode=True,
-                                       base_reserved_connection=1),
+            _GetReservedConns(options, 0, 3, superuser_mode=True, base_reserved_connection=1),
             'medium': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 5, superuser_mode=True,
-                                       base_reserved_connection=2),
+            _GetReservedConns(options, 0, 5, superuser_mode=True, base_reserved_connection=2),
         },
         'tune_op': lambda group_cache, global_cache, options, response:
-        __reserved_connections(options, 0, 10, superuser_mode=True),
+        _GetReservedConns(options, 0, 10, superuser_mode=True),
         'default': __BASE_RESERVED_DB_CONNECTION,
         'comment': f"Sets the number of connections reserved for superusers."
     },
     'reserved_connections': {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 3, superuser_mode=False,
-                                       base_reserved_connection=1),
+            _GetReservedConns(options, 0, 3, superuser_mode=False,
+                                   base_reserved_connection=1),
             'medium': lambda group_cache, global_cache, options, response:
-                __reserved_connections(options, 0, 5, superuser_mode=False,
-                                       base_reserved_connection=2),
+            _GetReservedConns(options, 0, 5, superuser_mode=False,
+                                   base_reserved_connection=2),
         },
         'tune_op': lambda group_cache, global_cache, options, response:
-            __reserved_connections(options, 0, 10, superuser_mode=False),
+        _GetReservedConns(options, 0, 10, superuser_mode=False),
         'default': __BASE_RESERVED_DB_CONNECTION,
         'comment': f"Sets the number of connections reserved for users."
     },
     'max_connections': {
         'instructions': {
-            'mini': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 5,
-                                                                                           30),
-            'medium': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 15,
-                                                                                             65),
-            'large': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 30,
-                                                                                            100),
-            'mall': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 40,
-                                                                                           175),
-            'bigt': lambda group_cache, global_cache, options, response: __max_connections(options, group_cache, 50,
-                                                                                           250),
+            'mini': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 10, 30),
+            'medium': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 65),
+            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 30, 100),
+            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 40, 175),
+            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 50, 250),
         },
         'default': 30,
         'comment': "The maximum number of client connections allowed. The default is 50. But by testing and some "
@@ -329,7 +303,7 @@ _DB_CONN_PROFILE = {
 
 _DB_RESOURCE_PROFILE = {
     'shared_buffers': {
-        'tune_op': lambda group_cache, global_cache, options, sys_record: __shared_buffers(options),
+        'tune_op': lambda group_cache, global_cache, options, response: _CalcSharedBuffers(options),
         'default': 128 * Mi,
         'comment': "Sets the amount of memory the database server uses for shared memory buffers. If you have a "
                    "dedicated database server with 1GB or more of RAM, a reasonable starting value for shared_buffers "
@@ -342,7 +316,7 @@ _DB_RESOURCE_PROFILE = {
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'temp_buffers': {
-        'tune_op': __temp_buffers,
+        'tune_op': _CalcTempBuffers,
         'default': 8 * Mi,
         'comment': "Sets the maximum amount of memory used for temporary buffers within each database session. These "
                    "are session-local buffers used only for access to temporary tables. A session will allocate "
@@ -355,7 +329,7 @@ _DB_RESOURCE_PROFILE = {
         'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
     },
     'work_mem': {
-        'tune_op': __work_mem,
+        'tune_op': _CalcWorkMem,
         'default': 4 * Mi,
         'comment': "Sets the base maximum amount of memory to be used by a query operation (such as a sort or hash "
                    "table) before writing to temporary disk files. If this value is specified without units, it is "
@@ -401,7 +375,7 @@ _DB_VACUUM_PROFILE = {
     },
     'autovacuum_naptime': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
+        SECOND * (15 + 30 * (group_cache['autovacuum_max_workers'] - 1)),
         'default': 1 * MINUTE,
         'comment': "Specifies the minimum delay between autovacuum runs on any given database. In each round the "
                    "daemon examines the database and issues VACUUM and ANALYZE commands as needed for tables in that "
@@ -412,7 +386,7 @@ _DB_VACUUM_PROFILE = {
     },
     'maintenance_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response: realign_value(
-            cap_value(options.usable_ram // 16, 64 * Mi, 8 * Gi), page_size=Ki)[options.align_index],
+            cap_value((options.usable_ram - global_cache['shared_buffers']) // 10, 64 * Mi, 8 * Gi), page_size=Ki)[options.align_index],
         'default': 64 * Mi,
         'hardware_scope': 'mem',
         'post-condition-group': lambda value, cache, options:
@@ -426,13 +400,13 @@ _DB_VACUUM_PROFILE = {
                    "default value too high. From Azure, if the task is VACUUM, the PostgreSQL implementation will only "
                    "use maximum 1 GiB (which is the same as one datafile). If the task is CREATE INDEX, the PostgreSQL "
                    "would use as much as autovacuum_work_mem with multiplier. By recommendation, it is best to keep at "
-                   "around 5 - 10% of physical memory (Amazon is 25%, Azure is restrained around 97 MiB to 577 MiB, "
-                   "but our is 8.33 %). This default is good enough and capped at maximum 8 GiB of RAM. "
-                   "Sets the limit for the amount that autovacuum, manual vacuum, bulk index build and other "
-                   "maintenance routines are permitted to use. Applications which perform large ETL operations may "
-                   "need to allocate up to 1/4 of RAM to support large bulk vacuums. Note that each autovacuum "
-                   "worker may use this much, so if using multiple autovacuum workers you may want to decrease this "
-                   "value so that they can't claim over 1/8 or 1/4 of available RAM (our is capped at 1/3).",
+                   "around 5 - 10% of physical memory (Amazon is 25%, Azure is restrained around 97 MiB to 577 MiB). "
+                   "This default is good enough and should be capped at maximum 8 GiB of RAM. Sets the limit for the "
+                   "amount that autovacuum, manual vacuum, bulk index build and other maintenance routines are permitted "
+                   "to use. Applications which perform large ETL operations may need to allocate up to 1/4 of RAM "
+                   "to support large bulk vacuums. Note that each autovacuum worker may use this much, so if using "
+                   "multiple autovacuum workers you may want to decrease this value so that they can't claim over "
+                   "1/8 or 1/4 of available RAM (our is capped at 1/3).",
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'autovacuum_work_mem': {
@@ -549,8 +523,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.85),
-                          page_size=250 * K10)[options.align_index],
+        realign_value(int(group_cache['autovacuum_freeze_max_age'] * 0.85),
+                      page_size=250 * K10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relfrozenxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits every "
@@ -574,8 +548,8 @@ _DB_VACUUM_PROFILE = {
     },
     'vacuum_multixact_freeze_table_age': {
         'tune_op': lambda group_cache, global_cache, options, response:
-            realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85),
-                          page_size=250 * K10)[options.align_index],
+        realign_value(int(group_cache['autovacuum_multixact_freeze_max_age'] * 0.85),
+                      page_size=250 * K10)[options.align_index],
         'default': 150 * M10,
         'comment': "VACUUM performs an aggressive scan if the table's pg_class.relminmxid field has reached the age "
                    "specified by this setting. An aggressive scan differs from a regular VACUUM in that it visits "
@@ -682,6 +656,7 @@ _DB_ASYNC_DISK_PROFILE = {
                    'cache, where performance might degrade. This setting may have no effect on some platforms. The '
                    'valid range is between 0, which disables forced writeback, and 2MB. The default is 0, i.e., no '
                    'forced writeback. ',
+        'partial_func': lambda value : f"{value // Ki}kB",
     },
 }
 
@@ -708,7 +683,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers_per_gather': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu // 3), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
         'comment': 'Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. '
                    'Parallel workers are taken from the pool of processes established by max_worker_processes, limited '
@@ -721,7 +696,7 @@ _DB_ASYNC_CPU_PROFILE = {
 
     'max_parallel_maintenance_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu // 2), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
         'default': 2,
         'comment': "Sets the maximum number of parallel workers that can be started by a single utility command. "
                    "Currently, the parallel utility commands that support the use of parallel workers are CREATE INDEX "
@@ -819,7 +794,7 @@ _DB_WAL_PROFILE = {
         'default': 'pglz',
         'comment': 'This parameter enables compression of WAL using the specified compression method. When enabled, '
                    'the PostgreSQL server compresses full page images written to WAL when full_page_writes is on or '
-                   'during a base backup. A compressed page image will be decompressed during WAL replay.'
+                   'during a base backup. A compressed page image will be decompressed during WAL replay (pg_rewind).'
     },
     'wal_init_zero': {
         'default': 'on',
@@ -835,14 +810,15 @@ _DB_WAL_PROFILE = {
                    'the need to create new ones. On COW file systems, it may be faster to create new ones, '
                    'so the option is given to disable this behavior.'
     },
-
     'wal_log_hints': {
         'default': 'on',
         'comment': "When this parameter is on, the PostgreSQL server writes the entire content of each disk page to "
                    "WAL during the first modification of that page after a checkpoint, even for non-critical "
                    "modifications of so-called hint bits. If data checksums are enabled, hint bit updates are always "
                    "WAL-logged and this setting is ignored. You can use this setting to test how much extra WAL-logging "
-                   "would occur if your database had data checksums enabled."
+                   "would occur if your database had data checksums enabled, and the use of pg_rewind. Enable this "
+                   "would increase the number of generated WAL files, resulting in more I/O, CPU usage and network "
+                   "transfer for replication and recovery; so it is best to set :arg:`wal_compression=on`."
     },
     # See Ref [16-19] for tuning the wal_writer_delay and commit_delay
     'wal_writer_delay': {
@@ -938,7 +914,7 @@ _DB_WAL_PROFILE = {
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'wal_buffers': {
-        'tune_op': partial(__wal_buffers, minimum=BASE_WAL_SEGMENT_SIZE // 2, maximum=BASE_WAL_SEGMENT_SIZE * 16),
+        'tune_op': partial(_CalcWalBuffers, minimum=BASE_WAL_SEGMENT_SIZE // 2, maximum=BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
         'comment': 'The amount of shared memory used for WAL data that has not yet been written to disk. The default '
@@ -996,9 +972,9 @@ exit 0
     'archive_timeout': {
         'instructions': {
             'mini_default': 1 * HOUR,
-            'medium_default': 30 * MINUTE,
+            'medium_default': 45 * MINUTE,
         },
-        'default': 15 * MINUTE,
+        'default': 30 * MINUTE,
         'hardware_scope': 'overall',  # But based on data rate
         'comment': 'The :var:`archive_command` or :var:`archive_library` is only invoked for completed WAL segments. '
                    'Hence, if your server generates little WAL traffic, there could be a long delay between the '
@@ -1010,7 +986,7 @@ exit 0
                    'database activity). Note that archived files that are closed early due to a forced switch are '
                    'still the same length as completely full files. Therefore, it is unwise to use a very short '
                    ':var:`archive_timeout` — it will bloat your archive storage. In general this parameter is used for '
-                   'safety and long PITR and want to revert back to a far time in the past. Default to 15 minutes on '
+                   'safety and long PITR and want to revert back to a far time in the past. Default to 30 minutes on '
                    'general system and up to 1 hour on smaller scale.',
         'partial_func': lambda value: f"{value}s",
     },
@@ -1138,7 +1114,8 @@ _DB_REPLICATION_PROFILE = {
     # Generic
     'logical_decoding_work_mem': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        realign_value(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi), page_size=DB_PAGE_SIZE)[options.align_index],
+        realign_value(cap_value(global_cache['maintenance_work_mem'] // 8, 32 * Mi, 2 * Gi), page_size=DB_PAGE_SIZE)[
+            options.align_index],
         'default': 64 * Mi,
         'comment': "Specifies the maximum amount of memory to be used by logical decoding, before some of the decoded "
                    "changes are written to local disk. This limits the amount of memory used by logical streaming "
@@ -1186,7 +1163,7 @@ _DB_QUERY_PROFILE = {
                    "0.001, which is smaller than PostgreSQL's default of 0.0025."
     },
     'effective_cache_size': {
-        'tune_op': __effective_cache_size,
+        'tune_op': _CalcEffectiveCacheSize,
         'default': 4 * Gi,
         'comment': "Sets the planner's assumption about the effective size of the disk cache that is available to a "
                    "single query. This is factored into estimates of the cost of using an index; a higher value makes "
@@ -1215,7 +1192,26 @@ _DB_QUERY_PROFILE = {
                    "1% error probability. For very small/simple databases, decrease to 10 or 50. Data warehousing "
                    "applications generally need to use 500 to 1000.",
     },
-
+    # Join and Parallelism (TODO) -> These are just there to let user notice
+    'join_collapse_limit': {
+        'instructions': {
+            'large_default': 12,
+            'mall_default': 16,
+            'bigt_default': 20,
+        },
+        'default': 8,
+    },
+    'from_collapse_limit': {
+        'instructions': {
+            'large_default': 12,
+            'mall_default': 16,
+            'bigt_default': 20,
+        },
+        'default': 8,
+    },
+    'plan_cache_mode': {
+        'default': 'auto',
+    },
     # Parallelism
     'parallel_setup_cost': {
         'instructions': {
@@ -1229,16 +1225,11 @@ _DB_QUERY_PROFILE = {
                    "Thus we prefer a better parallel plan by reducing this value to 500."
     },
     'parallel_tuple_cost': {
-        'instructions': {
-            'large': lambda group_cache, global_cache, options, response: min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-            'mall': lambda group_cache, global_cache, options, response: min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-            'bigt': lambda group_cache, global_cache, options, response: min(group_cache['cpu_tuple_cost'] * 10, 0.1),
-        },
+        'tune_op': lambda group_cache, global_cache, options, response: (group_cache['cpu_tuple_cost'] * 8 + 0.1) / 2,
         'default': 0.1,
         'comment': "Sets the planner's estimate of the cost of transferring a tuple from a parallel worker process to "
                    "another process. The default is 0.1, but if you have a lot of CPU in the database server, then we "
-                   "believe the cost of tuple transfer would be reduced but still maintained its ratio compared to "
-                   "the single CPU execution (0.01 vs 0.1). "
+                   "believe the cost of tuple transfer would be reduced."
     },
     # Commit Behaviour
     'commit_delay': {
@@ -1316,7 +1307,7 @@ _DB_LOG_PROFILE = {
                    ':var:`logging_collector` is also enabled.'
     },
     'log_directory': {
-        'default': 'log', # PG_LOG_DIR,
+        'default': 'log',  # PG_LOG_DIR,
         'comment': 'When :var:`logging_collector` is enabled, this parameter determines the directory in which log '
                    'files will be created. It can be specified as an absolute path, or relative to the cluster data '
                    'directory. '
@@ -1550,7 +1541,8 @@ _DB_TIMEOUT_PROFILE = {
 # Library (You don't need to tune these variable as they are not directly related to the database performance)
 _DB_LIB_PROFILE = {
     'shared_preload_libraries': {
-        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_visibility',   # pg_repack, Not pg_squeeze
+        'default': 'auto_explain,pg_prewarm,pgstattuple,pg_stat_statements,pg_buffercache,pg_visibility',
+        # pg_repack, Not pg_squeeze
         'comment': 'A comma-separated list of shared libraries to load into the server. The list of libraries must be '
                    'specified by name, not with file name or path. The libraries are loaded into the server during '
                    'startup. If a library is not found when the server is started, the server will fail to start. '

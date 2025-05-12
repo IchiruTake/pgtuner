@@ -1,14 +1,13 @@
 import asyncio
 import logging
 import ipaddress
-from datetime import datetime
 from math import ceil
 from time import perf_counter
 from typing import Callable
 from collections import defaultdict, deque
 
-from src.static.c_timezone import GetTimezone
-from src.static.vars import MINUTE, APP_NAME_UPPER, K10
+from src.utils.static import TIMEZONE
+from src.utils.static import APP_NAME_UPPER, K10
 from starlette.types import ASGIApp, Send, Receive, Message, Scope as StarletteScope
 from starlette.exceptions import HTTPException
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
@@ -251,7 +250,7 @@ class HeaderManageMiddleware(BaseMiddleware):
         self._dynamic = None
         self._dynamic_cache_control: str = dynamic_cache_control
 
-        self._tz = GetTimezone()[0]
+        self._tz = TIMEZONE
         self._time_operator: Callable = time_operator
 
 

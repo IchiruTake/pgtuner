@@ -6,11 +6,11 @@ from functools import partial
 
 from pydantic import BaseModel, Field
 
-from src.static.vars import APP_NAME_UPPER, Gi, Mi, Ki, K10
+from src.utils.static import APP_NAME_UPPER, Gi, K10
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.items import PG_TUNE_ITEM
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
-from src.tuner.data.optmode import PG_PROFILE_OPTMODE
+from src.tuner.data.workload import PG_PROFILE_OPTMODE
 from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.profile.database.shared import wal_time, checkpoint_time, vacuum_time, vacuum_scale
 from src.utils.mean import generalized_mean
@@ -27,7 +27,6 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 class PG_TUNE_REQUEST(BaseModel):
     """ The PostgreSQL tuning request, initiated by the user's request for tuning up """
     options: PG_TUNE_USR_OPTIONS
-    output_if_difference_only: bool = False
     include_comment: bool = False
     custom_style: str | None = None
 
@@ -62,20 +61,6 @@ class PG_TUNE_RESPONSE(BaseModel):
     def get_managed_cache(self, target: PGTUNER_SCOPE) -> dict[str, Any]:
         return self.outcome_cache[target]
 
-    def get_managed_items_and_cache(self, target: PGTUNER_SCOPE, scope: PG_SCOPE) -> tuple[
-        dict[str, PG_TUNE_ITEM], dict[str, Any]]:
-        return self.get_managed_items(target, scope), self.get_managed_cache(target)
-
-    def sync_cache_from_items(self, target: PGTUNER_SCOPE) -> dict:
-        divergent = {}
-        managed_cache = self.get_managed_cache(target)
-        for scope, items in self.outcome[target].items():
-            for item_name, item in items.items():
-                current = managed_cache.get(item_name)
-                if current != item.after:
-                    divergent[item_name] = item.after
-                    managed_cache = item.after
-        return divergent
 
     def _generate_content_as_file(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST, backup_settings: bool = True,
                                   exclude_names: list[str] | set[str] = None) -> str:
@@ -86,8 +71,7 @@ class PG_TUNE_RESPONSE(BaseModel):
             content.append(f'## ===== SCOPE: {scope} ===== \n')
             for item_name, item in items.items():
                 if exclude_names is None or item_name not in exclude_names:
-                    content.append(item.out(request.output_if_difference_only, request.include_comment,
-                                            request.custom_style))
+                    content.append(item.out(request.include_comment, request.custom_style))
                     content.append('\n' * (2 if request.include_comment else 1))
             # Separate for better view
             if request.include_comment:
@@ -123,8 +107,8 @@ class PG_TUNE_RESPONSE(BaseModel):
         raise ValueError(msg)
 
     # @time_decorator
-    def mem_test(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
-                 ignore_report: bool = True) -> tuple[str, int | float]:
+    def report(self, options: PG_TUNE_USR_OPTIONS, use_full_connection: bool = False,
+               ignore_report: bool = True) -> tuple[str, int | float]:
         # Cache result first
         _kwargs = options.tuning_kwargs
         usable_ram_noswap = options.usable_ram
@@ -187,7 +171,6 @@ class PG_TUNE_RESPONSE(BaseModel):
         max_total_memory_used_with_parallel += temp_buffers * num_user_conns
         max_total_memory_used_with_parallel_ratio = max_total_memory_used_with_parallel / usable_ram_noswap
         max_total_memory_used_with_parallel_hr = bytesize_to_hr(max_total_memory_used_with_parallel)
-        _epsilon_scale = 4 if use_full_connection else 2
 
         if ignore_report and _kwargs.mem_pool_parallel_estimate:
             return '', max_total_memory_used_with_parallel
@@ -208,7 +191,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         real_autovacuum_work_mem = managed_cache['autovacuum_work_mem']
         if real_autovacuum_work_mem == -1:
             real_autovacuum_work_mem = managed_cache['maintenance_work_mem']
-        if options.versioning()[0] < 17:
+        if options.pgsql_version < 17:
             # The VACUUM use adaptive radix tree which performs better and not being silently capped at 1 GiB
             # since PostgreSQL 17+
             # https://www.postgresql.org/docs/17/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM
@@ -226,7 +209,7 @@ class PG_TUNE_RESPONSE(BaseModel):
             effective_cache_size=effective_cache_size,
             data_disk_iops=PG_DISK_PERF.throughput_to_iops(
                 0.70 * generalized_mean(PG_DISK_PERF.iops_to_throughput(data_iops), data_tput, level=-2.5)
-            )
+            )   # The merge between sequential IOPS and random IOPS with weighted average of -2.5 and 70% efficiency
         )
         ckpt05 = checkpoint_time_partial(shared_buffers_ratio=0.05)
         ckpt30 = checkpoint_time_partial(shared_buffers_ratio=0.30)
@@ -347,7 +330,6 @@ Report Summary (others):
             -> Hit (page in shared_buffers): Maximum {vacuum_report['max_num_hit_page']} pages or RAM throughput {vacuum_report['max_hit_data']:.2f} MiB/s 
                 RAM Safety: {vacuum_report['max_hit_data'] < 10 * K10} (< 10 GiB/s for low DDR3)
             -> Miss (page in disk cache): Maximum {vacuum_report['max_num_miss_page']} pages or Disk throughput {vacuum_report['max_miss_data']:.2f} MiB/s
-                # NVME SSD with PCIe 3.0+ or USB 3.1
                 # See encoding here: https://en.wikipedia.org/wiki/64b/66b_encoding; NVME SSD with PCIe 3.0+ or USB 3.1
                 NVME10 Safety: {vacuum_report['max_miss_data'] < 10/8 * 64/66 * K10} (< 10 Gib/s, 64b/66b encoding)
                 SATA3 Safety: {vacuum_report['max_miss_data'] < 6/8 * 6/8 * K10} (< 6 Gib/s, 6b/8b encoding)
@@ -439,7 +421,6 @@ application's behavior.
 * Not every parameter can be covered or tuned, and not every parameter can be added as-is.
 As mentioned, consult with your developer, DBA, and system administrator to ensure the
 best performance and reliability of the database system.
-
 # ===============================================================
 '''
         return _report, (max_total_memory_used if not _kwargs.mem_pool_parallel_estimate else

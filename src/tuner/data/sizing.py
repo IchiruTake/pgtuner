@@ -1,54 +1,11 @@
 from enum import Enum
-from functools import lru_cache, total_ordering
+from functools import lru_cache
 from math import floor, ceil
 from typing import Literal
 
-from src.static.vars import K10, THROUGHPUT
+from src.utils.static import K10, THROUGHPUT
 
-__all__ = ['PG_SIZING', 'PG_DISK_SIZING']
-
-# =============================================================================
-# ENUM choices
-_ascending_specs: dict[str, list] = {
-    'size': ['mini', 'medium', 'large', 'mall', 'bigt'],
-    'vcpu_min': [1, 2, 6, 12, 32],
-    'vcpu_max': [4, 8, 16, 48, 128],
-    'ram_gib_min': [2, 8, 24, 48, 128],
-    'ram_gib_max': [16, 32, 64, 192, 512],
-    'storage_gib_max': [50, 300, 1024, 5120, 32768],
-    'network_mbps_max': [500, 1000, 5000, 12500, 30000],
-}
-
-@lru_cache(maxsize=len(_ascending_specs['size']))
-def _str_to_num(value: str) -> int:
-    return _ascending_specs['size'].index(value)
-
-@total_ordering
-class PG_SIZING(Enum):
-    """
-    The PostgreSQL sizing profile. This could help you analyze if your provided server is suitable with our
-    defined profiles.
-    """
-    MINI = 'mini'
-    MEDIUM = 'medium'
-    LARGE = 'large'
-    MALL = 'mall'
-    BIGT = 'bigt'
-
-    def num(self) -> int:
-        return _str_to_num(self.value)
-
-    def __lt__(self, other: 'PG_SIZING') -> bool:
-        return self.num() < other.num()
-
-    def __eq__(self, other: 'PG_SIZING') -> bool:
-        return self.num() == other.num()
-
-    def __add__(self, other: 'PG_SIZING') -> 'PG_SIZING':
-        return PG_SIZING(_ascending_specs['size'][self.num() + other.num()])
-
-    def __sub__(self, other: 'PG_SIZING') -> 'PG_SIZING':
-        return PG_SIZING(_ascending_specs['size'][self.num() - other.num()])
+__all__ = ['PG_DISK_SIZING']
 
 # -----------------------------------------------------------------------------
 ## Note that in the list, we choose the value based on the minimum of read/write IOPS/throughput, and doing
@@ -81,7 +38,7 @@ class PG_DISK_SIZING(Enum):
     """
     # SATA HDDs
     HDDv1 = ('hddv1', 100, 250)     # Some old HDDs or SD cards (efficiency around 80 - 120 MiB/s)
-    HDDv2 = ('hddv2', 200, K10)
+    HDDv2 = ('hddv2', 200, 1 *K10)
     HDDv3 = ('hddv3', 260, 2500)    # Some Western Digital HDDs, or modern HDDs with small SSD/DRAM cache (220 - 290 MiB/s)
 
     # SAN/NAS SSDs

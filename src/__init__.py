@@ -1,42 +1,20 @@
-import gc
+import multiprocessing as mp
+import os
+import platform
 
-import toml
-
-from src.log import BuildLogger
-from src.static.vars import LOG_FILE_PATH, GC_FILE_PATH
-
-
-def optimize_garbage_scheduler() -> None:
-    with open(GC_FILE_PATH, 'r') as gc_file_stream:
-        profile: dict = toml.load(gc_file_stream)['GC']
-        if profile['DISABLED'] is True:
-            gc.disable()
-            return None
-
-        if profile['CLEANUP_AND_FREEZE'] is True:
-            gc.collect(2)
-            gc.freeze()
-
-        if profile['DEBUG'] is True:
-            gc.set_debug(gc.DEBUG_STATS)
-
-        gc.set_threshold(profile['ALLO'], profile['GEN_0'], profile['GEN_1'])
-
-    return None
-
-
-def build_logger():
-    with open(LOG_FILE_PATH, 'r') as f:
-        _content = toml.load(f)['LOGGER']
-        if __debug__:
-            from pprint import pprint
-            pprint(_content)
-        return BuildLogger(_content)
-
+from src.utils.static import LOG_FILE_PATH, GC_FILE_PATH
+from src.utils.base import TranslateNone, OptimGC
+from src.utils.log import BuildLogger
 
 # ==================================================================================================
-print('Optimizing garbage collector and build logger...')
-optimize_garbage_scheduler()
-print('Garbage collector is optimized.')
-build_logger()
-print('Logger is built.')
+IS_CHILD_PROCESS: bool = not (mp.current_process().name == 'MainProcess')
+# Ignore the logger initialization if it is not the parent process (ignore child process during multiprocessing)
+print(f'Checking if it is a child process ... \nOS: {platform.system()} - PID: {os.getpid()} - PPID: {os.getppid()}')
+if not IS_CHILD_PROCESS:
+    # Ignore the logger initialization if it is not the parent process (ignore child process during multiprocessing)
+    print('Optimizing garbage collector and build logger...')
+    OptimGC(GC_FILE_PATH)
+    BuildLogger(LOG_FILE_PATH)
+    print('Logger is built.')
+else:
+    OptimGC(GC_FILE_PATH)

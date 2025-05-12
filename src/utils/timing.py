@@ -1,7 +1,7 @@
 from time import perf_counter
 from typing import Callable
 
-from src.static.vars import K10
+from src.utils.static import K10
 
 __all__ = ['time_decorator']
 

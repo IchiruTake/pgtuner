@@ -1,5 +1,5 @@
 """
-This module is to perform specific tuning on the PostgreSQL database server.
+This module is to perform specific tuning and calculation on the PostgreSQL database server.
 
 """
 import logging
@@ -7,9 +7,9 @@ from math import floor, ceil
 
 from pydantic import ByteSize
 
-from src.static.vars import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
 from src.tuner.data.disks import PG_DISK_PERF
 from src.utils.pydantic_utils import bytesize_to_hr
+from src.utils.static import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
 
 __all__ = ['wal_time', 'checkpoint_time', 'vacuum_time', 'vacuum_scale']
 _logger = logging.getLogger(APP_NAME_UPPER)
@@ -20,13 +20,14 @@ _FILE_ROTATION_TIME_MS = 0.21 * 2  # 0.21 ms on average when direct bare-metal, 
 
 
 def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_segment_size: ByteSize | int,
-             wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int, ) -> dict:
+             wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int) -> dict:
     # The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
     data_amount = int(wal_buffers * data_amount_ratio)
     num_wal_files_required = data_amount // wal_segment_size + 1
     rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS
+    # We don't add WAL_fill_time here because it is usually managed by min_wal_size and its cost is negligible
     write_time_in_ms = (data_amount / Mi) / wal_throughput * K10
 
     # Calculate maximum how many delay time
@@ -51,14 +52,15 @@ def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_se
         'msg': _msg
     }
 
-def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target,
+
+def checkpoint_time(checkpoint_timeout_second: int, checkpoint_completion_target: float,
                     shared_buffers: int, shared_buffers_ratio: float, effective_cache_size: int,
                     max_wal_size: int, data_disk_iops: int) -> dict:
     # Validate the maximum number of times to complete the checkpoint
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
     checkpoint_duration = ceil(checkpoint_timeout_second * checkpoint_completion_target)  # Measured in seconds
-    data_tran_tput = PG_DISK_PERF.iops_to_throughput(data_disk_iops) # Measured in MiB/s
+    data_tran_tput = PG_DISK_PERF.iops_to_throughput(data_disk_iops)  # Measured in MiB/s
     data_max_mib_written = data_tran_tput * checkpoint_duration
 
     data_amount = int(shared_buffers * shared_buffers_ratio)  # Measured in bytes
@@ -104,7 +106,7 @@ def vacuum_time(hit_cost: int, miss_cost: int, dirty_cost: int, delay_ms: int, c
             f'\nMISS (page in disk cache): {max_num_miss_page} page -> Throughput: {max_miss_data:.2f} MiB/s '
             f'-> Safe to GO: {max_miss_data < 5 * K10} (< 5 GiB/s for low DDR3)'
             f'\nDIRTY (page in disk): {max_num_dirty_page} page -> Throughput: {max_dirty_data:.2f} MiB/s '
-            f'-> Safe to GO: {max_dirty_data < data_disk_iops} (< Data Disk IOPS)')
+            f'-> Safe to GO: {max_dirty_data < _disk_tput} (< Data Disk IOPS)')
 
     # Scenario: 5:5:1 (frequent vacuum) or 1:1:1 (rarely vacuum)
     _551page = budget_per_sec // (5 * hit_cost + 5 * miss_cost + dirty_cost)
@@ -126,6 +128,7 @@ def vacuum_time(hit_cost: int, miss_cost: int, dirty_cost: int, delay_ms: int, c
         '1:1:1_data': _111data,
         'msg': _msg
     }
+
 
 def vacuum_scale(threshold: int, scale_factor: float) -> dict:
     _logger.debug('Estimate the number of changed or dead tuples to trigger normal vacuum')

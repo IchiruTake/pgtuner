@@ -1,4 +1,3 @@
-
 __all__ = ['generalized_mean']
 
 def generalized_mean(*args: int | float, level: int | float, round_ndigits: int | None = 4) -> int | float:

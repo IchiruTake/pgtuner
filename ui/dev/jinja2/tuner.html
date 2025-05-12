@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include './head.min.html' %}
+
+<!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
+{% include './header.min.html' %}
+
+<body>
+<div class="container my-4">
+    <h2 class="mb-4">PGTuner Input Form</h2>
+
+    <!-- System, Workload and Optimization Mode -->
+    {% include './tuner/01_workload.min.html' %}
+
+    <!-- Disk and WAL Specifications -->
+    {% include './tuner/03_volume.min.html' %}
+
+    <!-- Anti-wraparound Vacuum Tuning -->
+    {% include './tuner/04_wraparound.min.html' %}
+
+    <!-- Data Integrity, Transaction, Crash Recovery, and Replication -->
+    {% include './tuner/05_integrity.min.html' %}
+
+    <!-- User/Format Tuning Options -->
+    {% include './tuner/06_format.min.html' %}
+
+    <!-- Advanced Settings -->
+    {% include './tuner/07_adv.min.html' %}
+
+    <!-- Generate Button and Response Box -->
+    {% include './tuner/08_response.min.html' %}
+</div>
+
+</body>
+<script>
+    // Wait until the bootstrap.bundle.min.js is loaded
+    // let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    // let tooltipList = tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+    const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
+</script>
+</html>

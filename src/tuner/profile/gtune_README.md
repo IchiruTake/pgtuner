@@ -9,7 +9,7 @@ during the tuning process, the maximum number of connections allowed is usually 
 it by default. The magic number means that this is the average value and we used it for tuning.
 
 Note that this file is capable of performing the general tuning without acknowledging the type of server workload.
-For the specific tuning based on workload, please refer to the `s_tune_workload`.py. The tuning is inspired which is
+For the specific tuning based on workload, please refer to the `stune`.py. The tuning is inspired which is
 not limited to other types of database such as SQL Server
 
 References for SYSCTL tuning:
@@ -75,6 +75,10 @@ tune for commit_delay and commit_siblings
 [38] https://postgrespro.com/list/thread-id/1898949
 [39] https://www.bytebase.com/blog/postgres-timeout/
 [40] https://www.enterprisedb.com/blog/managing-freezing-postgresql
+[41] https://portavita.github.io/2019-06-14-blog_PostgreSQL_wal_log_hints_benchmarked/
+[42] https://portavita.github.io/2019-05-13-blog_about_wal_compression/
+[43] https://www.cybertec-postgresql.com/en/postgresql-underused-features-wal-compression/
+
 
 Questions:
 

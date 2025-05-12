@@ -1,5 +1,5 @@
 from pydantic import ByteSize
-from src.static.vars import DB_PAGE_SIZE
+from src.utils.static import DB_PAGE_SIZE
 
 __all__ = ['bytesize_to_hr', 'realign_value', 'cap_value']
 _SIZING = ByteSize | int | float
