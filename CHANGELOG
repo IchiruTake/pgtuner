@@ -19,6 +19,7 @@ Input Changes:
 - CONF: Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multipler is 2.0, the working memory usage per connection for one arbitrary operation is reduced from 1.1196 to 1.1417
 - CONF: Revert the upper bound parameter of `wal_segment_size` to 2 GiB instead of 128 MiB (scale from 3 to 7)
 - CONF: Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.05
+- CONF: Change the default parameter of `mem_pool_tuning_ratio` from 0.6 to 0.4
 - CONF: Remove all `*_profile` parameters except the `workload_profile` parameter.
 - CONF: The supported PostgreSQL version is using the integer instead of string (including the term 'latest').
 - CONF: Remove parameters of the OS and DB Log disk
