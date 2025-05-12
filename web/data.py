@@ -195,7 +195,8 @@ class PG_WEB_TUNE_USR_OPTIONS(BaseModel):
         )
 
 class PG_WEB_TUNE_REQUEST(BaseModel):
-    user_options: PG_WEB_TUNE_USR_OPTIONS
+    user_options: PG_TUNE_USR_OPTIONS
+    include_comment: bool = False
     alter_style: bool = False
     backup_settings: bool = False
     output_format: Literal['json', 'conf', 'file'] = 'conf'
@@ -205,6 +206,9 @@ class PG_WEB_TUNE_REQUEST(BaseModel):
 
     def to_backend(self) -> PG_TUNE_REQUEST:
         custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'
-        backend_request = PG_TUNE_REQUEST(options=self.user_options.to_backend(),
-                                          include_comment=False, custom_style=custom_style)
+        backend_request = PG_TUNE_REQUEST(
+            options=self.user_options,
+            include_comment=self.include_comment,
+            custom_style=custom_style
+        )
         return backend_request

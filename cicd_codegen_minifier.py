@@ -233,4 +233,7 @@ if __name__ == "__main__":
         shutil.copy(jinja_js_min_filepath, jinja_js_min_dirpath)
         if os.path.exists(jinja_js_min_filepath):
             os.remove(jinja_js_min_filepath)
+        if jinja_js_file == codegen_output_filepath:
+            shutil.copy(os.path.join(jinja_js_min_dirpath, os.path.basename(jinja_js_min_filepath)),
+                        os.path.join(jinja_js_min_dirpath, 'index.html'))
         print('The JS backend file has been minified and copied to:', jinja_js_min_dirpath)

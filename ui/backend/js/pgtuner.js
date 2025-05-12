@@ -1,5 +1,5 @@
 // ----------------- Fetching API -----------------
-const USE_PYTHON_BACKEND = false;
+const USE_PYTHON_BACKEND = true;
 function update_response(id, value) {
     const response_box_block = document.getElementById(id);
     if (response_box_block.readOnly) {
@@ -40,7 +40,6 @@ async function submitConfiguration() {
             update_response('response-box', result['content']);
         }
         return response;
-
     } else {
         let request = _build_request_from_backend(request_form)
         const result = web_optimize(request);
@@ -50,7 +49,6 @@ async function submitConfiguration() {
         } else {
             update_response('response-box', result['content']);
         }
-
         return result['response']
     }
 }

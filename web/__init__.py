@@ -1,42 +1,63 @@
 import asyncio
-import logging
-import random
-from contextlib import asynccontextmanager
-import os
 import gzip
+import logging
+import os
+import random
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Annotated, Mapping
+from typing import Literal
 
 from fastapi import FastAPI, Header, Request
 from fastapi import status
-from fastapi.templating import Jinja2Templates
 from fastapi.responses import ORJSONResponse, Response
-
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-
-from pydantic import ValidationError
 from starlette.responses import PlainTextResponse
-from starlette.types import ASGIApp
 from starlette.staticfiles import StaticFiles
+from starlette.types import ASGIApp
 
 from src import pgtuner
-from src.utils.static import APP_NAME_UPPER, APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
-    SECOND, K10, TIMEZONE
+from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.data.scope import PGTUNER_SCOPE
+from src.tuner.pg_dataclass import PG_TUNE_REQUEST
 from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
+from src.utils.static import APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
+    SECOND, TIMEZONE
+from src.utils.static import K10, APP_NAME_UPPER
 from web.env import OsGetEnvBool
 from web.middlewares.compressor import CompressMiddleware
 from web.middlewares.middlewares import HeaderManageMiddleware, RateLimitMiddleware
-from web.data import PG_WEB_TUNE_USR_OPTIONS, PG_WEB_TUNE_REQUEST
+
 
 # ==================================================================================================
+class PG_WEB_TUNE_REQUEST(BaseModel):
+    user_options: PG_TUNE_USR_OPTIONS
+    include_comment: bool = False
+    alter_style: bool = False
+    backup_settings: bool = False
+    output_format: Literal['json', 'conf', 'file'] = 'conf'
+
+    analyze_with_full_connection_use: bool = False
+    ignore_non_performance_setting: bool = True
+
+    def to_backend(self) -> PG_TUNE_REQUEST:
+        custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'
+        backend_request = PG_TUNE_REQUEST(
+            options=self.user_options,
+            include_comment=self.include_comment,
+            custom_style=custom_style
+        )
+        return backend_request
+
 __all__ = ['app']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 # 0: Development, 1: Production
-_app_dev_mode: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
+_APP_IN_DEVELOPMENT: bool = OsGetEnvBool(f'{APP_NAME_UPPER}_DEV_MODE', True)
 
 @asynccontextmanager
 async def app_lifespan(application: ASGIApp | FastAPI):
@@ -91,10 +112,10 @@ inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from O
 community (Azure, OnGres, PostgresPro, PostgreSQL core developers, real-world use cases, ...) and my own experience. 
 ''',
     version=__version__,
-    openapi_url='/openapi.json' if _app_dev_mode else None,
-    docs_url='/docs' if _app_dev_mode else None,
-    redoc_url='/redoc' if _app_dev_mode else None,
-    swagger_ui_oauth2_redirect_url='/docs/oauth2-redirect' if _app_dev_mode else None,
+    openapi_url='/openapi.json' if _APP_IN_DEVELOPMENT else None,
+    docs_url='/docs' if _APP_IN_DEVELOPMENT else None,
+    redoc_url='/redoc', # if _APP_IN_DEVELOPMENT else None,
+    swagger_ui_oauth2_redirect_url='/docs/oauth2-redirect' if _APP_IN_DEVELOPMENT else None,
     lifespan=app_lifespan,
     terms_of_service=None,
     contact={
@@ -128,7 +149,7 @@ def _cost(p: str) -> int:
         return 3
     return 1
 _request_scale_factor: float = float(os.getenv(f'FASTAPI_REQUEST_LIMIT_FACTOR', '0.90'))
-_user_request_limit = int(os.getenv(f'FASTAPI_USER_REQUEST_LIMIT', '15'))
+_user_request_limit = int(os.getenv(f'FASTAPI_USER_REQUEST_LIMIT', '180'))
 _user_request_window = int(os.getenv(f'FASTAPI_USER_REQUEST_WINDOW', '15'))
 app.add_middleware(RateLimitMiddleware, max_requests=int(100 * MINUTE * _request_scale_factor), interval=MINUTE,
                    max_requests_per_window=_user_request_limit, window_length=_user_request_window,
@@ -153,8 +174,8 @@ if OsGetEnvBool(f'FASTAPI_COMPRESS_MIDDLEWARE', False):
 
 # Auto Cache-Control and Header Middleware
 _private_cache = 'private, must-revalidate'
-_static_cache = (f'max-age={45 * SECOND if _app_dev_mode else 30 * MINUTE}, {_private_cache}, '
-                 f'stale-while-revalidate={30 * SECOND if _app_dev_mode else 3 * MINUTE}')
+_static_cache = (f'max-age={45 * SECOND if _APP_IN_DEVELOPMENT else 30 * MINUTE}, {_private_cache}, '
+                 f'stale-while-revalidate={30 * SECOND if _APP_IN_DEVELOPMENT else 3 * MINUTE}')
 _dynamic_cache = 'no-cache'
 app.add_middleware(HeaderManageMiddleware, static_cache_control=_static_cache, dynamic_cache_control=_dynamic_cache)
 _logger.debug('The header middleware has been added to the application ...')
@@ -162,16 +183,12 @@ _logger.debug('The header middleware has been added to the application ...')
 _logger.info('The middlewares have been added to the application ...')
 # ----------------------------------------------------------------------------------------------
 _logger.info('Mounting the static files to the application ...')
-_logger.info(f'Developer Mode: {_app_dev_mode}')
-_env_tag = 'dev' if _app_dev_mode else 'prod'
-_default_path = f'./web/ui/{_env_tag}/static'
+_logger.info(f'Developer Mode: {_APP_IN_DEVELOPMENT}')
 _static_mapper = {
-    '/static': _default_path,
-    '/resource': f'{_default_path}/resource',
-    '/css': f'{_default_path}/css',
+    '/resource': f'./ui/frontend/resource',
+    '/css': f'./ui/frontend/css',
     # '/js': './web/ui/js',
 }
-
 try:
     for path, directory in _static_mapper.items():
         app.mount(path, StaticFiles(directory=directory), name=path.split('/')[-1])
@@ -180,14 +197,11 @@ except (FileNotFoundError, RuntimeError) as e:
     raise e
 _logger.info('The static files have been added to the application ...')
 
-
-# ----------------------------------------------------------------------------------------------
 # UI Directory
-_templates = Jinja2Templates(directory=f'{_default_path}/jinja2')
+_templates = Jinja2Templates(directory=f"./ui/{'dev' if _APP_IN_DEVELOPMENT else 'prod'}/jinja2")
 
 # UI Exception Error
 class UIException(StarletteHTTPException):
-
     _status_mapper = {
         400: ('Bad Request', 'The server could not understand the request due to invalid syntax.'),
         401: ('Unauthorized', 'The request has not been applied because it lacks valid authentication credentials for the target resource.'),
@@ -221,7 +235,7 @@ async def ui_exception_handler(request: Request, exc: UIException):
         'generic_message': exc.generic_message,
         'detail_message': exc.detail,
     }
-    if _app_dev_mode:
+    if _APP_IN_DEVELOPMENT:
         ctx['incident_level'] = exc.incident_level
 
     return _templates.TemplateResponse(
@@ -239,8 +253,9 @@ async def ui_exception_handler(request: Request, exc: UIException):
 async def error(request: Request):
     raise UIException(status_code=404, detail='This is a test error page', heading='Test Error Page',)
 
-
+# ----------------------------------------------------------------------------------------------
 @app.get('/', status_code=status.HTTP_200_OK)
+@app.get('/tuner', status_code=status.HTTP_200_OK)
 async def root(request: Request):
     return _templates.TemplateResponse(
         name='/tuner.min.html',
@@ -270,7 +285,7 @@ async def js(
         javascript_path: str,
         accept_encoding: Annotated[str | None, Header()]
 ):
-    _javascript_filepath = f'{_default_path}/js/{javascript_path}'
+    _javascript_filepath = f'./ui/frontend/js/{javascript_path}'
     if not os.path.exists(_javascript_filepath):
         return Response(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -278,9 +293,8 @@ async def js(
                 'Cache-Control': f'max-age={MINUTE}, private, must-revalidate',
             }
         )
-    content = open(_javascript_filepath, 'r').read()
+    content = open(_javascript_filepath, 'r', encoding='utf8').read()
     mtime: str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(os.path.getmtime(_javascript_filepath)))
-
     response_header: dict[str, str] = {
         'Content-Type': 'application/javascript',
         'Last-Modified': mtime,
@@ -296,14 +310,13 @@ async def js(
 
 @app.get('/robots.txt', status_code=status.HTTP_200_OK)
 async def robots():
-    content = """User-agent: *
+    return PlainTextResponse(
+        content="""User-agent: *
 Disallow: /api/
 Disallow: /docs/
 Disallow: /redoc/
 Allow: /
-"""
-    return PlainTextResponse(
-        content=content,
+""",
         status_code=status.HTTP_200_OK,
         headers={
             'Cache-Control': _static_cache
@@ -357,13 +370,16 @@ async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
     exclude_names = ['archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
                      'log_directory']
     if request.ignore_non_performance_setting:
-        exclude_names.extend(['deadlock_timeout', 'transaction_timeout',
-                              'idle_session_timeout', 'log_line_prefix'])
+        exclude_names.extend([
+            'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout', 'log_autovacuum_min_duration',
+            'log_checkpoints', 'log_connections', 'log_disconnections', 'log_duration', 'log_error_verbosity',
+            'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits', 'log_statement',
+            'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
+        ])
 
     if backend_request.options.operating_system == 'windows':
         exclude_names.extend(['checkpoint_flush_after', 'bgwriter_flush_after', 'wal_writer_flush_after',
                               'backend_flush_after'])
-
 
     content = response.generate_content(
         target=PGTUNER_SCOPE.DATABASE_CONFIG,
