@@ -1828,7 +1828,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25), 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
@@ -3903,8 +3903,6 @@ function _wal_integrity_buffer_size_tune(request, response) {
 
     // Apply tune the wal_writer_delay here regardless of the synchronous_commit so that we can ensure
     // no mixed of lossy and safe transactions
-    console.log(request.options);
-    console.log(request.options.max_time_transaction_loss_allow_in_millisecond);
     const after_wal_writer_delay = Math.floor(request.options.max_time_transaction_loss_allow_in_millisecond / 3.25)
     _ApplyItmTune('wal_writer_delay', after_wal_writer_delay, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 

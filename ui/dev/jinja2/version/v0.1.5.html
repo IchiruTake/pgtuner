@@ -46,6 +46,7 @@
                         <li>GTUNE: The parameter `archive_timeout` is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.</li>
                         <li>GTUNE: Add the configurations of `join_collapse_limit`, `from_collapse_limit`, and `plan_cache_mode`.</li>
                         <li>GTUNE: Rework the self-tuning of `parallel_tuple_cost` configuration</li>
+                        <li>GTUNE: Adjust the scale ratio `max_parallel_workers` (vcpu * 1.125 ->> vcpu * 1.25 + 1) and `max_parallel_workers_per_gather` (vcpu / 3 ->> vcpu / 2.5) to have more parallel workers  </li>
                         <li>STUNE: Reduce the result of `cpu_tuple_cost` and `parallel_tuple_cost`</li>
                         <li>STUNE: Simplify (reduce) configuration value of `default_statistics_target`</li>
                         <li>STUNE: Simplify (reduce) configuration value of `after_commit_delay` to be workload-based rather than disk-based</li>

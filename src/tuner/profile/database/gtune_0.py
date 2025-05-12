@@ -672,7 +672,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
+        min(cap_value(int(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
         'default': 8,
         'comment': 'Sets the maximum number of workers that the cluster can support for parallel operations. The '
                    'supported range is [4, 512], with default to 1.125x of the logical CPU count (8 by official '
