@@ -164,7 +164,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     # TODO: Whilst PostgreSQL allows up to 2 GiB, my recommendation is to limited below 128 MiB
     # Either I enforce constraint to prevent non optimal configuration or I let user to do it.
     wal_segment_size: PositiveInt = Field(
-        default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=8 * BASE_WAL_SEGMENT_SIZE, frozen=True,
+        default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=BASE_WAL_SEGMENT_SIZE * (2 ** 7), frozen=True,
         multiple_of=BASE_WAL_SEGMENT_SIZE,
         description='The WAL segment size in PostgreSQL (in MiB). Whilst theoretically, PostgreSQL allows up to 2 GiB, '
                     'our recommendation is to limit below 128 MiB (2^3 more of 16 MiB). The tuning of this value is '
