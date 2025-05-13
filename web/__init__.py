@@ -14,7 +14,7 @@ from fastapi import FastAPI, Header, Request
 from fastapi import status
 from fastapi.responses import ORJSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import PlainTextResponse
 from starlette.staticfiles import StaticFiles
@@ -22,13 +22,11 @@ from starlette.types import ASGIApp
 
 from src import pgtuner
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS
-from src.tuner.data.scope import PGTUNER_SCOPE
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST
-from src.tuner.pg_dataclass import PG_TUNE_RESPONSE
 from src.utils.static import APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
-    SECOND, TIMEZONE
-from src.utils.static import K10, APP_NAME_UPPER
-from web.env import OsGetEnvBool
+    SECOND, TIMEZONE, K10, APP_NAME_UPPER
+from src.utils.base import OsGetEnvBool
+
 from web.middlewares.compressor import CompressMiddleware
 from web.middlewares.middlewares import HeaderManageMiddleware, RateLimitMiddleware
 
@@ -184,11 +182,12 @@ _logger.info('The middlewares have been added to the application ...')
 # ----------------------------------------------------------------------------------------------
 _logger.info('Mounting the static files to the application ...')
 _logger.info(f'Developer Mode: {_APP_IN_DEVELOPMENT}')
+
 _static_mapper = {
     '/': f'./ui/frontend',
     '/resource': f'./ui/frontend/resource',
     '/css': f'./ui/frontend/css',
-    # '/js': './web/ui/js',
+    # '/js': './ui/frontend/js',
 }
 try:
     for path, directory in _static_mapper.items():
@@ -196,8 +195,38 @@ try:
 except (FileNotFoundError, RuntimeError) as e:
     _logger.warning(f'The static files have not been mounted: {e}')
     raise e
+
+@app.get('/js/{javascript_path}')
+async def js(
+        javascript_path: str,
+        accept_encoding: Annotated[str | None, Header()]
+):
+    _javascript_filepath = f'./ui/frontend/js/{javascript_path}'
+    if not os.path.exists(_javascript_filepath):
+        return Response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            headers={
+                'Cache-Control': f'max-age={MINUTE}, private, must-revalidate',
+            }
+        )
+    content = open(_javascript_filepath, 'r', encoding='utf8').read()
+    mtime: str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(os.path.getmtime(_javascript_filepath)))
+    response_header: dict[str, str] = {
+        'Content-Type': 'application/javascript',
+        'Last-Modified': mtime,
+        'Etag': str(hash(content)),
+        'Cache-Control': _static_cache,
+    }
+    if accept_encoding and 'gzip' in accept_encoding and len(content) > _gzip_min_size:
+        content = gzip.compress(content.encode(), compresslevel=_gzip_com_level)
+        response_header['Content-Encoding'] = 'gzip'
+        response_header['Content-Length'] = f'{len(content)}'
+    return Response(content, status_code=status.HTTP_200_OK, headers=response_header)
+
 _logger.info('The static files have been added to the application ...')
 
+# ===============================================================================================
+# Jinja2 Template Engine
 # UI Directory
 _templates = Jinja2Templates(directory=f"./ui/{'dev' if _APP_IN_DEVELOPMENT else 'prod'}/jinja2")
 
@@ -250,15 +279,16 @@ async def ui_exception_handler(request: Request, exc: UIException):
         context=ctx
     )
 
+
 @app.get('/error')
 async def error(request: Request):
     raise UIException(status_code=404, detail='This is a test error page', heading='Test Error Page',)
 
-# ----------------------------------------------------------------------------------------------
+
 @app.get('/', status_code=status.HTTP_200_OK)
 async def root(request: Request):
     return _templates.TemplateResponse(
-        name='tuner.min.html',
+        name='/tuner.min.html',
         request=request,
         status_code=status.HTTP_200_OK,
         headers={
@@ -266,11 +296,12 @@ async def root(request: Request):
             'Cache-Control': _static_cache,
         }
     )
+
 
 @app.get('/changelog', status_code=status.HTTP_200_OK)
 async def changelog(request: Request):
     return _templates.TemplateResponse(
-        name='changelog.min.html',
+        name='/changelog.min.html',
         request=request,
         status_code=status.HTTP_200_OK,
         headers={
@@ -280,34 +311,9 @@ async def changelog(request: Request):
     )
 
 
-@app.get('/js/{javascript_path}')
-async def js(
-        javascript_path: str,
-        accept_encoding: Annotated[str | None, Header()]
-):
-    _javascript_filepath = f'./ui/frontend/js/{javascript_path}'
-    if not os.path.exists(_javascript_filepath):
-        return Response(
-            status_code=status.HTTP_404_NOT_FOUND,
-            headers={
-                'Cache-Control': f'max-age={MINUTE}, private, must-revalidate',
-            }
-        )
-    content = open(_javascript_filepath, 'r', encoding='utf8').read()
-    mtime: str = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(os.path.getmtime(_javascript_filepath)))
-    response_header: dict[str, str] = {
-        'Content-Type': 'application/javascript',
-        'Last-Modified': mtime,
-        'Etag': str(hash(content)),
-        'Cache-Control': _static_cache,
-    }
-    if accept_encoding and 'gzip' in accept_encoding and len(content) > _gzip_min_size:
-        content = gzip.compress(content.encode(), compresslevel=_gzip_com_level)
-        response_header['Content-Encoding'] = 'gzip'
-        response_header['Content-Length'] = f'{len(content)}'
-    return Response(content, status_code=status.HTTP_200_OK, headers=response_header)
 
-
+# ----------------------------------------------------------------------------------------------
+# Robots API
 @app.get('/robots.txt', status_code=status.HTTP_200_OK)
 async def robots():
     return PlainTextResponse(
@@ -347,58 +353,15 @@ async def health():
 # ----------------------------------------------------------------------------------------------
 # Backend API
 @app.post('/tune', status_code=status.HTTP_200_OK, response_class=ORJSONResponse)
-async def trigger_tune(request: PG_WEB_TUNE_REQUEST):
-    # Main website
-    t0 = perf_counter()
-    try:
-        backend_request = request.to_backend()
-    except ValidationError as err:
-        return ORJSONResponse(
-            content={'message': 'Invalid Request', 'detail': err.errors()},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    except ValueError as err:
-        return ORJSONResponse(
-            content={'message': 'Invalid Request', 'detail': str(err)},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # pprint(backend_request.options)
-    response: PG_TUNE_RESPONSE = pgtuner.optimize(backend_request)
-
-    # Display the content and perform memory testing validation
-    exclude_names = ['archive_command', 'restore_command', 'archive_cleanup_command', 'recovery_end_command',
-                     'log_directory']
-    if request.ignore_non_performance_setting:
-        exclude_names.extend([
-            'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout', 'log_autovacuum_min_duration',
-            'log_checkpoints', 'log_connections', 'log_disconnections', 'log_duration', 'log_error_verbosity',
-            'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits', 'log_statement',
-            'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
-        ])
-
-    if backend_request.options.operating_system == 'windows':
-        exclude_names.extend(['checkpoint_flush_after', 'bgwriter_flush_after', 'wal_writer_flush_after',
-                              'backend_flush_after'])
-
-    content = response.generate_content(
-        target=PGTUNER_SCOPE.DATABASE_CONFIG,
-        request=backend_request,
-        output_format=request.output_format,
-        exclude_names=set(exclude_names),
-        backup_settings=False, # request.backup_settings,
-    )
-    mem_report = response.report(backend_request.options, request.analyze_with_full_connection_use,
-                                 ignore_report=False)[0]
-
+async def trigger_tune(request: PG_TUNE_REQUEST):
+    t = perf_counter()
     return ORJSONResponse(
-        content={'mem_report': mem_report, 'content': content},
+        content=pgtuner.optimize(request, database_filename=None),
         status_code=status.HTTP_200_OK,
         headers={
             'Content-Type': 'application/json',
             'Cache-Control': f'max-age={30 * SECOND}, private, must-revalidate',
-            'X-Response-BackendTime': f'{(perf_counter() - t0) * K10:.2f}ms'
+            'X-Response-BackendTime': f'{(perf_counter() - t) * K10:.2f}ms'
         }
     )
-
 

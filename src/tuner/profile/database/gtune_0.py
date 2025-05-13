@@ -926,7 +926,6 @@ _DB_WAL_PROFILE = {
                    'then it is best to increase this attribute. Our auto-tuning are set to be range from 16-128 MiB on '
                    'small servers and 32-512 MiB on large servers (ratio from shared_buffers are varied).',
         'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
-        # 'partial_func': lambda value: f'{value // Mi}MB',   # No need high-precision result to translate as KiB
     },
 
     # ============================== ARCHIVE && RECOVERY ==============================

@@ -15,10 +15,9 @@ from src.tuner.data.scope import PG_SCOPE, PGTUNER_SCOPE
 from src.tuner.profile.database.shared import wal_time, checkpoint_time, vacuum_time, vacuum_scale
 from src.utils.mean import generalized_mean
 from src.utils.pydantic_utils import bytesize_to_hr
+from src.utils.timing import time_decorator
 
 __all__ = ['PG_TUNE_REQUEST', 'PG_TUNE_RESPONSE']
-
-from src.utils.timing import time_decorator
 
 _logger = logging.getLogger(APP_NAME_UPPER)
 
@@ -28,7 +27,12 @@ class PG_TUNE_REQUEST(BaseModel):
     """ The PostgreSQL tuning request, initiated by the user's request for tuning up """
     options: PG_TUNE_USR_OPTIONS
     include_comment: bool = False
-    custom_style: str | None = None
+    custom_style: bool = False
+    backup_settings: bool = False
+    output_format: Literal['json', 'conf', 'file'] = 'conf'
+
+    analyze_with_full_connection_use: bool = False
+    ignore_non_performance_setting: bool = True
 
 
 # This section is managed by the application
@@ -62,44 +66,47 @@ class PG_TUNE_RESPONSE(BaseModel):
         return self.outcome_cache[target]
 
 
-    def _generate_content_as_file(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST, backup_settings: bool = True,
-                                  exclude_names: list[str] | set[str] = None) -> str:
+    def _file_config(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST,
+                     exclude_names: list[str] | set[str] = None) -> str:
         content: list[str] = [target.disclaimer(), '\n']
-        if backup_settings:
+        if request.backup_settings:
             content.append(f"# User Options: {request.options.model_dump()}\n")
+
+        custom_style = None if not request.custom_style else "ALTER SYSTEM SET $1 = $2;"
         for idx, (scope, items) in enumerate(self.outcome[target].items()):
             content.append(f'## ===== SCOPE: {scope} ===== \n')
             for item_name, item in items.items():
                 if exclude_names is None or item_name not in exclude_names:
-                    content.append(item.out(request.include_comment, request.custom_style))
+                    _out = item.out(request.include_comment, custom_style)  #.replace(r"''", r"'")
+                    content.append(_out)
                     content.append('\n' * (2 if request.include_comment else 1))
-            # Separate for better view
+            # Separate for a better view
             content.append('\n' * (2 if request.include_comment else 1))
         return ''.join(content)
 
-    def _generate_content_as_response(self, target: PGTUNER_SCOPE, exclude_names: list[str] | set[str] = None,
-                                      output_format='conf') -> str | dict[str, Any]:
+    def _response_config(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST,
+                         exclude_names: list[str] | set[str] = None) -> str | dict[str, Any]:
         content = {
             item_name: item.out_display(override_value=None)
             for _, items in self.outcome[target].items() for item_name, item in items.items()
             if exclude_names is None or item_name not in exclude_names
         }
-        if output_format == 'conf':
+        if request.output_format == 'conf':
             content = '\n'.join(f'{k} = {v}' for k, v in content.items())
         return content
 
     @time_decorator
-    def generate_content(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST,
-                         exclude_names: list[str] | set[str] = None, backup_settings: bool = True,
-                         output_format: Literal['json', 'conf', 'file'] = 'conf') -> str:
+    def generate_config(self, target: PGTUNER_SCOPE, request: PG_TUNE_REQUEST,
+                        exclude_names: list[str] | set[str] = None) -> str:
         if exclude_names is not None and isinstance(exclude_names, list):
             exclude_names = set(exclude_names)
-        if output_format == 'file':
-            return self._generate_content_as_file(target, request, backup_settings, exclude_names)
-        elif output_format in ('json', 'conf'):
-            return self._generate_content_as_response(target, exclude_names, output_format)
 
-        msg: str = f'Invalid output format: {output_format}. Expected one of "json", "conf", "file".'
+        if request.output_format == 'file':
+            return self._file_config(target, request, exclude_names)
+        elif request.output_format in ('json', 'conf'):
+            return self._response_config(target, request, exclude_names)
+
+        msg: str = f'Invalid output format {request.output_format}. Expected one of "json", "conf", "file".'
         _logger.error(msg)
         raise ValueError(msg)
 
