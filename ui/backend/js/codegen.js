@@ -2541,13 +2541,13 @@ function vacuum_scale(threshold, scale_factor) {
  */
 class PG_TUNE_REQUEST {
     constructor(options) {
-        this.options = options.options || {};
-        this.include_comment = options.include_comment || false;
-        this.custom_style = options.custom_style || false;
-        this.backup_settings = options.backup_settings || true;
-        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || true;
-        this.ignore_non_performance_setting = options.ignore_non_performance_setting || false;
-        this.output_format = options.output_format || 'file';
+        this.options = options.options;
+        this.include_comment = options.include_comment ?? false;
+        this.custom_style = options.custom_style ?? false;
+        this.backup_settings = options.backup_settings ?? true;
+        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use ?? true;
+        this.ignore_non_performance_setting = options.ignore_non_performance_setting ?? false;
+        this.output_format = options.output_format ?? 'file';
     }
 }
 
@@ -2580,7 +2580,7 @@ class PG_TUNE_RESPONSE {
 
     _file_config(target, request, exclude_names = null) {
         let content = [target.disclaimer(), '\n'];
-        if (request.backup_settings) {
+        if (request.backup_settings === true) {
             content.push(`# User Options: ${JSON.stringify(request.options)}\n`);
         }
         let custom_style = !request.custom_style ? null : 'ALTER SYSTEM SET $1 = $2;';
@@ -4429,12 +4429,12 @@ function _build_request_from_backend(data) {
     return new PG_TUNE_REQUEST(
         {
             'options': _build_options_from_backend(data.options),
-            'include_comment': data.include_comment ?? false,
-            'custom_style': data.custom_style ?? false,
-            'backup_settings': data.backup_settings ?? true,
-            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? true,
-            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? false,
-            'output_format': data.output_format ?? 'file',
+            'include_comment': data.include_comment,
+            'custom_style': data.custom_style,
+            'backup_settings': data.backup_settings,
+            'analyze_with_full_connection_use': data.analyze_with_full_connection_use,
+            'ignore_non_performance_setting': data.ignore_non_performance_setting ,
+            'output_format': data.output_format,
         }
     )
 }
@@ -4442,12 +4442,12 @@ function _build_request_from_backend(data) {
 function _build_request_from_html() {
     return {
         'options': _build_options_from_html(),
-        'include_comment': _get_checkbox_element(`include_comment`) ?? false,
-        'custom_style': _get_checkbox_element(`custom_style`) ?? false,
-        'backup_settings': _get_checkbox_element(`backup_settings`) ?? true,
-        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? true,
-        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? false,
-        'output_format': _get_text_element(`output_format`) ?? 'file',
+        'include_comment': _get_checkbox_element(`include_comment`),
+        'custom_style': _get_checkbox_element(`custom_style`),
+        'backup_settings': _get_checkbox_element(`backup_settings`),
+        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`),
+        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`),
+        'output_format': _get_text_element(`output_format`),
     }
 }
 

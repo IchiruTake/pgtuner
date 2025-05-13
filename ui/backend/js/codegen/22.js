@@ -5,13 +5,13 @@
  */
 class PG_TUNE_REQUEST {
     constructor(options) {
-        this.options = options.options || {};
-        this.include_comment = options.include_comment || false;
-        this.custom_style = options.custom_style || false;
-        this.backup_settings = options.backup_settings || true;
-        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || true;
-        this.ignore_non_performance_setting = options.ignore_non_performance_setting || false;
-        this.output_format = options.output_format || 'file';
+        this.options = options.options;
+        this.include_comment = options.include_comment ?? false;
+        this.custom_style = options.custom_style ?? false;
+        this.backup_settings = options.backup_settings ?? true;
+        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use ?? true;
+        this.ignore_non_performance_setting = options.ignore_non_performance_setting ?? false;
+        this.output_format = options.output_format ?? 'file';
     }
 }
 
@@ -44,7 +44,7 @@ class PG_TUNE_RESPONSE {
 
     _file_config(target, request, exclude_names = null) {
         let content = [target.disclaimer(), '\n'];
-        if (request.backup_settings) {
+        if (request.backup_settings === true) {
             content.push(`# User Options: ${JSON.stringify(request.options)}\n`);
         }
         let custom_style = !request.custom_style ? null : 'ALTER SYSTEM SET $1 = $2;';

@@ -221,12 +221,12 @@ function _build_request_from_backend(data) {
     return new PG_TUNE_REQUEST(
         {
             'options': _build_options_from_backend(data.options),
-            'include_comment': data.include_comment ?? false,
-            'custom_style': data.custom_style ?? false,
-            'backup_settings': data.backup_settings ?? true,
-            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? true,
-            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? false,
-            'output_format': data.output_format ?? 'file',
+            'include_comment': data.include_comment,
+            'custom_style': data.custom_style,
+            'backup_settings': data.backup_settings,
+            'analyze_with_full_connection_use': data.analyze_with_full_connection_use,
+            'ignore_non_performance_setting': data.ignore_non_performance_setting ,
+            'output_format': data.output_format,
         }
     )
 }
@@ -234,12 +234,12 @@ function _build_request_from_backend(data) {
 function _build_request_from_html() {
     return {
         'options': _build_options_from_html(),
-        'include_comment': _get_checkbox_element(`include_comment`) ?? false,
-        'custom_style': _get_checkbox_element(`custom_style`) ?? false,
-        'backup_settings': _get_checkbox_element(`backup_settings`) ?? true,
-        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? true,
-        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? false,
-        'output_format': _get_text_element(`output_format`) ?? 'file',
+        'include_comment': _get_checkbox_element(`include_comment`),
+        'custom_style': _get_checkbox_element(`custom_style`),
+        'backup_settings': _get_checkbox_element(`backup_settings`),
+        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`),
+        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`),
+        'output_format': _get_text_element(`output_format`),
     }
 }
 
