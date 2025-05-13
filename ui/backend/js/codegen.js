@@ -2543,9 +2543,9 @@ class PG_TUNE_REQUEST {
     constructor(options) {
         this.options = options.options || {};
         this.include_comment = options.include_comment || false;
-        this.custom_style = options.custom_style || null;
-        this.backup_settings = options.backup_settings || false;
-        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || false;
+        this.custom_style = options.custom_style || false;
+        this.backup_settings = options.backup_settings || true;
+        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || true;
         this.ignore_non_performance_setting = options.ignore_non_performance_setting || false;
         this.output_format = options.output_format || 'file';
     }
@@ -2578,16 +2578,17 @@ class PG_TUNE_RESPONSE {
         return this.outcome_cache[target];
     }
 
-    _generate_content_as_file(target, request, backup_settings = true, exclude_names = null) {
+    _file_config(target, request, exclude_names = null) {
         let content = [target.disclaimer(), '\n'];
-        if (backup_settings) {
+        if (request.backup_settings) {
             content.push(`# User Options: ${JSON.stringify(request.options)}\n`);
         }
+        let custom_style = !request.custom_style ? null : 'ALTER SYSTEM SET $1 = $2;';
         for (const [scope, items] of Object.entries(this.outcome[target])) {
             content.push(`## ===== SCOPE: ${scope} ===== \n`);
             for (const [item_name, item] of Object.entries(items)) {
                 if (exclude_names === null || !exclude_names.has(item_name)) {
-                    content.push(item.out(request.include_comment, request.custom_style));
+                    content.push(item.out(request.include_comment, custom_style));
                     content.push(request.include_comment ? '\n\n' : '\n');
                 }
             }
@@ -2596,7 +2597,7 @@ class PG_TUNE_RESPONSE {
         return content.join('');
     }
 
-    _generate_content_as_response(target, exclude_names = null, output_format = 'conf') {
+    _generate_content_as_response(target, request, exclude_names = null) {
         let content = {};
         for (const [_, items] of Object.entries(this.outcome[target])) {
             for (const [item_name, item] of Object.entries(items)) {
@@ -2605,22 +2606,22 @@ class PG_TUNE_RESPONSE {
                 }
             }
         }
-        if (output_format === 'conf') {
+        if (request.output_format === 'conf') {
             return Object.entries(content).map(([k, v]) => `${k} = ${v}`).join('\n');
         }
         return content;
     }
 
-    generate_content(target, request, exclude_names = null, backup_settings = true, output_format = 'conf') {
+    generate_content(target, request, exclude_names = null) {
         if (exclude_names !== null && Array.isArray(exclude_names)) {
             exclude_names = new Set(exclude_names);
         }
-        if (output_format === 'file') {
-            return this._generate_content_as_file(target, request, backup_settings, exclude_names);
-        } else if (['json', 'conf'].includes(output_format)) {
-            return this._generate_content_as_response(target, exclude_names, output_format);
+        if (request.output_format === 'file') {
+            return this._generate_content_as_file(target, request, exclude_names);
+        } else if (['json', 'conf'].includes(request.output_format)) {
+            return this._generate_content_as_response(target, request, exclude_names);
         } else {
-            throw new Error(`Invalid output format: ${output_format}. Expected one of "json", "conf", "file".`);
+            throw new Error(`Invalid output format: ${request.output_format}. Expected one of "json", "conf", "file".`);
         }
     }
 
@@ -4429,25 +4430,23 @@ function _build_request_from_backend(data) {
         {
             'options': _build_options_from_backend(data.options),
             'include_comment': data.include_comment ?? false,
-            'custom_style': data.custom_style ?? null,
-            'backup_settings': data.backup_settings ?? false,
-            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? false,
-            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? true,
+            'custom_style': data.custom_style ?? false,
+            'backup_settings': data.backup_settings ?? true,
+            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? true,
+            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? false,
             'output_format': data.output_format ?? 'file',
         }
     )
 }
 
 function _build_request_from_html() {
-    let alter_style = _get_checkbox_element(`alter_style`) ?? false;
-    let custom_style = !alter_style ? null : 'ALTER SYSTEM SET $1 = $2;'
     return {
         'options': _build_options_from_html(),
         'include_comment': _get_checkbox_element(`include_comment`) ?? false,
-        'custom_style': custom_style,
-        'backup_settings': _get_checkbox_element(`backup_settings`) ?? false,
-        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? false,
-        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? true,
+        'custom_style': _get_checkbox_element(`custom_style`) ?? false,
+        'backup_settings': _get_checkbox_element(`backup_settings`) ?? true,
+        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? true,
+        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? false,
         'output_format': _get_text_element(`output_format`) ?? 'file',
     }
 }
@@ -4489,7 +4488,7 @@ function web_optimize(request) {
             'backend_flush_after');
     }
     const content = response.generate_content(
-        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names, request.backup_settings, request.output_format
+        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names
     );
     const mem_report = response.report(
         request.options, request.analyze_with_full_connection_use, false

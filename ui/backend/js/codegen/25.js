@@ -222,25 +222,23 @@ function _build_request_from_backend(data) {
         {
             'options': _build_options_from_backend(data.options),
             'include_comment': data.include_comment ?? false,
-            'custom_style': data.custom_style ?? null,
-            'backup_settings': data.backup_settings ?? false,
-            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? false,
-            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? true,
+            'custom_style': data.custom_style ?? false,
+            'backup_settings': data.backup_settings ?? true,
+            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? true,
+            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? false,
             'output_format': data.output_format ?? 'file',
         }
     )
 }
 
 function _build_request_from_html() {
-    let alter_style = _get_checkbox_element(`alter_style`) ?? false;
-    let custom_style = !alter_style ? null : 'ALTER SYSTEM SET $1 = $2;'
     return {
         'options': _build_options_from_html(),
         'include_comment': _get_checkbox_element(`include_comment`) ?? false,
-        'custom_style': custom_style,
-        'backup_settings': _get_checkbox_element(`backup_settings`) ?? false,
-        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? false,
-        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? true,
+        'custom_style': _get_checkbox_element(`custom_style`) ?? false,
+        'backup_settings': _get_checkbox_element(`backup_settings`) ?? true,
+        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? true,
+        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? false,
         'output_format': _get_text_element(`output_format`) ?? 'file',
     }
 }
@@ -282,7 +280,7 @@ function web_optimize(request) {
             'backend_flush_after');
     }
     const content = response.generate_content(
-        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names, request.backup_settings, request.output_format
+        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names
     );
     const mem_report = response.report(
         request.options, request.analyze_with_full_connection_use, false
