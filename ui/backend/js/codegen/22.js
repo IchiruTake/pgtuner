@@ -55,7 +55,7 @@ class PG_TUNE_RESPONSE {
                     content.push(request.include_comment ? '\n\n' : '\n');
                 }
             }
-            content.push('\n' + (request.include_comment ? '\n\n' : ''));
+            content.push(request.include_comment ? '\n\n' : '\n');
         }
         return content.join('');
     }

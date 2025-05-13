@@ -74,10 +74,7 @@ class PG_TUNE_RESPONSE(BaseModel):
                     content.append(item.out(request.include_comment, request.custom_style))
                     content.append('\n' * (2 if request.include_comment else 1))
             # Separate for better view
-            if request.include_comment:
-                content.append('\n\n\n')
-            else:
-                content.append('\n')
+            content.append('\n' * (2 if request.include_comment else 1))
         return ''.join(content)
 
     def _generate_content_as_response(self, target: PGTUNER_SCOPE, exclude_names: list[str] | set[str] = None,

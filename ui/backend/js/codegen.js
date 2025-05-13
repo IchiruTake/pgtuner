@@ -943,7 +943,7 @@ class PG_TUNE_ITEM {
 
     out(include_comment = false, custom_style = null) {
         let texts = [];
-        if (include_comment && this.comment !== null) {
+        if (include_comment && this.comment !== null && this.comment.trim() !== '') {
             // Transform the comment by prefixing each line with "# "
             const format_comment = String(this.comment).replace('\n', '\n# ');
             texts.push(`# ${format_comment}`);
@@ -2591,7 +2591,7 @@ class PG_TUNE_RESPONSE {
                     content.push(request.include_comment ? '\n\n' : '\n');
                 }
             }
-            content.push('\n' + (request.include_comment ? '\n\n' : ''));
+            content.push(request.include_comment ? '\n\n' : '\n');
         }
         return content.join('');
     }
