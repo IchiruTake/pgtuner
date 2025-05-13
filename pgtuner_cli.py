@@ -45,6 +45,7 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
         filepath = f'{PGTUNER_SCOPE.KERNEL_SYSCTL.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
         result = pgtuner.write(request, response, PGTUNER_SCOPE.KERNEL_SYSCTL, output_format=output_format,
                                output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
+
         # pprint(result)
 
 
@@ -53,6 +54,11 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
         filepath = f'{PGTUNER_SCOPE.DATABASE_CONFIG.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
         result = pgtuner.write(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, output_format=output_format,
                                output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
+        filepath = f'{PGTUNER_SCOPE.DATABASE_CONFIG.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.txt'
+        with open(os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), 'w') as f:
+            f.write(response.report(request.options, use_full_connection=True, ignore_report=False)[0])
+
+
         # pprint(result)
 
     # Test the logger of rotation
@@ -60,7 +66,7 @@ def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'f
     # for _handlers in _logger.handlers:
     #     if isinstance(_handlers, (logging.handlers.RotatingFileHandler, logging.handlers.TimedRotatingFileHandler)):
     #         _handlers.doRollover()
-    return None
+    return response
 
 
 
@@ -141,6 +147,6 @@ if __name__ == "__main__":
         offshore_replication=False,
     )
     rq = PG_TUNE_REQUEST(options=options, include_comment=False, custom_style=None)
-    # optimize(rq, output_format='file')
-    print(generalized_mean(1, 2.0, level=-5, round_ndigits=4))
+    response = optimize(rq, output_format='file')
+    # print(generalized_mean(1, 2.0, level=-5, round_ndigits=4))
     pass
