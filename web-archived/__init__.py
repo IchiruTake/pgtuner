@@ -45,7 +45,7 @@ class PG_WEB_TUNE_REQUEST(BaseModel):
     ignore_non_performance_setting: bool = True
 
     def to_backend(self) -> PG_TUNE_REQUEST:
-        custom_style = None if not self.alter_style else 'ALTER SYSTEM SET $1 = $2;'
+        custom_style = None if not self.alter_style else "ALTER SYSTEM SET $1 = '$2';"
         backend_request = PG_TUNE_REQUEST(
             options=self.user_options,
             include_comment=self.include_comment,
