@@ -261,7 +261,6 @@ function web_optimize(request) {
         tuning_items = DB13_CONFIG_PROFILE;
     }
     console.log(request);
-    console.log(request.options);
     Optimize(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, tuning_items);
     if (request.options.enable_database_correction_tuning) {
         correction_tune(request, response);

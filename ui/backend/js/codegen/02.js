@@ -204,29 +204,21 @@ class PG_TUNE_ITEM {
         this.comment = data.comment || null;
 
         // Custom-reserved variables for developers
-        this.style = data.style !== undefined ? data.style : "$1 = '$2'";
+        this.style = data.style ?? "$1 = $2";
         this.trigger = data.trigger;
         this.partial_func = data.partial_func || null;
         this.hardware_scope = data.hardware_scope; // Expected as a tuple [hardware type, sizing value]
     }
 
-    out(output_if_difference_only = false, include_comment = false, custom_style = null) {
-        // If output_if_difference_only is true and before equals after, return an empty string.
-        if (output_if_difference_only && this.before === this.after) {
-            return '';
-        }
+    out(include_comment = false, custom_style = null) {
         let texts = [];
-
         if (include_comment && this.comment !== null) {
             // Transform the comment by prefixing each line with "# "
-            const formattedComment = String(this.comment)
-                .split('\n')
-                .map(line => `# ${line}`)
-                .join('\n');
-            texts.push(formattedComment);
+            const format_comment = String(this.comment).replace('\n', '\n# ');
+            texts.push(`# ${format_comment}`);
+            texts.push('\n');
         }
-
-        const style = custom_style || this.style || "$1 = $2";
+        const style = (custom_style ?? this.style) ?? "$1 = $2";
         if (!style.includes("$1") || !style.includes("$2")) {
             throw new Error(`Invalid style configuration: ${style} due to missing $1 and $2`);
         }
@@ -240,7 +232,7 @@ class PG_TUNE_ITEM {
     }
 
     out_display(override_value = null) {
-        let value = override_value !== null ? override_value : this.after;
+        let value = override_value ?? this.after;
 
         if (this.partial_func && typeof this.partial_func === 'function') {
             value = this.partial_func(value);

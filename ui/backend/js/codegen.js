@@ -935,29 +935,21 @@ class PG_TUNE_ITEM {
         this.comment = data.comment || null;
 
         // Custom-reserved variables for developers
-        this.style = data.style !== undefined ? data.style : "$1 = '$2'";
+        this.style = data.style ?? "$1 = $2";
         this.trigger = data.trigger;
         this.partial_func = data.partial_func || null;
         this.hardware_scope = data.hardware_scope; // Expected as a tuple [hardware type, sizing value]
     }
 
-    out(output_if_difference_only = false, include_comment = false, custom_style = null) {
-        // If output_if_difference_only is true and before equals after, return an empty string.
-        if (output_if_difference_only && this.before === this.after) {
-            return '';
-        }
+    out(include_comment = false, custom_style = null) {
         let texts = [];
-
         if (include_comment && this.comment !== null) {
             // Transform the comment by prefixing each line with "# "
-            const formattedComment = String(this.comment)
-                .split('\n')
-                .map(line => `# ${line}`)
-                .join('\n');
-            texts.push(formattedComment);
+            const format_comment = String(this.comment).replace('\n', '\n# ');
+            texts.push(`# ${format_comment}`);
+            texts.push('\n');
         }
-
-        const style = custom_style || this.style || "$1 = $2";
+        const style = (custom_style ?? this.style) ?? "$1 = $2";
         if (!style.includes("$1") || !style.includes("$2")) {
             throw new Error(`Invalid style configuration: ${style} due to missing $1 and $2`);
         }
@@ -971,7 +963,7 @@ class PG_TUNE_ITEM {
     }
 
     out_display(override_value = null) {
-        let value = override_value !== null ? override_value : this.after;
+        let value = override_value ?? this.after;
 
         if (this.partial_func && typeof this.partial_func === 'function') {
             value = this.partial_func(value);
@@ -1617,9 +1609,9 @@ function _GetReservedConns(options, minimum, maximum, superuser_mode = false, ba
     } else {
         superuser_descale_ratio = options.tuning_kwargs.superuser_reserved_connections_scale_ratio;
         descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_descale_ratio;
-        reserved_connections = Math.floor(options.vcpu / descale_factor);
+        reserved_connections = options.vcpu / descale_factor;
     }
-    return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection;
+    return cap_value(Math.floor(reserved_connections), minimum, maximum) + base_reserved_connection;
 }
 
 function _CalcEffectiveCacheSize(group_cache, global_cache, options, response) {
@@ -1677,9 +1669,9 @@ _DB_CONN_PROFILE = {
         'instructions': {
             'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 30),
             'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 65),
-            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 100),
-            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 40, 175),
-            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 50, 250),
+            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 20, 100),
+            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 25, 175),
+            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 250),
         },
         'default': 30,
     },
@@ -1758,7 +1750,7 @@ _DB_VACUUM_PROFILE = {
     },
     'autovacuum_vacuum_cost_delay': { 'default': 2, 'partial_func': (value) => `${value}ms`, },
     'autovacuum_vacuum_cost_limit': { 'default': -1,  },
-    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}s`, },
+    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}ms`, },
     'vacuum_cost_limit': {
         'instructions': {
             'large_default': 500,
@@ -1918,6 +1910,7 @@ _DB_WAL_PROFILE = {
                 BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
     // ============================== ARCHIVE && RECOVERY ==============================
     'archive_mode': { 'default': 'on', },
@@ -4475,7 +4468,6 @@ function web_optimize(request) {
         tuning_items = DB13_CONFIG_PROFILE;
     }
     console.log(request);
-    console.log(request.options);
     Optimize(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, tuning_items);
     if (request.options.enable_database_correction_tuning) {
         correction_tune(request, response);

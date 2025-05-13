@@ -38,6 +38,7 @@ class PG_TUNE_ITEM(BaseModel):
         if include_comment:
             comment = str(pformat(self.comment)).replace('\n', '\n# ')
             texts.append(f"# {comment}")
+            texts.append('\n')
 
         style = custom_style or self.style or "$1 = $2"
         assert "$1" in style and "$2" in style, f"Invalid style configuration: {style} due to missing $1 and $2"
