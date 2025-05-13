@@ -43,7 +43,7 @@ function _EstimateKernelInUseMemory() {
 }
 
 function _EstimateMonitoringInUseMemory() {
-    // Ensure these part synchronized with Python code
+    // Ensure these parts synchronized with Python code
     const monitoring_memory_block = document.getElementById("base_monitoring_memory_usage_in_mib");
     let monitoring_memory = monitoring_memory_block.value * 1;  // To get a copy
     if (monitoring_memory === -1) {

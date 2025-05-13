@@ -15,17 +15,14 @@ This work may not be there without these great projects:
 - timescaledb-tune: https://github.com/timescale/timescaledb-tune
 
 """
-import os
 from zoneinfo import ZoneInfo
-from typing import Literal
 from datetime import datetime
 
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
 from src.tuner.data.workload import PG_SIZING, PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.utils.mean import generalized_mean
-from src.utils.static import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR, K10, Mi, Ki, \
-    BASE_WAL_SEGMENT_SIZE
+from src.utils.static import DATETIME_PATTERN_FOR_FILENAME, Gi, K10, Mi, Ki, BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.scope import PGTUNER_SCOPE
 
 from src import pgtuner
@@ -116,7 +113,7 @@ if __name__ == "__main__":
         custom_style=False,
         backup_settings=True,
         output_format='file',
-        analyze_with_full_connection_use=False,         # Just a final analyze report
+        analyze_with_full_connection_use=True,         # Just a final analyze report
         ignore_non_performance_setting=False,
     )
 
