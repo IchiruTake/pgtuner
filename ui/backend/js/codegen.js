@@ -2597,7 +2597,7 @@ class PG_TUNE_RESPONSE {
         return content.join('');
     }
 
-    _generate_content_as_response(target, request, exclude_names = null) {
+    _response_config(target, request, exclude_names = null) {
         let content = {};
         for (const [_, items] of Object.entries(this.outcome[target])) {
             for (const [item_name, item] of Object.entries(items)) {
@@ -2617,9 +2617,9 @@ class PG_TUNE_RESPONSE {
             exclude_names = new Set(exclude_names);
         }
         if (request.output_format === 'file') {
-            return this._generate_content_as_file(target, request, exclude_names);
+            return this._file_config(target, request, exclude_names);
         } else if (['json', 'conf'].includes(request.output_format)) {
-            return this._generate_content_as_response(target, request, exclude_names);
+            return this._response_config(target, request, exclude_names);
         } else {
             throw new Error(`Invalid output format: ${request.output_format}. Expected one of "json", "conf", "file".`);
         }
