@@ -256,10 +256,9 @@ async def error(request: Request):
 
 # ----------------------------------------------------------------------------------------------
 @app.get('/', status_code=status.HTTP_200_OK)
-@app.get('/tuner', status_code=status.HTTP_200_OK)
 async def root(request: Request):
     return _templates.TemplateResponse(
-        name='/tuner.min.html',
+        name='tuner.min.html',
         request=request,
         status_code=status.HTTP_200_OK,
         headers={
@@ -271,7 +270,7 @@ async def root(request: Request):
 @app.get('/changelog', status_code=status.HTTP_200_OK)
 async def changelog(request: Request):
     return _templates.TemplateResponse(
-        name='/changelog.min.html',
+        name='changelog.min.html',
         request=request,
         status_code=status.HTTP_200_OK,
         headers={
