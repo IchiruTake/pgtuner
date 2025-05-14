@@ -8,20 +8,17 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Annotated, Mapping
-from typing import Literal
 
 from fastapi import FastAPI, Header, Request
 from fastapi import status
 from fastapi.responses import ORJSONResponse, Response
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import PlainTextResponse
 from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp
 
 from src import pgtuner
-from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.tuner.pg_dataclass import PG_TUNE_REQUEST
 from src.utils.static import APP_NAME_LOWER, __version__ as backend_version, HOUR, MINUTE, \
     SECOND, TIMEZONE, K10, APP_NAME_UPPER
@@ -32,25 +29,6 @@ from web.middlewares.middlewares import HeaderManageMiddleware, RateLimitMiddlew
 
 
 # ==================================================================================================
-class PG_WEB_TUNE_REQUEST(BaseModel):
-    user_options: PG_TUNE_USR_OPTIONS
-    include_comment: bool = False
-    alter_style: bool = False
-    backup_settings: bool = False
-    output_format: Literal['json', 'conf', 'file'] = 'conf'
-
-    analyze_with_full_connection_use: bool = False
-    ignore_non_performance_setting: bool = True
-
-    def to_backend(self) -> PG_TUNE_REQUEST:
-        custom_style = None if not self.alter_style else "ALTER SYSTEM SET $1 = '$2';"
-        backend_request = PG_TUNE_REQUEST(
-            options=self.user_options,
-            include_comment=self.include_comment,
-            custom_style=custom_style
-        )
-        return backend_request
-
 __all__ = ['app']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
@@ -184,14 +162,18 @@ _logger.info('Mounting the static files to the application ...')
 _logger.info(f'Developer Mode: {_APP_IN_DEVELOPMENT}')
 
 _static_mapper = {
-    '/': f'./ui/frontend',
+    '/base': f'./ui/frontend',
     '/resource': f'./ui/frontend/resource',
     '/css': f'./ui/frontend/css',
     # '/js': './ui/frontend/js',
 }
 try:
     for path, directory in _static_mapper.items():
-        app.mount(path, StaticFiles(directory=directory), name=path.split('/')[-1])
+        app.mount(
+            path,
+            StaticFiles(directory=directory),
+            # name=path.split('/')[-1]
+        ) # WARNING: The path /* is not co-supported when we defined the path below
 except (FileNotFoundError, RuntimeError) as e:
     _logger.warning(f'The static files have not been mounted: {e}')
     raise e
@@ -228,7 +210,7 @@ _logger.info('The static files have been added to the application ...')
 # ===============================================================================================
 # Jinja2 Template Engine
 # UI Directory
-_templates = Jinja2Templates(directory=f"./ui/{'dev' if _APP_IN_DEVELOPMENT else 'prod'}/jinja2")
+_templates = Jinja2Templates(directory=f"./ui/dev/jinja2")
 
 # UI Exception Error
 class UIException(StarletteHTTPException):
