@@ -26,7 +26,7 @@
                         <li>PY_BKE: Now user has to self-supplied the configuration they wanted rather than naively use the default input. See `./pgtuner_cli.py` for usage</li>
                         <li>CONF: Introduce the parameter `cpu_to_connection_scale_ratio` with default to 4 (range from [2.5, 10]) to support the variety of scaling the number of connections in the general optimization phase.</li>
                         <li>CONF: Increase the parameter `memory_connection_to_dedicated_os_ratio` from 0.3 to 0.7</li>
-                        <li>CONF: Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multipler is 2.0, the working memory usage per connection for one arbitrary operation is reduced from 1.1196 to 1.1417 </li>
+                        <li>CONF: Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multipler is 2.0, the working memory usage per connection for one arbitrary operation is increased from 1.1196 to 1.1417 </li>
                         <li>CONF: Revert the upper bound parameter of `wal_segment_size` to 2 GiB instead of 128 MiB (scale from 3 to 7)</li>
                         <li>CONF: Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.05</li>
                         <li>CONF: Change the default parameter of `mem_pool_tuning_ratio` from 0.6 to 0.4</li>
