@@ -152,9 +152,9 @@ function _GetReservedConns(options, minimum, maximum, superuser_mode = false, ba
     } else {
         superuser_descale_ratio = options.tuning_kwargs.superuser_reserved_connections_scale_ratio;
         descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_descale_ratio;
-        reserved_connections = Math.floor(options.vcpu / descale_factor);
+        reserved_connections = options.vcpu / descale_factor;
     }
-    return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection;
+    return cap_value(Math.floor(reserved_connections), minimum, maximum) + base_reserved_connection;
 }
 
 function _CalcEffectiveCacheSize(group_cache, global_cache, options, response) {
@@ -212,9 +212,9 @@ _DB_CONN_PROFILE = {
         'instructions': {
             'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 30),
             'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 65),
-            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 100),
-            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 40, 175),
-            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 50, 250),
+            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 20, 100),
+            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 25, 175),
+            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 250),
         },
         'default': 30,
     },
@@ -293,7 +293,7 @@ _DB_VACUUM_PROFILE = {
     },
     'autovacuum_vacuum_cost_delay': { 'default': 2, 'partial_func': (value) => `${value}ms`, },
     'autovacuum_vacuum_cost_limit': { 'default': -1,  },
-    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}s`, },
+    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}ms`, },
     'vacuum_cost_limit': {
         'instructions': {
             'large_default': 500,
@@ -363,7 +363,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25), 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
@@ -453,6 +453,7 @@ _DB_WAL_PROFILE = {
                 BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
     // ============================== ARCHIVE && RECOVERY ==============================
     'archive_mode': { 'default': 'on', },

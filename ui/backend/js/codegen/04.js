@@ -60,9 +60,9 @@ class PG_TUNE_USR_OPTIONS {
         this.max_backup_replication_tool = options.max_backup_replication_tool ?? PG_BACKUP_TOOL.PG_BASEBACKUP;
         this.opt_transaction_lost = options.opt_transaction_lost ?? PG_PROFILE_OPTMODE.NONE;
         this.opt_wal_buffers = options.opt_wal_buffers ?? PG_PROFILE_OPTMODE.SPIDEY;
-        this.max_time_transaction_loss_allow_in_second = options.max_time_transaction_loss_allow_in_second ?? 650;
-        this.max_num_stream_replicas_on_standby = options.max_num_stream_replicas_on_standby ?? 0;
-        this.max_num_logical_replicas_on_standby = options.max_num_logical_replicas_on_standby ?? 0;
+        this.max_time_transaction_loss_allow_in_millisecond = options.max_time_transaction_loss_allow_in_millisecond ?? 650;
+        this.max_num_stream_replicas_on_primary = options.max_num_stream_replicas_on_primary ?? 0;
+        this.max_num_logical_replicas_on_primary = options.max_num_logical_replicas_on_primary ?? 0;
         this.offshore_replication = options.offshore_replication ?? false;
         // Database tuning options
 

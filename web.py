@@ -5,7 +5,7 @@ import web
 import os
 
 from src.utils.static import YEAR
-from web.env import OsGetEnvBool
+from src.utils.base import OsGetEnvBool
 
 if __name__ == "__main__":
     if os.getenv(f'PORT') is not None:

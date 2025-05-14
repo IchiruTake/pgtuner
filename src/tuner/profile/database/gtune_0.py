@@ -200,12 +200,12 @@ def _GetReservedConns(options: PG_TUNE_USR_OPTIONS, minimum: int, maximum: int, 
 
     # 1.5x here is heuristically defined to limit the number of superuser reserved connections
     if not superuser_mode:
-        reserved_connections: int = options.vcpu // __DESCALE_FACTOR_RESERVED_DB_CONNECTION
+        reserved_connections: int = options.vcpu / __DESCALE_FACTOR_RESERVED_DB_CONNECTION
     else:
         superuser_descale_ratio = options.tuning_kwargs.superuser_reserved_connections_scale_ratio
         descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_descale_ratio
-        reserved_connections: int = int(options.vcpu / descale_factor)
-    return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection
+        reserved_connections: int = options.vcpu / descale_factor
+    return cap_value(int(reserved_connections), minimum, maximum) + base_reserved_connection
 
 
 def _CalcEffectiveCacheSize(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, 
@@ -271,9 +271,9 @@ _DB_CONN_PROFILE = {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 10, 30),
             'medium': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 65),
-            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 30, 100),
-            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 40, 175),
-            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 50, 250),
+            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 20, 100),
+            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 25, 175),
+            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 30, 250),
         },
         'default': 30,
         'comment': "The maximum number of client connections allowed. The default is 50. But by testing and some "
@@ -672,7 +672,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu * 1.125), 4, 512), group_cache['max_worker_processes']),
+        min(cap_value(int(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
         'default': 8,
         'comment': 'Sets the maximum number of workers that the cluster can support for parallel operations. The '
                    'supported range is [4, 512], with default to 1.125x of the logical CPU count (8 by official '
@@ -926,7 +926,6 @@ _DB_WAL_PROFILE = {
                    'then it is best to increase this attribute. Our auto-tuning are set to be range from 16-128 MiB on '
                    'small servers and 32-512 MiB on large servers (ratio from shared_buffers are varied).',
         'partial_func': lambda value: f'{value // DB_PAGE_SIZE * (DB_PAGE_SIZE // Ki)}kB',
-        # 'partial_func': lambda value: f'{value // Mi}MB',   # No need high-precision result to translate as KiB
     },
 
     # ============================== ARCHIVE && RECOVERY ==============================

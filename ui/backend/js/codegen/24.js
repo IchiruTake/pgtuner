@@ -174,11 +174,11 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the random_page_cost by converting to disk throughput, then compute its minimum
     let after_random_page_cost = 1.01
     if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `hdd`, `weak`)) {
-        after_random_page_cost = 3.25
-    } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `hdd`, `strong`)) {
         after_random_page_cost = 2.60
+    } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `hdd`, `strong`)) {
+        after_random_page_cost = 2.20
     } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `san`, `weak`)) {
-        after_random_page_cost = 2.00
+        after_random_page_cost = 1.75
     } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `san`, `strong`)) {
         after_random_page_cost = 1.50
     } else if (PG_DISK_SIZING.matchOneDisk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.SSDv1)) {

@@ -8,7 +8,7 @@ COPY requirements.bump.web.txt .
 RUN pip install --upgrade pip && pip install -r requirements.bump.web.txt
 
 # Copy the rest of the files
-COPY /.pgtuner_dba /.pgtuner_dba
+COPY /.pgtuner /.pgtuner
 COPY /log /log
 COPY /conf /conf
 COPY /src /src

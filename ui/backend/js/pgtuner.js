@@ -1,5 +1,5 @@
 // ----------------- Fetching API -----------------
-const USE_PYTHON_BACKEND = false;
+let USE_PYTHON_BACKEND = false;
 function update_response(id, value) {
     const response_box_block = document.getElementById(id);
     if (response_box_block.readOnly) {

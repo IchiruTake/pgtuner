@@ -29,6 +29,7 @@
                         <li>CONF: Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multipler is 2.0, the working memory usage per connection for one arbitrary operation is reduced from 1.1196 to 1.1417 </li>
                         <li>CONF: Revert the upper bound parameter of `wal_segment_size` to 2 GiB instead of 128 MiB (scale from 3 to 7)</li>
                         <li>CONF: Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.05</li>
+                        <li>CONF: Change the default parameter of `mem_pool_tuning_ratio` from 0.6 to 0.4</li>
                         <li>CONF: Remove all `*_profile` parameters except the `workload_profile` parameter.</li>
                         <li>CONF: The supported PostgreSQL version is using the integer instead of string (including the term 'latest').</li>
                         <li>CONF: Remove parameters of the OS and DB Log disk </li>
@@ -46,6 +47,7 @@
                         <li>GTUNE: The parameter `archive_timeout` is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.</li>
                         <li>GTUNE: Add the configurations of `join_collapse_limit`, `from_collapse_limit`, and `plan_cache_mode`.</li>
                         <li>GTUNE: Rework the self-tuning of `parallel_tuple_cost` configuration</li>
+                        <li>GTUNE: Adjust the scale ratio `max_parallel_workers` (vcpu * 1.125 ->> vcpu * 1.25 + 1) and `max_parallel_workers_per_gather` (vcpu / 3 ->> vcpu / 2.5) to have more parallel workers  </li>
                         <li>STUNE: Reduce the result of `cpu_tuple_cost` and `parallel_tuple_cost`</li>
                         <li>STUNE: Simplify (reduce) configuration value of `default_statistics_target`</li>
                         <li>STUNE: Simplify (reduce) configuration value of `after_commit_delay` to be workload-based rather than disk-based</li>

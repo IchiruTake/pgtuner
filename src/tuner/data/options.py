@@ -351,7 +351,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     )
 
     vcpu: PositiveInt = Field(
-        default=4, ge=1, frozen=True, allow_inf_nan=False,
+        default=4, ge=1, frozen=True,
         description='The number of vCPU (logical CPU) that the PostgreSQL server is running on. Default is 4 vCPUs.'
     )
     total_ram: ByteSize | PositiveInt = Field(

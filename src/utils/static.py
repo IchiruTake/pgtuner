@@ -13,7 +13,7 @@ __version__ = '0.1.5'
 __VERSION__ = __version__
 __AUTHOR__ = 'Ichiru Take'
 
-APP_NAME = 'PGTUNER_DBA'  # This name is used on log.toml,
+APP_NAME = 'PGTUNER'  # This name is used on log.toml,
 APP_NAME_LOWER: str = APP_NAME.lower()
 APP_NAME_UPPER: str = APP_NAME.upper()
 _TIMEZONE = os.getenv('timezone', 'UTC')  # 'UTC' or 'Europe/Paris' or 'Asia/Saigon'

@@ -935,29 +935,21 @@ class PG_TUNE_ITEM {
         this.comment = data.comment || null;
 
         // Custom-reserved variables for developers
-        this.style = data.style !== undefined ? data.style : "$1 = '$2'";
+        this.style = data.style ?? "$1 = $2";
         this.trigger = data.trigger;
         this.partial_func = data.partial_func || null;
         this.hardware_scope = data.hardware_scope; // Expected as a tuple [hardware type, sizing value]
     }
 
-    out(output_if_difference_only = false, include_comment = false, custom_style = null) {
-        // If output_if_difference_only is true and before equals after, return an empty string.
-        if (output_if_difference_only && this.before === this.after) {
-            return '';
-        }
+    out(include_comment = false, custom_style = null) {
         let texts = [];
-
-        if (include_comment && this.comment !== null) {
+        if (include_comment && this.comment !== null && this.comment.trim() !== '') {
             // Transform the comment by prefixing each line with "# "
-            const formattedComment = String(this.comment)
-                .split('\n')
-                .map(line => `# ${line}`)
-                .join('\n');
-            texts.push(formattedComment);
+            const format_comment = String(this.comment).replace('\n', '\n# ');
+            texts.push(`# ${format_comment}`);
+            texts.push('\n');
         }
-
-        const style = custom_style || this.style || "$1 = $2";
+        const style = (custom_style ?? this.style) ?? "$1 = $2";
         if (!style.includes("$1") || !style.includes("$2")) {
             throw new Error(`Invalid style configuration: ${style} due to missing $1 and $2`);
         }
@@ -971,7 +963,7 @@ class PG_TUNE_ITEM {
     }
 
     out_display(override_value = null) {
-        let value = override_value !== null ? override_value : this.after;
+        let value = override_value ?? this.after;
 
         if (this.partial_func && typeof this.partial_func === 'function') {
             value = this.partial_func(value);
@@ -1361,9 +1353,9 @@ class PG_TUNE_USR_OPTIONS {
         this.max_backup_replication_tool = options.max_backup_replication_tool ?? PG_BACKUP_TOOL.PG_BASEBACKUP;
         this.opt_transaction_lost = options.opt_transaction_lost ?? PG_PROFILE_OPTMODE.NONE;
         this.opt_wal_buffers = options.opt_wal_buffers ?? PG_PROFILE_OPTMODE.SPIDEY;
-        this.max_time_transaction_loss_allow_in_second = options.max_time_transaction_loss_allow_in_second ?? 650;
-        this.max_num_stream_replicas_on_standby = options.max_num_stream_replicas_on_standby ?? 0;
-        this.max_num_logical_replicas_on_standby = options.max_num_logical_replicas_on_standby ?? 0;
+        this.max_time_transaction_loss_allow_in_millisecond = options.max_time_transaction_loss_allow_in_millisecond ?? 650;
+        this.max_num_stream_replicas_on_primary = options.max_num_stream_replicas_on_primary ?? 0;
+        this.max_num_logical_replicas_on_primary = options.max_num_logical_replicas_on_primary ?? 0;
         this.offshore_replication = options.offshore_replication ?? false;
         // Database tuning options
 
@@ -1617,9 +1609,9 @@ function _GetReservedConns(options, minimum, maximum, superuser_mode = false, ba
     } else {
         superuser_descale_ratio = options.tuning_kwargs.superuser_reserved_connections_scale_ratio;
         descale_factor = __DESCALE_FACTOR_RESERVED_DB_CONNECTION * superuser_descale_ratio;
-        reserved_connections = Math.floor(options.vcpu / descale_factor);
+        reserved_connections = options.vcpu / descale_factor;
     }
-    return cap_value(reserved_connections, minimum, maximum) + base_reserved_connection;
+    return cap_value(Math.floor(reserved_connections), minimum, maximum) + base_reserved_connection;
 }
 
 function _CalcEffectiveCacheSize(group_cache, global_cache, options, response) {
@@ -1677,9 +1669,9 @@ _DB_CONN_PROFILE = {
         'instructions': {
             'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 30),
             'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 65),
-            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 100),
-            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 40, 175),
-            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 50, 250),
+            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 20, 100),
+            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 25, 175),
+            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 250),
         },
         'default': 30,
     },
@@ -1758,7 +1750,7 @@ _DB_VACUUM_PROFILE = {
     },
     'autovacuum_vacuum_cost_delay': { 'default': 2, 'partial_func': (value) => `${value}ms`, },
     'autovacuum_vacuum_cost_limit': { 'default': -1,  },
-    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}s`, },
+    'vacuum_cost_delay': { 'default': 0, 'partial_func': (value) => `${value}ms`, },
     'vacuum_cost_limit': {
         'instructions': {
             'large_default': 500,
@@ -1828,7 +1820,7 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25), 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
@@ -1918,6 +1910,7 @@ _DB_WAL_PROFILE = {
                 BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
+        'partial_func': (value) => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`,
     },
     // ============================== ARCHIVE && RECOVERY ==============================
     'archive_mode': { 'default': 'on', },
@@ -2548,13 +2541,13 @@ function vacuum_scale(threshold, scale_factor) {
  */
 class PG_TUNE_REQUEST {
     constructor(options) {
-        this.options = options.options || {};
-        this.include_comment = options.include_comment || false;
-        this.custom_style = options.custom_style || null;
-        this.backup_settings = options.backup_settings || false;
-        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use || false;
-        this.ignore_non_performance_setting = options.ignore_non_performance_setting || false;
-        this.output_format = options.output_format || 'file';
+        this.options = options.options;
+        this.include_comment = options.include_comment ?? false;
+        this.custom_style = options.custom_style ?? false;
+        this.backup_settings = options.backup_settings ?? true;
+        this.analyze_with_full_connection_use = options.analyze_with_full_connection_use ?? true;
+        this.ignore_non_performance_setting = options.ignore_non_performance_setting ?? false;
+        this.output_format = options.output_format ?? 'file';
     }
 }
 
@@ -2585,25 +2578,26 @@ class PG_TUNE_RESPONSE {
         return this.outcome_cache[target];
     }
 
-    _generate_content_as_file(target, request, backup_settings = true, exclude_names = null) {
+    _file_config(target, request, exclude_names = null) {
         let content = [target.disclaimer(), '\n'];
-        if (backup_settings) {
+        if (request.backup_settings === true) {
             content.push(`# User Options: ${JSON.stringify(request.options)}\n`);
         }
+        let custom_style = !request.custom_style ? null : 'ALTER SYSTEM SET $1 = $2;';
         for (const [scope, items] of Object.entries(this.outcome[target])) {
             content.push(`## ===== SCOPE: ${scope} ===== \n`);
             for (const [item_name, item] of Object.entries(items)) {
                 if (exclude_names === null || !exclude_names.has(item_name)) {
-                    content.push(item.out(request.include_comment, request.custom_style));
+                    content.push(item.out(request.include_comment, custom_style));
                     content.push(request.include_comment ? '\n\n' : '\n');
                 }
             }
-            content.push('\n' + (request.include_comment ? '\n\n' : ''));
+            content.push(request.include_comment ? '\n\n' : '\n');
         }
         return content.join('');
     }
 
-    _generate_content_as_response(target, exclude_names = null, output_format = 'conf') {
+    _response_config(target, request, exclude_names = null) {
         let content = {};
         for (const [_, items] of Object.entries(this.outcome[target])) {
             for (const [item_name, item] of Object.entries(items)) {
@@ -2612,22 +2606,22 @@ class PG_TUNE_RESPONSE {
                 }
             }
         }
-        if (output_format === 'conf') {
+        if (request.output_format === 'conf') {
             return Object.entries(content).map(([k, v]) => `${k} = ${v}`).join('\n');
         }
         return content;
     }
 
-    generate_content(target, request, exclude_names = null, backup_settings = true, output_format = 'conf') {
+    generate_content(target, request, exclude_names = null) {
         if (exclude_names !== null && Array.isArray(exclude_names)) {
             exclude_names = new Set(exclude_names);
         }
-        if (output_format === 'file') {
-            return this._generate_content_as_file(target, request, backup_settings, exclude_names);
-        } else if (['json', 'conf'].includes(output_format)) {
-            return this._generate_content_as_response(target, exclude_names, output_format);
+        if (request.output_format === 'file') {
+            return this._file_config(target, request, exclude_names);
+        } else if (['json', 'conf'].includes(request.output_format)) {
+            return this._response_config(target, request, exclude_names);
         } else {
-            throw new Error(`Invalid output format: ${output_format}. Expected one of "json", "conf", "file".`);
+            throw new Error(`Invalid output format: ${request.output_format}. Expected one of "json", "conf", "file".`);
         }
     }
 
@@ -3287,11 +3281,11 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the random_page_cost by converting to disk throughput, then compute its minimum
     let after_random_page_cost = 1.01
     if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `hdd`, `weak`)) {
-        after_random_page_cost = 3.25
-    } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `hdd`, `strong`)) {
         after_random_page_cost = 2.60
+    } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `hdd`, `strong`)) {
+        after_random_page_cost = 2.20
     } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `san`, `weak`)) {
-        after_random_page_cost = 2.00
+        after_random_page_cost = 1.75
     } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, `san`, `strong`)) {
         after_random_page_cost = 1.50
     } else if (PG_DISK_SIZING.matchOneDisk(data_iops, RANDOM_IOPS, PG_DISK_SIZING.SSDv1)) {
@@ -4435,27 +4429,25 @@ function _build_request_from_backend(data) {
     return new PG_TUNE_REQUEST(
         {
             'options': _build_options_from_backend(data.options),
-            'include_comment': data.include_comment ?? false,
-            'custom_style': data.custom_style ?? null,
-            'backup_settings': data.backup_settings ?? false,
-            'analyze_with_full_connection_use': data.analyze_with_full_connection_use ?? false,
-            'ignore_non_performance_setting': data.ignore_non_performance_setting ?? true,
-            'output_format': data.output_format ?? 'file',
+            'include_comment': data.include_comment,
+            'custom_style': data.custom_style,
+            'backup_settings': data.backup_settings,
+            'analyze_with_full_connection_use': data.analyze_with_full_connection_use,
+            'ignore_non_performance_setting': data.ignore_non_performance_setting ,
+            'output_format': data.output_format,
         }
     )
 }
 
 function _build_request_from_html() {
-    let alter_style = _get_checkbox_element(`alter_style`) ?? false;
-    let custom_style = !alter_style ? null : 'ALTER SYSTEM SET $1 = $2;'
     return {
         'options': _build_options_from_html(),
-        'include_comment': _get_checkbox_element(`include_comment`) ?? false,
-        'custom_style': custom_style,
-        'backup_settings': _get_checkbox_element(`backup_settings`) ?? false,
-        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`) ?? false,
-        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`) ?? true,
-        'output_format': _get_text_element(`output_format`) ?? 'file',
+        'include_comment': _get_checkbox_element(`include_comment`),
+        'custom_style': _get_checkbox_element(`custom_style`),
+        'backup_settings': _get_checkbox_element(`backup_settings`),
+        'analyze_with_full_connection_use': _get_checkbox_element(`analyze_with_full_connection_use`),
+        'ignore_non_performance_setting': _get_checkbox_element(`ignore_non_performance_setting`),
+        'output_format': _get_text_element(`output_format`),
     }
 }
 
@@ -4475,7 +4467,6 @@ function web_optimize(request) {
         tuning_items = DB13_CONFIG_PROFILE;
     }
     console.log(request);
-    console.log(request.options);
     Optimize(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, tuning_items);
     if (request.options.enable_database_correction_tuning) {
         correction_tune(request, response);
@@ -4497,7 +4488,7 @@ function web_optimize(request) {
             'backend_flush_after');
     }
     const content = response.generate_content(
-        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names, request.backup_settings, request.output_format
+        PGTUNER_SCOPE.DATABASE_CONFIG, request, exclude_names
     );
     const mem_report = response.report(
         request.options, request.analyze_with_full_connection_use, false

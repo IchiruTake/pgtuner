@@ -172,3 +172,4 @@ cython_debug/
 ping.js
 web_ping.py
 ping.html
+/.pgtuner

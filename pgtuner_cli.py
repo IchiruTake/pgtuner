@@ -15,17 +15,14 @@ This work may not be there without these great projects:
 - timescaledb-tune: https://github.com/timescale/timescaledb-tune
 
 """
-import os
 from zoneinfo import ZoneInfo
-from typing import Literal
 from datetime import datetime
 
 from src.tuner.data.disks import PG_DISK_PERF
 from src.tuner.data.options import PG_TUNE_USR_OPTIONS, PG_TUNE_USR_KWARGS
 from src.tuner.data.workload import PG_SIZING, PG_WORKLOAD, PG_PROFILE_OPTMODE, PG_BACKUP_TOOL
 from src.utils.mean import generalized_mean
-from src.utils.static import DATETIME_PATTERN_FOR_FILENAME, Gi, SUGGESTION_ENTRY_READER_DIR, K10, Mi, Ki, \
-    BASE_WAL_SEGMENT_SIZE
+from src.utils.static import DATETIME_PATTERN_FOR_FILENAME, Gi, K10, Mi, Ki, BASE_WAL_SEGMENT_SIZE
 from src.tuner.data.scope import PGTUNER_SCOPE
 
 from src import pgtuner
@@ -34,36 +31,6 @@ from src.tuner.pg_dataclass import PG_TUNE_REQUEST
 
 # ==================================================================================================
 # Metadata
-
-
-def optimize(request: PG_TUNE_REQUEST, output_format: Literal['json', 'text', 'file', 'conf'] = 'conf'):
-    # entry.init(request)
-    response = pgtuner.optimize(request)
-
-    if request.options.enable_sysctl_general_tuning:
-        dt_start = datetime.now(ZoneInfo('UTC'))
-        filepath = f'{PGTUNER_SCOPE.KERNEL_SYSCTL.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
-        result = pgtuner.write(request, response, PGTUNER_SCOPE.KERNEL_SYSCTL, output_format=output_format,
-                               output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
-        # pprint(result)
-
-
-    if request.options.enable_database_general_tuning:
-        dt_start = datetime.now(ZoneInfo('UTC'))
-        filepath = f'{PGTUNER_SCOPE.DATABASE_CONFIG.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}.conf'
-        result = pgtuner.write(request, response, PGTUNER_SCOPE.DATABASE_CONFIG, output_format=output_format,
-                               output_file=os.path.join(SUGGESTION_ENTRY_READER_DIR, filepath), exclude_names=[])
-        # pprint(result)
-
-    # Test the logger of rotation
-    # _logger = logging.getLogger(APP_NAME_UPPER)
-    # for _handlers in _logger.handlers:
-    #     if isinstance(_handlers, (logging.handlers.RotatingFileHandler, logging.handlers.TimedRotatingFileHandler)):
-    #         _handlers.doRollover()
-    return None
-
-
-
 if __name__ == "__main__":
     data_index_disk = PG_DISK_PERF(
         random_iops_spec=5 * K10, random_iops_scale_factor=1.0,
@@ -140,7 +107,18 @@ if __name__ == "__main__":
         max_backup_replication_tool=PG_BACKUP_TOOL.PG_BASEBACKUP,
         offshore_replication=False,
     )
-    rq = PG_TUNE_REQUEST(options=options, include_comment=False, custom_style=None)
-    # optimize(rq, output_format='file')
-    print(generalized_mean(1, 2.0, level=-5, round_ndigits=4))
+    rq = PG_TUNE_REQUEST(
+        options=options,
+        include_comment=False,
+        custom_style=False,
+        backup_settings=True,
+        output_format='file',
+        analyze_with_full_connection_use=True,         # Just a final analyze report
+        ignore_non_performance_setting=False,
+    )
+
+    dt_start = datetime.now(ZoneInfo('UTC'))
+    database_filename = f'{PGTUNER_SCOPE.DATABASE_CONFIG.value}_{dt_start.strftime(DATETIME_PATTERN_FOR_FILENAME)}'
+    response = pgtuner.optimize(rq, database_filename=database_filename)
+    # print(generalized_mean(1, 2.0, level=-5, round_ndigits=4))
     pass
