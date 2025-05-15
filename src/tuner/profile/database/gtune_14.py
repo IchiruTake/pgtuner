@@ -5,8 +5,7 @@ from pydantic import ByteSize
 
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, type_validation, rewrite_items
-from src.tuner.profile.database.gtune_0 import DB0_CONFIG_PROFILE
-from src.utils.dict_deepmerge import deepmerge
+from src.tuner.profile.database.gtune_13 import DB13_CONFIG_PROFILE
 from src.utils.static import APP_NAME_UPPER
 
 __all__ = ['DB14_CONFIG_PROFILE']
@@ -75,9 +74,14 @@ DB14_CONFIG_MAPPING = {
 }
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING)
 type_validation(DB14_CONFIG_MAPPING)
-DB14_CONFIG_PROFILE = deepcopy(DB0_CONFIG_PROFILE)
+DB14_CONFIG_PROFILE = deepcopy(DB13_CONFIG_PROFILE)
 if DB14_CONFIG_MAPPING:
     for k, v in DB14_CONFIG_MAPPING.items():
         if k in DB14_CONFIG_PROFILE:
-            deepmerge(DB14_CONFIG_PROFILE[k][1], v[1], inline_source=True, inline_target=True)
+            # deepmerge(DB14_CONFIG_PROFILE[k][1], v[1], inline_source=True, inline_target=True)
+            src_conf = DB14_CONFIG_PROFILE[k][1]
+            dst_conf = v[1]
+            for k0, v0 in dst_conf.items():
+                src_conf[k0] = v0
+
     rewrite_items(DB14_CONFIG_PROFILE)

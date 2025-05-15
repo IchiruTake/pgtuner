@@ -86,7 +86,7 @@ if __name__ == "__main__":
         enable_sysctl_general_tuning=False, enable_sysctl_correction_tuning=False,
         enable_database_general_tuning=True, enable_database_correction_tuning=True,
         ## User-Tuning Profiles
-        workload_profile=PG_SIZING.LARGE, pgsql_version=17,
+        workload_profile=PG_SIZING.LARGE, pgsql_version=16,
         database_size_in_gib=0, # [0, 1000]. Default is 0 GiB for maximum of 60% of data disk
         num_write_transaction_per_hour_on_workload=50 * K10, # [K10, 20 * M10]. Default is 50 * K10 (50K).
         align_index=1, # [0, 1]. Default is 1. Choose the higher number during alignment
