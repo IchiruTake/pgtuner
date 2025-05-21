@@ -161,6 +161,8 @@ class PG_TUNE_RESPONSE {
 
         // WAL Times
         const wal_throughput = options.wal_spec.perf()[0];
+        const wal05 = wal_time(wal_buffers, 0.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
         const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
             wal_throughput, options, managed_cache['wal_init_zero']);
         const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
@@ -349,6 +351,10 @@ Report Summary (others):
         + Full Page Writes: ${managed_cache['full_page_writes']}
         + Fsync: ${managed_cache['fsync']}
     - Buffers Write Cycle within Data Loss Time: ${options.max_time_transaction_loss_allow_in_millisecond} ms (depend on WAL volume throughput)
+        + 1.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.NONE}:
+            -> Elapsed Time :: Rotate: ${wal05['rotate_time'].toFixed(2)} ms :: Write: ${wal05['write_time'].toFixed(2)} ms :: Delay: ${wal05['delay_time'].toFixed(2)} ms
+            -> Total Time :: ${wal05['total_time'].toFixed(2)} ms during ${wal05['num_wal_files']} WAL files
+            -> OK for Transaction Loss: ${wal05['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
         + 1.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: ${wal10['rotate_time'].toFixed(2)} ms :: Write: ${wal10['write_time'].toFixed(2)} ms :: Delay: ${wal10['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal10['total_time'].toFixed(2)} ms during ${wal10['num_wal_files']} WAL files
