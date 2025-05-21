@@ -187,6 +187,7 @@ class PG_TUNE_RESPONSE(BaseModel):
         wal_time_partial = partial(wal_time, wal_buffers=wal_buffers, wal_segment_size=_kwargs.wal_segment_size,
                                    wal_writer_delay_in_ms=managed_cache['wal_writer_delay'],
                                    wal_throughput=wal_throughput)
+        wal05 = wal_time_partial(data_amount_ratio=0.5)
         wal10 = wal_time_partial(data_amount_ratio=1.0)
         wal15 = wal_time_partial(data_amount_ratio=1.5)
         wal20 = wal_time_partial(data_amount_ratio=2.0)
@@ -385,6 +386,10 @@ Report Summary (others):
         + Full Page Writes: {managed_cache['full_page_writes']}
         + Fsync: {managed_cache['fsync']}
     - Buffers Write Cycle within Data Loss Time: {options.max_time_transaction_loss_allow_in_millisecond} ms (depend on WAL volume throughput)
+        + 0.5x when opt_wal_buffers={PG_PROFILE_OPTMODE.NONE}:
+            -> Elapsed Time :: Rotate: {wal05['rotate_time']:.2f} ms :: Write: {wal05['write_time']:.2f} ms :: Delay: {wal05['delay_time']:.2f} ms
+            -> Total Time :: {wal05['total_time']:.2f} ms during {wal05['num_wal_files']} WAL files
+            -> OK for Transaction Loss: {wal05['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
         + 1.0x when opt_wal_buffers={PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: {wal10['rotate_time']:.2f} ms :: Write: {wal10['write_time']:.2f} ms :: Delay: {wal10['delay_time']:.2f} ms
             -> Total Time :: {wal10['total_time']:.2f} ms during {wal10['num_wal_files']} WAL files

@@ -57,6 +57,7 @@
                         <li>STUNE: Reduce by half the alignment size of `min_wal_size`, `max_wal_size`, and `wal_keep_size` (The configuration would be better detailed).</li>
                         <li>STUNE: The two parameters `statement_timeout` and `lock_timeout` is reduced significantly.</li>
                         <li>STUNE: A typo in `backend_flsuh_after` has been corrected from 512 MiB to 512 KiB.</li>
+                        <li>STUNE: Re-calibrate the algorithm of WAL pre-allocation of zero-filled WAL file (ignore the parameter `wal_init_zero`).</li>
                     </ul>
                 </li>
 

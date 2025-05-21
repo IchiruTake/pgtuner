@@ -6,14 +6,15 @@
 
 // The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 // Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
-const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized
+const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized (0.72-0.75ms tested on GCP VM)
+const _DISK_ZERO_SPEED = 2.5 * Ki        // The speed of creating a zero-filled file, measured by MiB/s
 function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput) {
     // The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     // or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     console.debug('Estimate the time required to flush the full WAL buffers to disk');
     const data_amount = Math.floor(wal_buffers * data_amount_ratio);
     const num_wal_files_required = Math.floor(data_amount / wal_segment_size) + 1;
-    const rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
+    const rotate_time_in_ms = num_wal_files_required * (_FILE_ROTATION_TIME_MS + _DISK_ZERO_SPEED / (wal_segment_size / Mi) * K10);
     const write_time_in_ms = (data_amount / Mi) / wal_throughput * K10;
 
     // Calculate maximum how many delay time
