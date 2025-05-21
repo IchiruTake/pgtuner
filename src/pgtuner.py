@@ -79,10 +79,12 @@ def optimize(request: PG_TUNE_REQUEST, database_filename: str = None):
         ]
         if request.ignore_non_performance_setting:
             default_exclude_names.extend([
-                'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout', 'log_autovacuum_min_duration',
+                'deadlock_timeout', 'transaction_timeout', 'idle_replication_slot_timeout',
+                'idle_session_timeout', 'log_autovacuum_min_duration',
                 'log_checkpoints', 'log_connections', 'log_disconnections', 'log_duration', 'log_error_verbosity',
                 'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits', 'log_statement',
-                'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
+                'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval',
+                'log_lock_failure'
             ])
 
         if request.options.operating_system == 'windows':
