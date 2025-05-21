@@ -2,28 +2,8 @@
 /**
  * Original Source File: ./src/tuner/profile/database/gtune_17.py
  */
-// Log profile
-const _DB17_LOG_PROFILE = {
-    "log_startup_progress_interval": {
-        "default": K10,
-        "partial_func": value => `${value}s`,
-    }
-};
-// Vacuum profile
-const _DB17_VACUUM_PROFILE = {
-    "vacuum_buffer_usage_limit": {
-        "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
-        "default": 2 * Mi,
-        "hardware_scope": "mem",
-        "partial_func": value => `${Math.floor(value / Mi)}MB`,
-    },
-    "vacuum_failsafe_age": { "default": 1600000000, },
-    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
-};
 // WAL profile
 const _DB17_WAL_PROFILE = {
-    "wal_compression": { "default": "zstd", },
     "summarize_wal": { "default": "on", },
     "wal_summary_keep_time": {
         "default": Math.floor(30 * DAY / MINUTE),
@@ -33,23 +13,22 @@ const _DB17_WAL_PROFILE = {
 // Timeout profile
 const _DB17_TIMEOUT_PROFILE = {
     "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
+    "transaction_timeout": { "default": 0, "partial_func": value => `${value}s`, },
 };
-// Query profile
-const _DB17_QUERY_PROFILE = {
-    "track_wal_io_timing": { "default": 'on', },
+// AsyncIO profile
+const _DB17_ASYNC_DISK_PROFILE = {
+    "io_combine_limit": { "default": 128 * Ki, "partial_func": value => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`, },
 };
 
 // Merge mapping: use tuples as arrays
 const DB17_CONFIG_MAPPING = {
-    log: [PG_SCOPE.LOGGING, _DB17_LOG_PROFILE, { hardware_scope: 'disk' }],
     timeout: [PG_SCOPE.OTHERS, _DB17_TIMEOUT_PROFILE, { hardware_scope: 'overall' }],
-    query: [PG_SCOPE.QUERY_TUNING, _DB17_QUERY_PROFILE, { hardware_scope: 'overall' }],
-    maintenance: [PG_SCOPE.MAINTENANCE, _DB17_VACUUM_PROFILE, { hardware_scope: 'overall' }],
-    wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB17_WAL_PROFILE, { hardware_scope: 'disk' }],
+    wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB17_WAL_PROFILE, { hardware_scope: 'overall' }],
+    "asynchronous_disk": [PG_SCOPE.OTHERS, _DB17_ASYNC_DISK_PROFILE, { hardware_scope: 'disk' }],
 };
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-let DB17_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
+let DB17_CONFIG_PROFILE = { ...DB16_CONFIG_PROFILE}
 if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {

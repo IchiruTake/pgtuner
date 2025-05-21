@@ -253,6 +253,7 @@ function web_optimize(request) {
         15: DB15_CONFIG_PROFILE,
         16: DB16_CONFIG_PROFILE,
         17: DB17_CONFIG_PROFILE,
+        18: DB18_CONFIG_PROFILE,
     }
     let tuning_items = items[parseInt(request.options.pgsql_version)];
     if (tuning_items === null || tuning_items === undefined) {
@@ -270,9 +271,11 @@ function web_optimize(request) {
     if (request.ignore_non_performance_setting) {
         exclude_names.push(
             'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout',
+            'idle_replication_slot_timeout',
             'log_autovacuum_min_duration', 'log_checkpoints', 'log_connections', 'log_disconnections',
             'log_duration', 'log_error_verbosity', 'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits',
-            'log_statement', 'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
+            'log_statement', 'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval',
+            'log_lock_failure',
             )
     }
     if (request.options.operating_system === 'windows') {

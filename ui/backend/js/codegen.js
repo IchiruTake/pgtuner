@@ -2197,7 +2197,7 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE};
+let DB14_CONFIG_PROFILE = { ...DB13_CONFIG_PROFILE};
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
@@ -2224,30 +2224,15 @@ if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
 const _DB15_LOG_PROFILE = {
     "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
-// Timeout profile
-const _DB15_TIMEOUT_PROFILE = {
-    'idle_session_timeout': { "default": 0, "partial_func": value => `${value}s`, },
-};
-// Query profile
-const _DB15_QUERY_PROFILE = {
-    'track_wal_io_timing': { 'default': 'on', },
-};
-// Vacuum profile
-const _DB15_VACUUM_PROFILE = {
-    'vacuum_failsafe_age': { 'default': 1600000000, },
-    'vacuum_multixact_failsafe_age': { 'default': 1600000000, }
-};
+
 
 // Merge mapping: use tuples as arrays
 const DB15_CONFIG_MAPPING = {
     log: [PG_SCOPE.LOGGING, _DB15_LOG_PROFILE, { hardware_scope: 'disk' }],
-    timeout: [PG_SCOPE.OTHERS, _DB15_TIMEOUT_PROFILE, { hardware_scope: 'overall' }],
-    query: [PG_SCOPE.QUERY_TUNING, _DB15_QUERY_PROFILE, { hardware_scope: 'overall' }],
-    maintenance: [PG_SCOPE.MAINTENANCE, _DB15_VACUUM_PROFILE, { hardware_scope: 'overall' }],
 };
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-let DB15_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE};
+let DB15_CONFIG_PROFILE = { ...DB14_CONFIG_PROFILE};
 if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
@@ -2269,10 +2254,6 @@ if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
 /**
  * Original Source File: ./src/tuner/profile/database/gtune_16.py
  */
-// Log profile
-const _DB16_LOG_PROFILE = {
-    "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
-};
 // Vacuum profile
 const _DB16_VACUUM_PROFILE = {
     'vacuum_buffer_usage_limit': {
@@ -2282,34 +2263,21 @@ const _DB16_VACUUM_PROFILE = {
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
     },
-    "vacuum_failsafe_age": { "default": 1600000000, },
-    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
 };
 // WAL profile
 const _DB16_WAL_PROFILE = {
     "wal_compression": { "default": "zstd", },
 };
-// Timeout profile
-const _DB16_TIMEOUT_PROFILE = {
-    "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
-};
-// Query profile
-const _DB16_QUERY_PROFILE = {
-    "track_wal_io_timing": { "default": 'on', },
-};
 
 
 // Merge mapping: use tuples as arrays
 const DB16_CONFIG_MAPPING = {
-    log: [PG_SCOPE.LOGGING, _DB16_LOG_PROFILE, { hardware_scope: 'disk' }],
-    timeout: [PG_SCOPE.OTHERS, _DB16_TIMEOUT_PROFILE, { hardware_scope: 'overall' }],
-    query: [PG_SCOPE.QUERY_TUNING, _DB16_QUERY_PROFILE, { hardware_scope: 'overall' }],
     maintenance: [PG_SCOPE.MAINTENANCE, _DB16_VACUUM_PROFILE, { hardware_scope: 'overall' }],
     wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB16_WAL_PROFILE, { hardware_scope: 'disk' }],
 };
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-let DB16_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
+let DB16_CONFIG_PROFILE = { ...DB15_CONFIG_PROFILE}
 if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {
@@ -2331,28 +2299,8 @@ if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
 /**
  * Original Source File: ./src/tuner/profile/database/gtune_17.py
  */
-// Log profile
-const _DB17_LOG_PROFILE = {
-    "log_startup_progress_interval": {
-        "default": K10,
-        "partial_func": value => `${value}s`,
-    }
-};
-// Vacuum profile
-const _DB17_VACUUM_PROFILE = {
-    "vacuum_buffer_usage_limit": {
-        "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
-        "default": 2 * Mi,
-        "hardware_scope": "mem",
-        "partial_func": value => `${Math.floor(value / Mi)}MB`,
-    },
-    "vacuum_failsafe_age": { "default": 1600000000, },
-    "vacuum_multixact_failsafe_age": { "default": 1600000000, }
-};
 // WAL profile
 const _DB17_WAL_PROFILE = {
-    "wal_compression": { "default": "zstd", },
     "summarize_wal": { "default": "on", },
     "wal_summary_keep_time": {
         "default": Math.floor(30 * DAY / MINUTE),
@@ -2362,23 +2310,22 @@ const _DB17_WAL_PROFILE = {
 // Timeout profile
 const _DB17_TIMEOUT_PROFILE = {
     "idle_session_timeout": { "default": 0, "partial_func": value => `${value}s`, },
+    "transaction_timeout": { "default": 0, "partial_func": value => `${value}s`, },
 };
-// Query profile
-const _DB17_QUERY_PROFILE = {
-    "track_wal_io_timing": { "default": 'on', },
+// AsyncIO profile
+const _DB17_ASYNC_DISK_PROFILE = {
+    "io_combine_limit": { "default": 128 * Ki, "partial_func": value => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`, },
 };
 
 // Merge mapping: use tuples as arrays
 const DB17_CONFIG_MAPPING = {
-    log: [PG_SCOPE.LOGGING, _DB17_LOG_PROFILE, { hardware_scope: 'disk' }],
     timeout: [PG_SCOPE.OTHERS, _DB17_TIMEOUT_PROFILE, { hardware_scope: 'overall' }],
-    query: [PG_SCOPE.QUERY_TUNING, _DB17_QUERY_PROFILE, { hardware_scope: 'overall' }],
-    maintenance: [PG_SCOPE.MAINTENANCE, _DB17_VACUUM_PROFILE, { hardware_scope: 'overall' }],
-    wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB17_WAL_PROFILE, { hardware_scope: 'disk' }],
+    wal: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB17_WAL_PROFILE, { hardware_scope: 'overall' }],
+    "asynchronous_disk": [PG_SCOPE.OTHERS, _DB17_ASYNC_DISK_PROFILE, { hardware_scope: 'disk' }],
 };
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-let DB17_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE}
+let DB17_CONFIG_PROFILE = { ...DB16_CONFIG_PROFILE}
 if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {
@@ -2395,6 +2342,76 @@ if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
 }
 // console.debug(`DB17_CONFIG_PROFILE: `);
 // show_profile(DB17_CONFIG_PROFILE);
+
+// ==================================================================================
+/**
+ * Original Source File: ./src/tuner/profile/database/gtune_18.py
+ */
+
+// AsyncIO profile
+const _DB18_ASYNC_DISK_PROFILE = {
+    "io_max_combine_limit": { "default": 128 * Ki, "partial_func": value => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`, },
+    "io_max_concurrency": { "default": cap_value(-1, -1,1024) },
+    "io_method": { "default": "io_uring", },
+    "io_workers": { "default": cap_value(3, 1, 32), },
+};
+
+// Vacuum profile
+const _DB18_VACUUM_PROFILE = {
+    "autovacuum_vacuum_max_threshold": { "default": cap_value(100 * M10, -1, 2**31 - 1) },
+    "autovacuum_worker_slots": { "default": cap_value(16, -1, 2**18 - 1) },
+    "vacuum_max_eager_freeze_failure_rate": { "default": cap_value(0.03, 0.0, 1.0) },
+    "vacuum_truncate": { "default": 'on' },
+};
+
+// Query profile
+const _DB18_QUERY_PROFILE = {
+    "track_cost_delay_timing": { "default": 'on', }
+};
+
+// Log profile
+const _DB18_LOG_PROFILE = {
+    "log_lock_failure": { "default": 'on', }
+};
+
+// Timeout profile
+const _DB18_TIMEOUT_PROFILE = {
+    "idle_replication_slot_timeout": { "default": cap_value(0, 0, 35791394) },
+};
+
+// Replication profile
+const _DB18_REPLICATION_PROFILE = {
+    "max_active_replication_origins": { "default": cap_value(10, 0, 2**18 - 1) },
+};
+
+// Merge mapping: use tuples as arrays
+const DB18_CONFIG_MAPPING = {
+    "asynchronous_disk": [PG_SCOPE.OTHERS, _DB18_ASYNC_DISK_PROFILE, { hardware_scope: 'disk' }],
+    maintenance: [PG_SCOPE.MAINTENANCE, _DB18_VACUUM_PROFILE, {'hardware_scope': 'overall'}],
+    query: [PG_SCOPE.QUERY_TUNING, _DB18_QUERY_PROFILE, { hardware_scope: 'overall' }],
+    log: [PG_SCOPE.LOGGING, _DB18_LOG_PROFILE, { hardware_scope: 'disk' }],
+    timeout: [PG_SCOPE.OTHERS, _DB18_TIMEOUT_PROFILE, { hardware_scope: 'overall' }],
+    replication: [PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB18_REPLICATION_PROFILE, { hardware_scope: 'cpu' }],
+};
+merge_extra_info_to_profile(DB18_CONFIG_MAPPING);
+type_validation(DB18_CONFIG_MAPPING);
+let DB18_CONFIG_PROFILE = { ...DB17_CONFIG_PROFILE}
+if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
+    for (const [key, value] of Object.entries(DB18_CONFIG_MAPPING)) {
+        if (key in DB18_CONFIG_PROFILE) {
+            // Merge the second element of the tuple (the profile dict)
+            // deepmerge(DB18_CONFIG_PROFILE[key][1], value[1], { inlineSource: true, inlineTarget: true });
+            let src = DB18_CONFIG_PROFILE[key][1];
+            let dst = value[1];
+            for (const [k, v] of Object.entries(dst)) {
+                src[k] = v;
+            }
+        }
+    }
+    rewrite_items(DB18_CONFIG_PROFILE);
+}
+// console.debug(`DB18_CONFIG_PROFILE: `);
+// show_profile(DB18_CONFIG_PROFILE);
 
 // ==================================================================================
 /**
@@ -4461,6 +4478,7 @@ function web_optimize(request) {
         15: DB15_CONFIG_PROFILE,
         16: DB16_CONFIG_PROFILE,
         17: DB17_CONFIG_PROFILE,
+        18: DB18_CONFIG_PROFILE,
     }
     let tuning_items = items[parseInt(request.options.pgsql_version)];
     if (tuning_items === null || tuning_items === undefined) {
@@ -4478,9 +4496,11 @@ function web_optimize(request) {
     if (request.ignore_non_performance_setting) {
         exclude_names.push(
             'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout',
+            'idle_replication_slot_timeout',
             'log_autovacuum_min_duration', 'log_checkpoints', 'log_connections', 'log_disconnections',
             'log_duration', 'log_error_verbosity', 'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits',
-            'log_statement', 'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
+            'log_statement', 'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval',
+            'log_lock_failure',
             )
     }
     if (request.options.operating_system === 'windows') {

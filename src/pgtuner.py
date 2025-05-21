@@ -5,6 +5,7 @@ from time import perf_counter
 from pydantic import ByteSize
 
 from src.tuner.base import GeneralOptimize
+from src.tuner.profile.database.gtune_18 import DB18_CONFIG_PROFILE
 from src.utils.static import (APP_NAME_UPPER, SUGGESTION_ENTRY_READER_DIR, K10, )
 
 from src.tuner.data.scope import PGTUNER_SCOPE
@@ -23,6 +24,7 @@ _profiles = {
     15: DB15_CONFIG_PROFILE,
     16: DB16_CONFIG_PROFILE,
     17: DB17_CONFIG_PROFILE,
+    18: DB18_CONFIG_PROFILE
 }
 _logger = logging.getLogger(APP_NAME_UPPER)
 _SIZING = ByteSize | int | float
@@ -77,10 +79,12 @@ def optimize(request: PG_TUNE_REQUEST, database_filename: str = None):
         ]
         if request.ignore_non_performance_setting:
             default_exclude_names.extend([
-                'deadlock_timeout', 'transaction_timeout', 'idle_session_timeout', 'log_autovacuum_min_duration',
+                'deadlock_timeout', 'transaction_timeout', 'idle_replication_slot_timeout',
+                'idle_session_timeout', 'log_autovacuum_min_duration',
                 'log_checkpoints', 'log_connections', 'log_disconnections', 'log_duration', 'log_error_verbosity',
                 'log_line_prefix', 'log_lock_waits', 'log_recovery_conflict_waits', 'log_statement',
-                'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval'
+                'log_replication_commands', 'log_min_error_statement', 'log_startup_progress_interval',
+                'log_lock_failure'
             ])
 
         if request.options.operating_system == 'windows':

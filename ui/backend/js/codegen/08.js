@@ -25,7 +25,7 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE};
+let DB14_CONFIG_PROFILE = { ...DB13_CONFIG_PROFILE};
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
