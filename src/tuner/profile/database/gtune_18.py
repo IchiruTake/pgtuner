@@ -80,7 +80,7 @@ _DB_ASYNC_DISK_PROFILE = {
 
 _DB_VACUUM_PROFILE = {
     'autovacuum_vacuum_max_threshold': {
-        'default': cap_value(100 * M10, -1, 2^31 - 1),
+        'default': cap_value(100 * M10, -1, 2 ** 31 - 1),
         'comment': 'Specifies the maximum number of updated or deleted tuples needed to trigger a VACUUM in any one '
                    'table, i.e., a limit on the value calculated with autovacuum_vacuum_threshold and '
                    'autovacuum_vacuum_scale_factor. The default is 100,000,000 tuples. If -1 is specified, autovacuum '
@@ -157,7 +157,7 @@ _DB_TIMEOUT_PROFILE = {
 
 _DB_REPLICATION_PROFILE = {
     'max_active_replication_origins': {
-        'default': cap_value(10, 0, 2^18 - 1),
+        'default': cap_value(10, 0, 2 ** 18 - 1),
         'comment': 'Specifies how many replication origins (see replication-origins) can be tracked simultaneously, '
                    'effectively limiting how many logical replication subscriptions can be created on the server. '
                    'Setting it to a lower value than the current number of tracked replication origins (reflected '
