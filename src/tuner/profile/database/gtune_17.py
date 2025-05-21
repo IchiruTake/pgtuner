@@ -6,7 +6,7 @@ from pydantic import ByteSize
 from src.tuner.data.scope import PG_SCOPE
 from src.tuner.profile.common import merge_extra_info_to_profile, rewrite_items, type_validation
 from src.tuner.profile.database.gtune_16 import DB16_CONFIG_PROFILE
-from src.utils.static import APP_NAME_UPPER, DAY, MINUTE
+from src.utils.static import APP_NAME_UPPER, DAY, MINUTE, Ki, DB_PAGE_SIZE
 
 __all__ = ['DB17_CONFIG_PROFILE']
 _SIZING = ByteSize | int | float
@@ -64,11 +64,23 @@ _DB_TIMEOUT_PROFILE = {
     },
 }
 
+_DB_ASYNC_DISK_PROFILE = {
+    'io_combine_limit': {
+        'default': 128 * Ki,
+        'comment': 'Controls the largest I/O size in operations that combine I/O, and is silently limited to the '
+                   'parameter io_max_combine_limit. or on the server command line. The maximum possible '
+                   'size depends on the operating system and block size, but is typically 1MB on Unix and 128kB on '
+                   'Windows. The default is 128kB.',
+        'partial_func': lambda value: f'{(value // DB_PAGE_SIZE) * (DB_PAGE_SIZE // Ki)}kB',
+    },
+}
+
 # =============================================================================
 # Trigger the merge
 DB17_CONFIG_MAPPING = {
     'wal': (PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB_WAL_PROFILE, {'hardware_scope': 'overall'}),
     'timeout': (PG_SCOPE.OTHERS, _DB_TIMEOUT_PROFILE, {'hardware_scope': 'overall'}),
+    'asynchronous-disk': (PG_SCOPE.OTHERS, _DB_ASYNC_DISK_PROFILE, {'hardware_scope': 'disk'}),
 }
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING)
 type_validation(DB17_CONFIG_MAPPING)
