@@ -161,9 +161,12 @@ class PG_TUNE_RESPONSE {
 
         // WAL Times
         const wal_throughput = options.wal_spec.perf()[0];
-        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
+        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
 
         // Vacuum and Maintenance
         let real_autovacuum_work_mem = managed_cache['autovacuum_work_mem'];

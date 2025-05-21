@@ -2422,15 +2422,19 @@ if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
 // The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 // Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
 const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized (0.72-0.75ms tested on GCP VM)
-const _DISK_ZERO_SPEED = 2.5 * Ki        // The speed of creating a zero-filled file, measured by MiB/s
-function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput) {
+const _DISK_ZERO_SPEED = 2.9 * Ki        // The speed of creating a zero-filled file, measured by MiB/s
+function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput,
+                  options, wal_init_zero) {
     // The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     // or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     console.debug('Estimate the time required to flush the full WAL buffers to disk');
     const data_amount = Math.floor(wal_buffers * data_amount_ratio);
     const num_wal_files_required = Math.floor(data_amount / wal_segment_size) + 1;
-    const rotate_time_in_ms = num_wal_files_required * (_FILE_ROTATION_TIME_MS + _DISK_ZERO_SPEED / (wal_segment_size / Mi) * K10);
+    let rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
     const write_time_in_ms = (data_amount / Mi) / wal_throughput * K10;
+    if (wal_init_zero === 'on' && options.operating_system !== 'windows') {
+        rotate_time_in_ms += num_wal_files_required * ((wal_segment_size / Mi) / _DISK_ZERO_SPEED * K10);
+    }
 
     // Calculate maximum how many delay time
     let delay_time = 0;
@@ -2715,9 +2719,12 @@ class PG_TUNE_RESPONSE {
 
         // WAL Times
         const wal_throughput = options.wal_spec.perf()[0];
-        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
+        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
 
         // Vacuum and Maintenance
         let real_autovacuum_work_mem = managed_cache['autovacuum_work_mem'];
@@ -3933,12 +3940,13 @@ function _wal_integrity_buffer_size_tune(request, response) {
     )[1]  // Bump to higher WAL buffers
     let transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
     while (transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
-        after_wal_writer_delay, wal_tput)['total_time']) {
+        after_wal_writer_delay, wal_tput, options, managed_cache['wal_init_zero'])['total_time']) {
         current_wal_buffers -= decay_rate
     }
 
     _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
+    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
+        after_wal_writer_delay, wal_tput, options, managed_cache['wal_init_zero'])['msg']
     console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} -> ${wal_time_report}.`)
     return null
 }

@@ -184,9 +184,11 @@ class PG_TUNE_RESPONSE(BaseModel):
 
         # WAL Times
         wal_throughput = options.wal_spec.perf()[0]
-        wal_time_partial = partial(wal_time, wal_buffers=wal_buffers, wal_segment_size=_kwargs.wal_segment_size,
-                                   wal_writer_delay_in_ms=managed_cache['wal_writer_delay'],
-                                   wal_throughput=wal_throughput)
+        wal_time_partial = partial(
+            wal_time, wal_buffers=wal_buffers, wal_segment_size=_kwargs.wal_segment_size,
+            wal_writer_delay_in_ms=managed_cache['wal_writer_delay'], wal_throughput=wal_throughput,
+            options=options, wal_init_zero=managed_cache['wal_init_zero'],
+        )
         wal05 = wal_time_partial(data_amount_ratio=0.5)
         wal10 = wal_time_partial(data_amount_ratio=1.0)
         wal15 = wal_time_partial(data_amount_ratio=1.5)
