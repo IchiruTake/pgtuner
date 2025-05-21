@@ -5,6 +5,7 @@ from time import perf_counter
 from pydantic import ByteSize
 
 from src.tuner.base import GeneralOptimize
+from src.tuner.profile.database.gtune_18 import DB18_CONFIG_PROFILE
 from src.utils.static import (APP_NAME_UPPER, SUGGESTION_ENTRY_READER_DIR, K10, )
 
 from src.tuner.data.scope import PGTUNER_SCOPE
@@ -23,6 +24,7 @@ _profiles = {
     15: DB15_CONFIG_PROFILE,
     16: DB16_CONFIG_PROFILE,
     17: DB17_CONFIG_PROFILE,
+    18: DB18_CONFIG_PROFILE
 }
 _logger = logging.getLogger(APP_NAME_UPPER)
 _SIZING = ByteSize | int | float
