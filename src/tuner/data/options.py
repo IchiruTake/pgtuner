@@ -245,7 +245,7 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
     )
     pgsql_version: PositiveInt = Field(
         default=17, ge=13, le=18,
-        description='The PostgreSQL version to be used for tuning. The supported range is [13, 17]. The default '
+        description='The PostgreSQL version to be used for tuning. The supported range is [13, 18]. The default '
                     'is 17. The version is used to determine the tuning options and the risk level.'
     )
     # Disk options for data partitions

@@ -175,12 +175,10 @@ _DB_REPLICATION_PROFILE = {
 DB18_CONFIG_MAPPING = {
     'asynchronous-disk': (PG_SCOPE.OTHERS, _DB_ASYNC_DISK_PROFILE, {'hardware_scope': 'disk'}),
     'maintenance': (PG_SCOPE.MAINTENANCE, _DB_VACUUM_PROFILE, {'hardware_scope': 'overall'}),
-
     'query': (PG_SCOPE.QUERY_TUNING, _DB_QUERY_PROFILE, {'hardware_scope': 'cpu'}),
     'log': (PG_SCOPE.LOGGING, _DB_LOG_PROFILE, {'hardware_scope': 'disk'}),
-    'replication': (PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB_REPLICATION_PROFILE, {'hardware_scope': 'disk'}),
     'timeout': (PG_SCOPE.OTHERS, _DB_TIMEOUT_PROFILE, {'hardware_scope': 'overall'}),
-
+    'replication': (PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, _DB_REPLICATION_PROFILE, {'hardware_scope': 'cpu'}),
 }
 merge_extra_info_to_profile(DB18_CONFIG_MAPPING)
 type_validation(DB18_CONFIG_MAPPING)
