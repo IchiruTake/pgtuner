@@ -2166,7 +2166,12 @@ type_validation(DB0_CONFIG_PROFILE);
  * Original Source File: ./src/tuner/profile/database/gtune_13.py
  */
 
-const DB13_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE };
+const DB13_CONFIG_PROFILE = { };
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB0_CONFIG_PROFILE)) {
+    DB13_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 // console.debug(`DB13_CONFIG_PROFILE`);
 // show_profile(DB13_CONFIG_PROFILE);
 
@@ -2197,7 +2202,11 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { ...DB13_CONFIG_PROFILE};
+let DB14_CONFIG_PROFILE = { };
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB13_CONFIG_PROFILE)) {
+    DB14_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
@@ -2225,14 +2234,18 @@ const _DB15_LOG_PROFILE = {
     "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB15_CONFIG_MAPPING = {
     log: [PG_SCOPE.LOGGING, _DB15_LOG_PROFILE, { hardware_scope: 'disk' }],
 };
+
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-let DB15_CONFIG_PROFILE = { ...DB14_CONFIG_PROFILE};
+let DB15_CONFIG_PROFILE = { };
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB14_CONFIG_PROFILE)) {
+    DB15_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
@@ -2269,7 +2282,6 @@ const _DB16_WAL_PROFILE = {
     "wal_compression": { "default": "zstd", },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB16_CONFIG_MAPPING = {
     maintenance: [PG_SCOPE.MAINTENANCE, _DB16_VACUUM_PROFILE, { hardware_scope: 'overall' }],
@@ -2277,7 +2289,12 @@ const DB16_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-let DB16_CONFIG_PROFILE = { ...DB15_CONFIG_PROFILE}
+let DB16_CONFIG_PROFILE = { }
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB15_CONFIG_PROFILE)) {
+    DB16_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {
@@ -2325,7 +2342,12 @@ const DB17_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-let DB17_CONFIG_PROFILE = { ...DB16_CONFIG_PROFILE}
+let DB17_CONFIG_PROFILE = { }
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB16_CONFIG_PROFILE)) {
+    DB17_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {
@@ -2395,7 +2417,11 @@ const DB18_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB18_CONFIG_MAPPING);
 type_validation(DB18_CONFIG_MAPPING);
-let DB18_CONFIG_PROFILE = { ...DB17_CONFIG_PROFILE}
+// Pseudo Deep Copy
+let DB18_CONFIG_PROFILE = { }
+for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
+    DB18_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB18_CONFIG_MAPPING)) {
         if (key in DB18_CONFIG_PROFILE) {
@@ -3182,8 +3208,8 @@ function _ApplyItmTune(key, after, scope, response, suffix_text = '') {
     // Versioning should NOT be acknowledged here by this function
     if (!(key in items) || !(key in cache)) {
         const msg = `WARNING: The ${key} is not found in the managed tuning item list, probably the scope is invalid.`
-        console.error(msg)
-        throw new Error(msg)
+        console.warn(msg)
+        return null
     }
 
     const before = cache[key]

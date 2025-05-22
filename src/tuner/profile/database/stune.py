@@ -64,8 +64,8 @@ def _ApplyItmTune(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPO
     # Versioning should NOT be acknowledged here by this function
     if key not in items or key not in cache:
         msg = f'WARNING: The {key} is not found in the managed tuning item list, probably the scope is invalid.'
-        _logger.critical(msg)
-        raise KeyError(msg)
+        _logger.warning(msg)
+        return None
 
     before = cache[key]
     if isinstance(_log_pool, list):

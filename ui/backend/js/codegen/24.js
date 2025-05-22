@@ -44,8 +44,8 @@ function _ApplyItmTune(key, after, scope, response, suffix_text = '') {
     // Versioning should NOT be acknowledged here by this function
     if (!(key in items) || !(key in cache)) {
         const msg = `WARNING: The ${key} is not found in the managed tuning item list, probably the scope is invalid.`
-        console.error(msg)
-        throw new Error(msg)
+        console.warn(msg)
+        return null
     }
 
     const before = cache[key]

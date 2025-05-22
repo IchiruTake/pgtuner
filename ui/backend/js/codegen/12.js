@@ -50,7 +50,11 @@ const DB18_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB18_CONFIG_MAPPING);
 type_validation(DB18_CONFIG_MAPPING);
-let DB18_CONFIG_PROFILE = { ...DB17_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB18_CONFIG_PROFILE = { }
+for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
+    DB18_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB18_CONFIG_MAPPING)) {
         if (key in DB18_CONFIG_PROFILE) {

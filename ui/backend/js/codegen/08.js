@@ -25,7 +25,11 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { ...DB13_CONFIG_PROFILE};
+// Pseudo Deep Copy
+const DB14_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB13_CONFIG_PROFILE)) {
+    DB14_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
