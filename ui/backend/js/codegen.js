@@ -1639,10 +1639,10 @@ function _CalcWalBuffers(group_cache, global_cache, options, response, minimum, 
     let shared_buffers = global_cache['shared_buffers'];
     let usable_ram_noswap = options.usable_ram;
     function fn(x) {
-        return 1024 * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
+        return Ki * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
     }
     let oldstyle_wal_buffers = Math.min(Math.floor(shared_buffers / 32), options.tuning_kwargs.wal_segment_size);  // Measured in bytes
-    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki);
+    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki); // Measured in bytes
     return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), DB_PAGE_SIZE)[options.align_index];
 }
 
@@ -2166,7 +2166,12 @@ type_validation(DB0_CONFIG_PROFILE);
  * Original Source File: ./src/tuner/profile/database/gtune_13.py
  */
 
-const DB13_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE };
+const DB13_CONFIG_PROFILE = { };
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB0_CONFIG_PROFILE)) {
+    DB13_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 // console.debug(`DB13_CONFIG_PROFILE`);
 // show_profile(DB13_CONFIG_PROFILE);
 
@@ -2197,7 +2202,11 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { ...DB13_CONFIG_PROFILE};
+// Pseudo Deep Copy
+const DB14_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB13_CONFIG_PROFILE)) {
+    DB14_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
@@ -2225,14 +2234,18 @@ const _DB15_LOG_PROFILE = {
     "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB15_CONFIG_MAPPING = {
     log: [PG_SCOPE.LOGGING, _DB15_LOG_PROFILE, { hardware_scope: 'disk' }],
 };
+
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-let DB15_CONFIG_PROFILE = { ...DB14_CONFIG_PROFILE};
+// Pseudo Deep Copy
+const DB15_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB14_CONFIG_PROFILE)) {
+    DB15_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
@@ -2258,7 +2271,7 @@ if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
 const _DB16_VACUUM_PROFILE = {
     'vacuum_buffer_usage_limit': {
         "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         "default": 2 * Mi,
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -2269,7 +2282,6 @@ const _DB16_WAL_PROFILE = {
     "wal_compression": { "default": "zstd", },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB16_CONFIG_MAPPING = {
     maintenance: [PG_SCOPE.MAINTENANCE, _DB16_VACUUM_PROFILE, { hardware_scope: 'overall' }],
@@ -2277,7 +2289,12 @@ const DB16_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-let DB16_CONFIG_PROFILE = { ...DB15_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB16_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB15_CONFIG_PROFILE)) {
+    DB16_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {
@@ -2325,7 +2342,12 @@ const DB17_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-let DB17_CONFIG_PROFILE = { ...DB16_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB17_CONFIG_PROFILE = { }
+for (const [key, value] of Object.entries(DB16_CONFIG_PROFILE)) {
+    DB17_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {
@@ -2395,7 +2417,11 @@ const DB18_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB18_CONFIG_MAPPING);
 type_validation(DB18_CONFIG_MAPPING);
-let DB18_CONFIG_PROFILE = { ...DB17_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB18_CONFIG_PROFILE = { }
+for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
+    DB18_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB18_CONFIG_MAPPING)) {
         if (key in DB18_CONFIG_PROFILE) {
@@ -2421,15 +2447,20 @@ if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
 
 // The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 // Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
-const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized
-function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput) {
+const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized (0.72-0.75ms tested on GCP VM)
+const _DISK_ZERO_SPEED = 2.9 * Ki        // The speed of creating a zero-filled file, measured by MiB/s
+function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput,
+                  options, wal_init_zero) {
     // The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     // or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     console.debug('Estimate the time required to flush the full WAL buffers to disk');
     const data_amount = Math.floor(wal_buffers * data_amount_ratio);
     const num_wal_files_required = Math.floor(data_amount / wal_segment_size) + 1;
-    const rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
+    let rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
     const write_time_in_ms = (data_amount / Mi) / wal_throughput * K10;
+    if (wal_init_zero === 'on' && options.operating_system !== 'windows') {
+        rotate_time_in_ms += num_wal_files_required * ((wal_segment_size / Mi) / _DISK_ZERO_SPEED * K10);
+    }
 
     // Calculate maximum how many delay time
     let delay_time = 0;
@@ -2714,9 +2745,14 @@ class PG_TUNE_RESPONSE {
 
         // WAL Times
         const wal_throughput = options.wal_spec.perf()[0];
-        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
+        const wal05 = wal_time(wal_buffers, 0.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+            wal_throughput, options, managed_cache['wal_init_zero']);
 
         // Vacuum and Maintenance
         let real_autovacuum_work_mem = managed_cache['autovacuum_work_mem'];
@@ -2899,6 +2935,10 @@ Report Summary (others):
         + Full Page Writes: ${managed_cache['full_page_writes']}
         + Fsync: ${managed_cache['fsync']}
     - Buffers Write Cycle within Data Loss Time: ${options.max_time_transaction_loss_allow_in_millisecond} ms (depend on WAL volume throughput)
+        + 0.5x when opt_wal_buffers=${PG_PROFILE_OPTMODE.NONE}:
+            -> Elapsed Time :: Rotate: ${wal05['rotate_time'].toFixed(2)} ms :: Write: ${wal05['write_time'].toFixed(2)} ms :: Delay: ${wal05['delay_time'].toFixed(2)} ms
+            -> Total Time :: ${wal05['total_time'].toFixed(2)} ms during ${wal05['num_wal_files']} WAL files
+            -> OK for Transaction Loss: ${wal05['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
         + 1.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: ${wal10['rotate_time'].toFixed(2)} ms :: Write: ${wal10['write_time'].toFixed(2)} ms :: Delay: ${wal10['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal10['total_time'].toFixed(2)} ms during ${wal10['num_wal_files']} WAL files
@@ -3168,8 +3208,8 @@ function _ApplyItmTune(key, after, scope, response, suffix_text = '') {
     // Versioning should NOT be acknowledged here by this function
     if (!(key in items) || !(key in cache)) {
         const msg = `WARNING: The ${key} is not found in the managed tuning item list, probably the scope is invalid.`
-        console.error(msg)
-        throw new Error(msg)
+        console.warn(msg)
+        return null
     }
 
     const before = cache[key]
@@ -3932,12 +3972,13 @@ function _wal_integrity_buffer_size_tune(request, response) {
     )[1]  // Bump to higher WAL buffers
     let transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
     while (transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
-        after_wal_writer_delay, wal_tput)['total_time']) {
+        after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['total_time']) {
         current_wal_buffers -= decay_rate
     }
 
     _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
+    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
+        after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['msg']
     console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} -> ${wal_time_report}.`)
     return null
 }

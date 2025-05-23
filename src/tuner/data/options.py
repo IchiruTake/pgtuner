@@ -181,25 +181,25 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'archive_timeout, wal_buffers, and checkpoint_timeout to better suit your workload. '
     )
     min_wal_size_ratio: PositiveFloat = Field(
-        default=0.05, ge=0.0, le=0.15, frozen=True,
-        description='The ratio of the min_wal_size against the total WAL volume. The supported range is [0.0, 0.15], '
-                    'default to 0.05 (5% of the WAL volume), meaning that 5% of the WAL volume is reserved to handle '
+        default=0.025, ge=0.0, le=0.10, frozen=True,
+        description='The ratio of the min_wal_size against the total WAL volume. The supported range is [0.0, 0.10], '
+                    'default to 0.025 (2.5% of the WAL volume), meaning that 5% of the WAL volume is reserved to handle '
                     'spikes in WAL usage, allowing time for CHECKPOINT and ARCHIVE to run to cleanup WAL archive, '
                     'ensuring the non-full WAL (for SATA/NVME SSD to have write cache) and updated data files. '
                     'Internally, the :arg:`min_wal_size` has an internal lower bound of 32 WAL files or 2 GiB and an '
                     'upper bound of 1.05x of :arg:`max_wal_size` (since the :arg:`max_wal_size` is a soft limit). '
     )
     max_wal_size_ratio: PositiveFloat = Field(
-        default=0.05, ge=0.0, le=0.30, frozen=True,
-        description='The ratio of the max_wal_size against the total WAL volume. The supported range is [0.0, 0.30], '
-                    'default to 0.05 (5% of WAL volume). But internally, the max_wal_size has an internal lower bound '
+        default=0.04, ge=0.0, le=0.20, frozen=True,
+        description='The ratio of the max_wal_size against the total WAL volume. The supported range is [0.0, 0.20], '
+                    'default to 0.04 (4% of WAL volume). But internally, the max_wal_size has an internal lower bound '
                     'of 64 WAL files or 4 GiB (prevent the default running too frequently during burst, causing the '
                     'WAL spike); and the upper bound of 64 GiB to ensure fast recovery on burst at large scale.'
     )
     wal_keep_size_ratio: PositiveFloat = (
-        Field(default=0.05, ge=0.0, le=0.30, frozen=True,
+        Field(default=0.05, ge=0.0, le=0.20, frozen=True,
               description='The ratio of the wal_keep_size against the total WAL volume. The supported range is '
-                          '[0.0, 0.30], default to 0.05 (5% of WAL volume). This value is used to ensure that the '
+                          '[0.0, 0.20], default to 0.04 (4% of WAL volume). This value is used to ensure that the '
                           'WAL archive is kept for a certain period of time before it is removed. Azure uses 400 MiB '
                           'of WAL which is 25 WAL files. Internally, the wal_keep_size has an internal lower bound '
                           'of 32 WAL files or 2 GiB to ensure a good time for retrying the WAL streaming and an upper '

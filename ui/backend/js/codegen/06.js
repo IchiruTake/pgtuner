@@ -182,10 +182,10 @@ function _CalcWalBuffers(group_cache, global_cache, options, response, minimum, 
     let shared_buffers = global_cache['shared_buffers'];
     let usable_ram_noswap = options.usable_ram;
     function fn(x) {
-        return 1024 * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
+        return Ki * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
     }
     let oldstyle_wal_buffers = Math.min(Math.floor(shared_buffers / 32), options.tuning_kwargs.wal_segment_size);  // Measured in bytes
-    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki);
+    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki); // Measured in bytes
     return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), DB_PAGE_SIZE)[options.align_index];
 }
 

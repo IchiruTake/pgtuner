@@ -4,7 +4,7 @@ data_index_disk = new PG_DISK_PERF(
         'random_iops_scale_factor': 1.0,
         'throughput_spec': 350,
         'throughput_scale_factor': 1.0,
-        'disk_usable_size': 128 * Gi,
+        'disk_usable_size': 64 * Gi,
     }
 )
 wal_disk = new PG_DISK_PERF(
@@ -13,7 +13,7 @@ wal_disk = new PG_DISK_PERF(
         'random_iops_scale_factor': 1.0,
         'throughput_spec': 500,
         'throughput_scale_factor': 1.0,
-        'disk_usable_size': 256 * Gi,
+        'disk_usable_size': 128 * Gi,
     }
 )
 kw = new PG_TUNE_USR_KWARGS(
@@ -45,11 +45,10 @@ kw = new PG_TUNE_USR_KWARGS(
 
         // WAL control parameters -> Change this when you initdb with custom wal_segment_size (not recommended)
         // https://postgrespro.com/list/thread-id/1898949
-        // TODO: Whilst PostgreSQL allows up to 2 GiB, my recommendation is to limited below 128 MiB to prevent issue
         wal_segment_size: BASE_WAL_SEGMENT_SIZE, // [16 * Mi, 128 * Mi]. Default is 16 MiB. The WAL segment size
-        min_wal_size_ratio: 0.05, // [0.0, 0.15]. Default is 0.05 (5%). The ratio of the min_wal_size
-        max_wal_size_ratio: 0.05, // [0.0, 0.30]. Default is 0.05 (5%). The ratio to force CHECKPOINT
-        wal_keep_size_ratio: 0.05, // [0.0, 0.30]. Default is 0.05 (5%). The ratio to keep for replication
+        min_wal_size_ratio: 0.025, // [0.0, 0.10]. Default is 0.025 (2.5%). The ratio of the min_wal_size
+        max_wal_size_ratio: 0.04, // [0.0, 0.20]. Default is 0.04 (4%). The ratio to force CHECKPOINT
+        wal_keep_size_ratio: 0.04, // [0.0, 0.20]. Default is 0.04 (4%). The ratio to keep for replication
 
         // Vacuum Tuning
         autovacuum_utilization_ratio: 0.80, // [0.30, 0.95]. Default is 0.80 (80%). The utilization of the random IOPS

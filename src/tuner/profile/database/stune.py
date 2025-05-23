@@ -64,8 +64,8 @@ def _ApplyItmTune(key: str, after: Any, scope: PG_SCOPE, response: PG_TUNE_RESPO
     # Versioning should NOT be acknowledged here by this function
     if key not in items or key not in cache:
         msg = f'WARNING: The {key} is not found in the managed tuning item list, probably the scope is invalid.'
-        _logger.critical(msg)
-        raise KeyError(msg)
+        _logger.warning(msg)
+        return None
 
     before = cache[key]
     if isinstance(_log_pool, list):
@@ -925,13 +925,14 @@ def _wal_integrity_buffer_size_tune(
     )[1]  # Only use higher WAL buffers
 
     transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
+
     while transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
-                                            after_wal_writer_delay, wal_tput)['total_time']:
+                                            after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['total_time']:
         current_wal_buffers -= decay_rate
     _ApplyItmTune('wal_buffers', current_wal_buffers, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
     wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
-                               after_wal_writer_delay, wal_tput)['msg']
+                               after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['msg']
     _logs.append(f'The wal_buffers is set to {bytesize_to_hr(current_wal_buffers)} -> {wal_time_report}')
     return _FlushLog(_logs)
 

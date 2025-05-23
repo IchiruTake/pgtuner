@@ -8,14 +8,18 @@ const _DB15_LOG_PROFILE = {
     "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB15_CONFIG_MAPPING = {
     log: [PG_SCOPE.LOGGING, _DB15_LOG_PROFILE, { hardware_scope: 'disk' }],
 };
+
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-let DB15_CONFIG_PROFILE = { ...DB14_CONFIG_PROFILE};
+// Pseudo Deep Copy
+const DB15_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB14_CONFIG_PROFILE)) {
+    DB15_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
