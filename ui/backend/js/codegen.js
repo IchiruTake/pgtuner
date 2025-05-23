@@ -1639,10 +1639,10 @@ function _CalcWalBuffers(group_cache, global_cache, options, response, minimum, 
     let shared_buffers = global_cache['shared_buffers'];
     let usable_ram_noswap = options.usable_ram;
     function fn(x) {
-        return 1024 * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
+        return Ki * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
     }
     let oldstyle_wal_buffers = Math.min(Math.floor(shared_buffers / 32), options.tuning_kwargs.wal_segment_size);  // Measured in bytes
-    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki);
+    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki); // Measured in bytes
     return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), DB_PAGE_SIZE)[options.align_index];
 }
 
@@ -2202,8 +2202,8 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { };
 // Pseudo Deep Copy
+const DB14_CONFIG_PROFILE = { };
 for (const [key, value] of Object.entries(DB13_CONFIG_PROFILE)) {
     DB14_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
 }
@@ -2241,8 +2241,8 @@ const DB15_CONFIG_MAPPING = {
 
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-let DB15_CONFIG_PROFILE = { };
 // Pseudo Deep Copy
+const DB15_CONFIG_PROFILE = { };
 for (const [key, value] of Object.entries(DB14_CONFIG_PROFILE)) {
     DB15_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
 }
@@ -2289,8 +2289,8 @@ const DB16_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-let DB16_CONFIG_PROFILE = { }
 // Pseudo Deep Copy
+const DB16_CONFIG_PROFILE = { };
 for (const [key, value] of Object.entries(DB15_CONFIG_PROFILE)) {
     DB16_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
 }
@@ -2342,8 +2342,8 @@ const DB17_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-let DB17_CONFIG_PROFILE = { }
 // Pseudo Deep Copy
+const DB17_CONFIG_PROFILE = { }
 for (const [key, value] of Object.entries(DB16_CONFIG_PROFILE)) {
     DB17_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
 }
@@ -2418,7 +2418,7 @@ const DB18_CONFIG_MAPPING = {
 merge_extra_info_to_profile(DB18_CONFIG_MAPPING);
 type_validation(DB18_CONFIG_MAPPING);
 // Pseudo Deep Copy
-let DB18_CONFIG_PROFILE = { }
+const DB18_CONFIG_PROFILE = { }
 for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
     DB18_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
 }
