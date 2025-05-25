@@ -233,6 +233,7 @@ def _CalcWalBuffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, res
     shared_buffers = global_cache['shared_buffers']
     usable_ram_noswap = options.usable_ram
     fn = lambda x: Ki * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
+    # See function XLOGChooseNumBuffers() in line 4800 at ./src/backend/access/transam/xlog.c
     oldstyle_wal_buffers = min(shared_buffers // 32, options.tuning_kwargs.wal_segment_size)  # Measured in bytes
     wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki) # Measured in bytes
     return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=DB_PAGE_SIZE)[options.align_index]

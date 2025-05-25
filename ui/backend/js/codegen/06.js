@@ -449,7 +449,7 @@ _DB_WAL_PROFILE = {
     },
     'wal_buffers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            _CalcWalBuffers(group_cache, global_cache, options, response, Math.floor(BASE_WAL_SEGMENT_SIZE / 2),
+            _CalcWalBuffers(group_cache, global_cache, options, response, BASE_WAL_SEGMENT_SIZE,
                 BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
