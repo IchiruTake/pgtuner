@@ -372,6 +372,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     # workload required WRITE-intensive operation during daily.
     # See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
+    # https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
     bg_io_per_cycle = 0.075  # 7.5 % of random IO per sec (should be around than 3-10%)
     assert bg_io_per_cycle < 1.0, 'The bg_io_per_cycle should be less than 1.0, otherwise it is not a valid ratio.'
     assert 0 < bg_io_per_cycle <= 0.15, 'The bg_io_per_cycle should be between 0 and 0.15 to not trash out the bgwriter.'
