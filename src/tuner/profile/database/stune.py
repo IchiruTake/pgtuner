@@ -373,12 +373,13 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # workload required WRITE-intensive operation during daily.
     # See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     # https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
-    bg_io_per_cycle = 0.075  # 7.5 % of random IO per sec (should be around than 3-10%)
+    bg_io_per_cycle = 0.05  # 4 % of random IO per cycle (should be around than 3-10%)
     assert bg_io_per_cycle < 1.0, 'The bg_io_per_cycle should be less than 1.0, otherwise it is not a valid ratio.'
     assert 0 < bg_io_per_cycle <= 0.15, 'The bg_io_per_cycle should be between 0 and 0.15 to not trash out the bgwriter.'
     iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  # write/(write + delay) = bg_io_per_cycle
     after_bgwriter_lru_maxpages = cap_value(
-        data_iops * cap_value(iops_ratio, 1e-6, 1e-1), # Should not be too high
+        # Should not be too high
+        50 * request.options.workload_profile.num() + data_iops * cap_value(iops_ratio, 1e-6, 1e-1),
         100 + 50 * request.options.workload_profile.num(), 10000
     )
     _ApplyItmTune('bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
