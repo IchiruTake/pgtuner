@@ -1300,19 +1300,19 @@ class PG_TUNE_USR_KWARGS {
     constructor(options = {}) {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
-        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 4;
+        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
         // Memory Utilization (Basic)
         this.effective_cache_size_available_ratio = options.effective_cache_size_available_ratio ?? 0.985;
         this.shared_buffers_ratio = options.shared_buffers_ratio ?? 0.25;
-        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.075;
+        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.10;
         this.effective_connection_ratio = options.effective_connection_ratio ?? 0.75;
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
         this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
-        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.4;
+        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.45;
         this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
         // Tune logging behaviour
@@ -1321,9 +1321,9 @@ class PG_TUNE_USR_KWARGS {
         this.max_runtime_ratio_to_explain_slow_query = options.max_runtime_ratio_to_explain_slow_query ?? 1.5;
         // WAL control parameters
         this.wal_segment_size = options.wal_segment_size ?? BASE_WAL_SEGMENT_SIZE;
-        this.min_wal_size_ratio = options.min_wal_size_ratio ?? 0.05;
-        this.max_wal_size_ratio = options.max_wal_size_ratio ?? 0.05;
-        this.wal_keep_size_ratio = options.wal_keep_size_ratio ?? 0.05;
+        this.min_wal_size_ratio = options.min_wal_size_ratio ?? 0.025;
+        this.max_wal_size_ratio = options.max_wal_size_ratio ?? 0.04;
+        this.wal_keep_size_ratio = options.wal_keep_size_ratio ?? 0.04;
         // Vacuum Tuning
         this.autovacuum_utilization_ratio = options.autovacuum_utilization_ratio ?? 0.80;
         this.vacuum_safety_level = options.vacuum_safety_level ?? 2;
@@ -1787,7 +1787,7 @@ _DB_BGWRITER_PROFILE = {
     // We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     // to tune it
     'bgwriter_delay': {
-        'default': 300,
+        'default': 200,
         'hardware_scope': 'overall',
         'partial_func': (value) => `${value}ms`,
     },
@@ -3458,25 +3458,26 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
 
     // ----------------------------------------------------------------------------------------------
     console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.\nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.`)
-    // Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
-    // --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
-    let after_bgwriter_delay = Math.floor(Math.max(100, managed_cache['bgwriter_delay'] - 8 * data_iops / K10))
+    // Tune the bgwriter_delay.
+    // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
+    let after_bgwriter_delay = Math.floor(Math.max(
+        100, // Don't want too small to have too many frequent context switching
+        // Don't use the number from general tuning since we want a smoothing IO stabilizer
+        300 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10
+        ))
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response)
 
     // Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
     // workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     // workload required WRITE-intensive operation during daily.
-    if ((request.options.workload_type === PG_WORKLOAD.VECTOR && request.options.workload_profile >= PG_SIZING.MALL) || request.options.workload_type !== PG_WORKLOAD.VECTOR) {
-        let after_bgwriter_lru_maxpages = Math.floor(managed_cache['bgwriter_lru_maxpages']) // Make a copy
-        if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd', 'weak')) {
-            after_bgwriter_lru_maxpages += 100
-        } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd', 'strong')) {
-            after_bgwriter_lru_maxpages += 100 + 150
-        } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'nvme')) {
-            after_bgwriter_lru_maxpages += 100 + 150 + 200
-        }
-        _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response)
-    }
+    // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
+    const bg_io_per_cycle = 0.075  // 7.5 % of random IO per sec (should be around than 3-10%)
+    const iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  // write/(write + delay) = bg_io_per_cycle
+    const after_bgwriter_lru_maxpages = cap_value(
+        data_iops * cap_value(iops_ratio, 1e-6, 1e-1), // Should not be too high
+        100 + 50 * request.options.workload_profile.num(), 10000
+    );
+    _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
 
     // ----------------------------------------------------------------------------------------------
     /**
@@ -3931,7 +3932,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         Math.min(32 * _kwargs.wal_segment_size, 2 * Gi),
         64 * Gi
     )
-    after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
+    after_wal_keep_size = realign_value(after_wal_keep_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
     _ApplyItmTune('wal_keep_size', after_wal_keep_size, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // -------------------------------------------------------------------------

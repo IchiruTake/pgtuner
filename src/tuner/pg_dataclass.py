@@ -393,19 +393,19 @@ Report Summary (others):
         + 0.5x when opt_wal_buffers={PG_PROFILE_OPTMODE.NONE}:
             -> Elapsed Time :: Rotate: {wal05['rotate_time']:.2f} ms :: Write: {wal05['write_time']:.2f} ms :: Delay: {wal05['delay_time']:.2f} ms
             -> Total Time :: {wal05['total_time']:.2f} ms for {wal05['num_wal_files']} WAL files
-            -> Status (O at Best/Avg/Worst): {wal05['total_time'] <= wal_writer_delay}/{wal05['total_time'] <= wal_writer_delay * 2}/{wal05['total_time'] <= wal_writer_delay * 3}
+            -> Status (OK at Best/Avg/Worst): {wal05['total_time'] <= wal_writer_delay}/{wal05['total_time'] <= wal_writer_delay * 2}/{wal05['total_time'] <= wal_writer_delay * 3}
         + 1.0x when opt_wal_buffers={PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: {wal10['rotate_time']:.2f} ms :: Write: {wal10['write_time']:.2f} ms :: Delay: {wal10['delay_time']:.2f} ms
             -> Total Time :: {wal10['total_time']:.2f} ms for {wal10['num_wal_files']} WAL files
-            -> Status (O at Best/Avg/Worst): {wal10['total_time'] <= wal_writer_delay}/{wal10['total_time'] <= wal_writer_delay * 2}/{wal10['total_time'] <= wal_writer_delay * 3}
+            -> Status (OK at Best/Avg/Worst): {wal10['total_time'] <= wal_writer_delay}/{wal10['total_time'] <= wal_writer_delay * 2}/{wal10['total_time'] <= wal_writer_delay * 3}
         + 1.5x when opt_wal_buffers={PG_PROFILE_OPTMODE.OPTIMUS_PRIME}:
             -> Elapsed Time :: Rotate: {wal15['rotate_time']:.2f} ms :: Write: {wal15['write_time']:.2f} ms :: Delay: {wal15['delay_time']:.2f} ms
             -> Total Time :: {wal15['total_time']:.2f} ms for {wal15['num_wal_files']} WAL files
-            -> Status (O at Best/Avg/Worst): {wal15['total_time'] <= wal_writer_delay}/{wal15['total_time'] <= wal_writer_delay * 2}/{wal15['total_time'] <= wal_writer_delay * 3}
+            -> Status (OK at Best/Avg/Worst): {wal15['total_time'] <= wal_writer_delay}/{wal15['total_time'] <= wal_writer_delay * 2}/{wal15['total_time'] <= wal_writer_delay * 3}
         + 2.0x when opt_wal_buffers={PG_PROFILE_OPTMODE.PRIMORDIAL}:
             -> Elapsed Time :: Rotate: {wal20['rotate_time']:.2f} ms :: Write: {wal20['write_time']:.2f} ms :: Delay: {wal20['delay_time']:.2f} ms
             -> Total Time :: {wal20['total_time']:.2f} ms for {wal20['num_wal_files']} WAL files
-            -> Status (O at Best/Avg/Worst): {wal20['total_time'] <= wal_writer_delay}/{wal20['total_time'] <= wal_writer_delay * 2}/{wal20['total_time'] <= wal_writer_delay * 3}
+            -> Status (OK at Best/Avg/Worst): {wal20['total_time'] <= wal_writer_delay}/{wal20['total_time'] <= wal_writer_delay * 2}/{wal20['total_time'] <= wal_writer_delay * 3}
     - WAL Sizing: 
         + Max WAL Size for Automatic Checkpoint: {bytesize_to_hr(managed_cache['max_wal_size'])} or {managed_cache['max_wal_size'] / options.wal_spec.disk_usable_size * 100:.2f} (%)
         + Min WAL Size for WAL recycle instead of removal: {bytesize_to_hr(managed_cache['min_wal_size'])} 

@@ -358,26 +358,28 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
                      response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
-    # Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
-    # --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
-    after_bgwriter_delay = floor(max(100, managed_cache['bgwriter_delay'] - 8 * data_iops // int(1 * K10)))
+    # Tune the bgwriter_delay.
+    # The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
+    after_bgwriter_delay = floor(max(
+        100,    # Don't want too small to have too many frequent context switching
+        # Don't use the number from general tuning since we want a smoothing IO stabilizer
+        300 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
+    ))
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, scope=PG_SCOPE.OTHERS, 
                  response=response, _log_pool=_logs)
 
     # Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
     # workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     # workload required WRITE-intensive operation during daily.
-    if ((request.options.workload_type == PG_WORKLOAD.VECTOR and request.options.workload_profile >= PG_SIZING.MALL) or
-            request.options.workload_type != PG_WORKLOAD.VECTOR):
-        after_bgwriter_lru_maxpages = int(managed_cache['bgwriter_lru_maxpages'])  # Make a copy
-        if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'ssd', interval='weak'):
-            after_bgwriter_lru_maxpages += 100
-        elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'ssd', interval='strong'):
-            after_bgwriter_lru_maxpages += 100 + 150
-        elif PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'nvme'):
-            after_bgwriter_lru_maxpages += 100 + 150 + 200
-        _ApplyItmTune(key='bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
-                     response=response, _log_pool=_logs)
+    # See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
+    bg_io_per_cycle = 0.075  # 7.5 % of random IO per sec (should be around than 3-10%)
+    iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  # write/(write + delay) = bg_io_per_cycle
+    after_bgwriter_lru_maxpages = cap_value(
+        data_iops * cap_value(iops_ratio, 1e-6, 1e-1), # Should not be too high
+        100 + 50 * request.options.workload_profile.num(), 10000
+    )
+    _ApplyItmTune('bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
+                  response=response, _log_pool=_logs)
 
     # -------------------------------------------------------------------------
     """
@@ -872,11 +874,9 @@ def _wal_integrity_buffer_size_tune(
         min(32 * _kwargs.wal_segment_size, 2 * Gi),
         64 * Gi
     )
-    after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
+    after_wal_keep_size = realign_value(after_wal_keep_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
     _ApplyItmTune('wal_keep_size', after_wal_keep_size, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
-    assert managed_cache['wal_keep_size'] <= int(_wal_disk_size * 0.50), \
-        'The wal_keep_size is greater than half of the WAL disk size'
 
     # -------------------------------------------------------------------------
     # Tune the archive_timeout based on the WAL segment size. This is easy because we want to flush the WAL

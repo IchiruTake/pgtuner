@@ -330,7 +330,7 @@ _DB_BGWRITER_PROFILE = {
     // We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     // to tune it
     'bgwriter_delay': {
-        'default': 300,
+        'default': 200,
         'hardware_scope': 'overall',
         'partial_func': (value) => `${value}ms`,
     },
