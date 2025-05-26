@@ -45,6 +45,7 @@ if __name__ == "__main__":
     kw = PG_TUNE_USR_KWARGS(
         # Connection
         user_max_connections=0, # Default to let pgtuner manage the number of connections
+        cpu_to_connection_scale_ratio=5, # [2.5, 10]. Default is 5. The ratio of CPU to connection
         superuser_reserved_connections_scale_ratio=1.5, # [1, 3]. Higher for less superuser reserved connections
         single_memory_connection_overhead=5 * Mi, # [2, 12]. Default is 5 MiB. This is estimation and not big impact
         memory_connection_to_dedicated_os_ratio=0.7, # [0, 1]. Default is 0.7. This is estimation and not big impact
@@ -52,16 +53,16 @@ if __name__ == "__main__":
         # Memory Utilization (Basic)
         effective_cache_size_available_ratio=0.985, # [0.95, 1.0]. Default is 0.985 (98.5%).
         shared_buffers_ratio=0.25, # [0.15, 0.60). Default is 0.25 (25%). The starting ratio
-        max_work_buffer_ratio=0.075, # [0.0, 0.50]. Default is 0.075 (7.5%). The starting ratio
+        max_work_buffer_ratio=0.1, # [0.0, 0.50]. Default is 0.1 (10%). The starting ratio
         effective_connection_ratio=0.75, # [0.25, 1.0]. Default is 0.75 (75%). Only this ratio are maintained connected
         temp_buffers_ratio=0.25, # [0.05, 0.95]. Default is 0.25 (25%). The ratio of temp_buffers to total
 
         # Memory Utilization (Advanced)
         max_normal_memory_usage=0.45, # [0.35, 0.80]. Default is 0.45 (45%). The optimized ratio for normal memory usage
-        mem_pool_tuning_ratio=0.4, # [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
+        mem_pool_tuning_ratio=0.45, # [0.0, 1.0]. Default is 0.45 (45%). The optimized ratio for memory pool tuning
         # Maximum float allowed is [-60, 60] under 64-bit system
-        hash_mem_usage_level=-5, # [-50, 50]. Default is -6. The optimized ratio for hash memory usage level
-        mem_pool_parallel_estimate=True, # Default is True to assume the use of p
+        hash_mem_usage_level=-5, # [-50, 50]. Default is -5. The optimized ratio for hash memory usage level (peak range is -60, 60)
+        mem_pool_parallel_estimate=True, # Default is True to assume the use of parallelism
 
         # Logging behaviour (query size, and query runtime)
         max_query_length_in_bytes=2 * Ki, # [64, 64 * Mi]. Default is 2 KiB. The maximum query length in bytes
@@ -72,9 +73,9 @@ if __name__ == "__main__":
         # https://postgrespro.com/list/thread-id/1898949
         # TODO: Whilst PostgreSQL allows up to 2 GiB, my recommendation is to limited below 128 MiB to prevent issue
         wal_segment_size=BASE_WAL_SEGMENT_SIZE, # [16 * Mi, 128 * Mi]. Default is 16 MiB. The WAL segment size
-        min_wal_size_ratio=0.05, # [0.0, 0.15]. Default is 0.05 (5%). The ratio of the min_wal_size
-        max_wal_size_ratio=0.05, # [0.0, 0.30]. Default is 0.05 (5%). The ratio to force CHECKPOINT
-        wal_keep_size_ratio=0.05, # [0.0, 0.30]. Default is 0.05 (5%). The ratio to keep for replication
+        min_wal_size_ratio=0.025, # [0.0, 0.10]. Default is 0.025 (2.5%). The ratio of the min_wal_size
+        max_wal_size_ratio=0.04, # [0.0, 0.20]. Default is 0.04 (4%). The ratio to force CHECKPOINT
+        wal_keep_size_ratio=0.04, # [0.0, 0.20]. Default is 0.04 (4%). The ratio to keep for replication
 
         # Vacuum Tuning
         autovacuum_utilization_ratio=0.80, # [0.30, 0.95]. Default is 0.80 (80%). The utilization of the random IOPS

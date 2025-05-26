@@ -20,6 +20,7 @@ kw = new PG_TUNE_USR_KWARGS(
     {
         // Connection
         user_max_connections: 0, // Default to let pgtuner manage the number of connections
+        cpu_to_connection_scale_ratio: 5, // The scale ratio of the CPU to the number of connections
         superuser_reserved_connections_scale_ratio: 1.5, // [1, 3]. Higher for less superuser reserved connections
         single_memory_connection_overhead: 5 * Mi, // [2, 12]. Default is 5 MiB. This is estimation and not big impact
         memory_connection_to_dedicated_os_ratio: 0.7, // [0, 1]. Default is 0.3. This is estimation and not big impact
@@ -27,13 +28,13 @@ kw = new PG_TUNE_USR_KWARGS(
         // Memory Utilization (Basic)
         effective_cache_size_available_ratio: 0.985, // [0.95, 1.0]. Default is 0.985 (98.5%).
         shared_buffers_ratio: 0.25, // [0.15, 0.60). Default is 0.25 (25%). The starting ratio
-        max_work_buffer_ratio: 0.075, // [0.0, 0.50]. Default is 0.075 (7.5%). The starting ratio
+        max_work_buffer_ratio: 0.1, // [0.0, 0.50]. Default is 0.1 (10%). The starting ratio
         effective_connection_ratio: 0.75, // [0.25, 1.0]. Default is 0.75 (75%). Only this ratio are maintained connected
         temp_buffers_ratio: 0.25, // [0.05, 0.95]. Default is 0.25 (25%). The ratio of temp_buffers to total
 
         // Memory Utilization (Advanced)
         max_normal_memory_usage: 0.45, // [0.35, 0.80]. Default is 0.45 (45%). The optimized ratio for normal memory usage
-        mem_pool_tuning_ratio: 0.4, // [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
+        mem_pool_tuning_ratio: 0.45, // [0.0, 1.0]. Default is 0.4 (40%). The optimized ratio for memory pool tuning
         // Maximum float allowed is [-60, 60] under 64-bit system
         hash_mem_usage_level: -5, // [-50, 50]. Default is -5. The optimized ratio for hash memory usage level
         mem_pool_parallel_estimate: true, // Default is True to assume the use of parallel work_mem

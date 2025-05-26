@@ -915,7 +915,7 @@ _DB_WAL_PROFILE = {
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'wal_buffers': {
-        'tune_op': partial(_CalcWalBuffers, minimum=BASE_WAL_SEGMENT_SIZE // 2, maximum=BASE_WAL_SEGMENT_SIZE * 16),
+        'tune_op': partial(_CalcWalBuffers, minimum=BASE_WAL_SEGMENT_SIZE, maximum=BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
         'comment': 'The amount of shared memory used for WAL data that has not yet been written to disk. The default '
