@@ -3471,6 +3471,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     // workload required WRITE-intensive operation during daily.
     // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
+    // https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
     const bg_io_per_cycle = 0.075  // 7.5 % of random IO per sec (should be around than 3-10%)
     const iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  // write/(write + delay) = bg_io_per_cycle
     const after_bgwriter_lru_maxpages = cap_value(
