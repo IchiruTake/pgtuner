@@ -2745,13 +2745,14 @@ class PG_TUNE_RESPONSE {
 
         // WAL Times
         const wal_throughput = options.wal_spec.perf()[0];
-        const wal05 = wal_time(wal_buffers, 0.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+        const wal_writer_delay = managed_cache['wal_writer_delay']
+        const wal05 = wal_time(wal_buffers, 0.5, _kwargs.wal_segment_size, wal_writer_delay,
             wal_throughput, options, managed_cache['wal_init_zero']);
-        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, wal_writer_delay,
             wal_throughput, options, managed_cache['wal_init_zero']);
-        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, wal_writer_delay,
             wal_throughput, options, managed_cache['wal_init_zero']);
-        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'],
+        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, wal_writer_delay,
             wal_throughput, options, managed_cache['wal_init_zero']);
 
         // Vacuum and Maintenance
@@ -2928,29 +2929,30 @@ Report Summary (others):
     - Batched Commit Delay: ${managed_cache['commit_delay']} (ms)
     
 * Write-Ahead Logging and Data Integrity:
-    - WAL Level: ${managed_cache['wal_level']} with ${managed_cache['wal_compression']} compression algorithm
-    - WAL Segment Size (1 file): ${bytesize_to_hr(_kwargs.wal_segment_size)}
+    - WAL Level: ${managed_cache['wal_level']} :: Compression: ${managed_cache['wal_compression']}
+    - Single WAL File Size (1 file): ${bytesize_to_hr(_kwargs.wal_segment_size)}
     - Integrity:
         + Synchronous Commit: ${managed_cache['synchronous_commit']}
         + Full Page Writes: ${managed_cache['full_page_writes']}
         + Fsync: ${managed_cache['fsync']}
     - Buffers Write Cycle within Data Loss Time: ${options.max_time_transaction_loss_allow_in_millisecond} ms (depend on WAL volume throughput)
+        WAL Buffers: ${bytesize_to_hr(wal_buffers)} or ${(wal_buffers / usable_ram_noswap * 100).toFixed(2)} (%)
         + 0.5x when opt_wal_buffers=${PG_PROFILE_OPTMODE.NONE}:
             -> Elapsed Time :: Rotate: ${wal05['rotate_time'].toFixed(2)} ms :: Write: ${wal05['write_time'].toFixed(2)} ms :: Delay: ${wal05['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal05['total_time'].toFixed(2)} ms during ${wal05['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal05['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal05['total_time'] <= wal_writer_delay}/${wal05['total_time'] <= wal_writer_delay * 2}/${wal05['total_time'] <= wal_writer_delay * 3}
         + 1.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: ${wal10['rotate_time'].toFixed(2)} ms :: Write: ${wal10['write_time'].toFixed(2)} ms :: Delay: ${wal10['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal10['total_time'].toFixed(2)} ms during ${wal10['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal10['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal10['total_time'] <= wal_writer_delay}/${wal10['total_time'] <= wal_writer_delay * 2}/${wal10['total_time'] <= wal_writer_delay * 3}
         + 1.5x when opt_wal_buffers=${PG_PROFILE_OPTMODE.OPTIMUS_PRIME}:
             -> Elapsed Time :: Rotate: ${wal15['rotate_time'].toFixed(2)} ms :: Write: ${wal15['write_time'].toFixed(2)} ms :: Delay: ${wal15['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal15['total_time'].toFixed(2)} ms during ${wal15['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal15['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal15['total_time'] <= wal_writer_delay}/${wal15['total_time'] <= wal_writer_delay * 2}/${wal15['total_time'] <= wal_writer_delay * 3}
         + 2.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.PRIMORDIAL}:
             -> Elapsed Time :: Rotate: ${wal20['rotate_time'].toFixed(2)} ms :: Write: ${wal20['write_time'].toFixed(2)} ms :: Delay: ${wal20['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal20['total_time'].toFixed(2)} ms during ${wal20['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal20['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal20['total_time'] <= wal_writer_delay}/${wal20['total_time'] <= wal_writer_delay * 2}/${wal20['total_time'] <= wal_writer_delay * 3}
     - WAL Sizing:  
         + Max WAL Size for Automatic Checkpoint: ${bytesize_to_hr(managed_cache['max_wal_size'])} or ${managed_cache['max_wal_size'] / options.wal_spec.perf()[0]} seconds
         + Min WAL Size for WAL recycle instead of removal: ${bytesize_to_hr(managed_cache['min_wal_size'])}

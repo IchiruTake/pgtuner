@@ -184,9 +184,10 @@ class PG_TUNE_RESPONSE(BaseModel):
 
         # WAL Times
         wal_throughput = options.wal_spec.perf()[0]
+        wal_writer_delay = managed_cache['wal_writer_delay']
         wal_time_partial = partial(
             wal_time, wal_buffers=wal_buffers, wal_segment_size=_kwargs.wal_segment_size,
-            wal_writer_delay_in_ms=managed_cache['wal_writer_delay'], wal_throughput=wal_throughput,
+            wal_writer_delay_in_ms=wal_writer_delay, wal_throughput=wal_throughput,
             options=options, wal_init_zero=managed_cache['wal_init_zero'],
         )
         wal05 = wal_time_partial(data_amount_ratio=0.5)
@@ -381,29 +382,30 @@ Report Summary (others):
     - Batched Commit Delay: {managed_cache['commit_delay']} (ms)
        
 * Write-Ahead Logging and Data Integrity:
-    - WAL Level: {managed_cache['wal_level']} with {managed_cache['wal_compression']} compression algorithm 
-    - WAL Segment Size (1 file): {bytesize_to_hr(_kwargs.wal_segment_size)}
+    - WAL Level: {managed_cache['wal_level']} :: Compression {managed_cache['wal_compression']} 
+    - Single WAL File Size (1 file): {bytesize_to_hr(_kwargs.wal_segment_size)}
     - Integrity: 
         + Synchronous Commit: {managed_cache['synchronous_commit']}
         + Full Page Writes: {managed_cache['full_page_writes']}
         + Fsync: {managed_cache['fsync']}
     - Buffers Write Cycle within Data Loss Time: {options.max_time_transaction_loss_allow_in_millisecond} ms (depend on WAL volume throughput)
+        WAL Buffers: {bytesize_to_hr(wal_buffers)} or {wal_buffers / usable_ram_noswap * 100:.2f} (%)
         + 0.5x when opt_wal_buffers={PG_PROFILE_OPTMODE.NONE}:
             -> Elapsed Time :: Rotate: {wal05['rotate_time']:.2f} ms :: Write: {wal05['write_time']:.2f} ms :: Delay: {wal05['delay_time']:.2f} ms
-            -> Total Time :: {wal05['total_time']:.2f} ms during {wal05['num_wal_files']} WAL files
-            -> OK for Transaction Loss: {wal05['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Total Time :: {wal05['total_time']:.2f} ms for {wal05['num_wal_files']} WAL files
+            -> Status (O at Best/Avg/Worst): {wal05['total_time'] <= wal_writer_delay}/{wal05['total_time'] <= wal_writer_delay * 2}/{wal05['total_time'] <= wal_writer_delay * 3}
         + 1.0x when opt_wal_buffers={PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: {wal10['rotate_time']:.2f} ms :: Write: {wal10['write_time']:.2f} ms :: Delay: {wal10['delay_time']:.2f} ms
-            -> Total Time :: {wal10['total_time']:.2f} ms during {wal10['num_wal_files']} WAL files
-            -> OK for Transaction Loss: {wal10['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Total Time :: {wal10['total_time']:.2f} ms for {wal10['num_wal_files']} WAL files
+            -> Status (O at Best/Avg/Worst): {wal10['total_time'] <= wal_writer_delay}/{wal10['total_time'] <= wal_writer_delay * 2}/{wal10['total_time'] <= wal_writer_delay * 3}
         + 1.5x when opt_wal_buffers={PG_PROFILE_OPTMODE.OPTIMUS_PRIME}:
             -> Elapsed Time :: Rotate: {wal15['rotate_time']:.2f} ms :: Write: {wal15['write_time']:.2f} ms :: Delay: {wal15['delay_time']:.2f} ms
-            -> Total Time :: {wal15['total_time']:.2f} ms during {wal15['num_wal_files']} WAL files
-            -> OK for Transaction Loss: {wal15['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Total Time :: {wal15['total_time']:.2f} ms for {wal15['num_wal_files']} WAL files
+            -> Status (O at Best/Avg/Worst): {wal15['total_time'] <= wal_writer_delay}/{wal15['total_time'] <= wal_writer_delay * 2}/{wal15['total_time'] <= wal_writer_delay * 3}
         + 2.0x when opt_wal_buffers={PG_PROFILE_OPTMODE.PRIMORDIAL}:
             -> Elapsed Time :: Rotate: {wal20['rotate_time']:.2f} ms :: Write: {wal20['write_time']:.2f} ms :: Delay: {wal20['delay_time']:.2f} ms
-            -> Total Time :: {wal20['total_time']:.2f} ms during {wal20['num_wal_files']} WAL files
-            -> OK for Transaction Loss: {wal20['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Total Time :: {wal20['total_time']:.2f} ms for {wal20['num_wal_files']} WAL files
+            -> Status (O at Best/Avg/Worst): {wal20['total_time'] <= wal_writer_delay}/{wal20['total_time'] <= wal_writer_delay * 2}/{wal20['total_time'] <= wal_writer_delay * 3}
     - WAL Sizing: 
         + Max WAL Size for Automatic Checkpoint: {bytesize_to_hr(managed_cache['max_wal_size'])} or {managed_cache['max_wal_size'] / options.wal_spec.disk_usable_size * 100:.2f} (%)
         + Min WAL Size for WAL recycle instead of removal: {bytesize_to_hr(managed_cache['min_wal_size'])} 
