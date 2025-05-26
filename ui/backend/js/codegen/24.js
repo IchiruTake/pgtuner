@@ -1070,6 +1070,20 @@ function _logger_tune(request, response) {
     return null;
 }
 
+function _stune_v18(request, response) {
+    // This is the tuning for PostgreSQL 18
+    if (request.options.pgsql_version < 18) {
+        console.warn(`The PostgreSQL version is ${request.options.pgsql_version} < 18 -> Skip the PostgreSQL 18 tuning`)
+        return null;
+    }
+    console.info(`===== PostgreSQL 18 Tuning =====`)
+    console.info(`Start tuning the PostgreSQL 18 database server based on the new features and changes in PostgreSQL 18. \nImpacted attributes: io_uring`)
+
+    const after_io_method = ['windows', 'macos'].includes(request.options.operating_system) ? 'worker' : 'io_uring'
+    _ApplyItmTune('io_method', after_io_method, PG_SCOPE.OTHERS, response)
+
+}
+
 function correction_tune(request, response) {
     if (!request.options.enable_database_correction_tuning) {
         console.warn('The database correction tuning is disabled by the user -> Skip the workload tuning')
@@ -1094,8 +1108,11 @@ function correction_tune(request, response) {
     // -------------------------------------------------------------------------
     // Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    // -------------------------------------------------------------------------
+    // Version Adaptation Tuning
+    _stune_v18(request, response)
+
+
     return null;
 }
-
-// -----------------------------------------------
-// Sample

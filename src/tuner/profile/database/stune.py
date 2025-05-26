@@ -373,6 +373,8 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # workload required WRITE-intensive operation during daily.
     # See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     bg_io_per_cycle = 0.075  # 7.5 % of random IO per sec (should be around than 3-10%)
+    assert bg_io_per_cycle < 1.0, 'The bg_io_per_cycle should be less than 1.0, otherwise it is not a valid ratio.'
+    assert 0 < bg_io_per_cycle <= 0.15, 'The bg_io_per_cycle should be between 0 and 0.15 to not trash out the bgwriter.'
     iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  # write/(write + delay) = bg_io_per_cycle
     after_bgwriter_lru_maxpages = cap_value(
         data_iops * cap_value(iops_ratio, 1e-6, 1e-1), # Should not be too high
@@ -1207,8 +1209,23 @@ def _logger_tune(
     #              _log_pool=_logs)
     # _ApplyItmTune(key='auto_explain.log_timing', after='on', scope=PG_SCOPE.EXTRA, response=response,
     #              _log_pool=_logs)
-    return None
+    return _FlushLog(_logs)
 
+# =============================================================================
+def _stune_v18(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
+    if request.options.pgsql_version < 18:
+        _logger.warning('The PostgreSQL version is less than 18.0 -> Skip the tuning.')
+        return None
+
+    _logs = [
+        '\n ===== PostgreSQL 18+ Tuning =====',
+        'Start tuning the PostgreSQL 18+ database server based on the new features and changes. '
+        'Impacted attributes: io_method'
+    ]
+    after_io_method = 'worker' if request.options.operating_system in ('windows', 'macos') else 'io_uring'
+    _ApplyItmTune('io_method', after_io_method, scope=PG_SCOPE.OTHERS, response=response, _log_pool=_logs)
+
+    return _FlushLog(_logs)
 
 # =============================================================================
 @time_decorator
@@ -1235,6 +1252,10 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     # -------------------------------------------------------------------------
     # Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    # -------------------------------------------------------------------------
+    # Version Adaptation Tuning
+    _stune_v18(request, response)
 
     # -------------------------------------------------------------------------
     if not WEB_MODE:
