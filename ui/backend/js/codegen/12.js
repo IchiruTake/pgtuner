@@ -6,8 +6,8 @@
 // AsyncIO profile
 const _DB18_ASYNC_DISK_PROFILE = {
     "io_max_combine_limit": { "default": 128 * Ki, "partial_func": value => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`, },
-    "io_max_concurrency": { "default": cap_value(-1, -1,1024) },
-    "io_method": { "default": "io_uring", },
+    "io_max_concurrency": { "default": cap_value(-1, -1, 1024) },
+    "io_method": { "default": "worker", },
     "io_workers": { "default": cap_value(3, 1, 32), },
 };
 

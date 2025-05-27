@@ -2373,8 +2373,8 @@ if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
 // AsyncIO profile
 const _DB18_ASYNC_DISK_PROFILE = {
     "io_max_combine_limit": { "default": 128 * Ki, "partial_func": value => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`, },
-    "io_max_concurrency": { "default": cap_value(-1, -1,1024) },
-    "io_method": { "default": "io_uring", },
+    "io_max_concurrency": { "default": cap_value(-1, -1, 1024) },
+    "io_method": { "default": "worker", },
     "io_workers": { "default": cap_value(3, 1, 32), },
 };
 
@@ -3424,13 +3424,10 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         // READ operation only (if not believe, check three patches in release notes). At least the FlushBuffer()
         // is still work-in-place (WIP)
         // TODO: Preview patches later in version 18+
-        let after_checkpoint_flush_after = managed_cache['checkpoint_flush_after']
+        let after_checkpoint_flush_after = 512 * Ki     // Directly bump to 512 KiB
         let after_wal_writer_flush_after = managed_cache['wal_writer_flush_after']
         let after_bgwriter_flush_after = managed_cache['bgwriter_flush_after']
-        if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'san', 'strong')) {
-            after_checkpoint_flush_after = 512 * Ki
-            after_bgwriter_flush_after = 512 * Ki
-        } else if (PG_DISK_SIZING.matchDiskSeriesInRange(data_iops, RANDOM_IOPS, 'ssd', 'nvme')) {
+        if (PG_DISK_SIZING.matchDiskSeriesInRange(data_iops, RANDOM_IOPS, 'ssd', 'nvme')) {
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
         }
@@ -3472,7 +3469,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // workload required WRITE-intensive operation during daily.
     // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     // https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
-    const bg_io_per_cycle = 0.05  // Random IO per cycle (should be around than 3-10%)
+    const bg_io_per_cycle = 0.065  // Random IO per cycle (should be around than 3-10%)
     const iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  // write/(write + delay) = bg_io_per_cycle
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high

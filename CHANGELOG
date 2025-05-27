@@ -38,7 +38,6 @@ Algorithm Changes:
 - STUNE: Reduce the result of `cpu_tuple_cost` and `parallel_tuple_cost`
 - STUNE: Simplify (reduce) configuration value of `default_statistics_target`
 - STUNE: Simplify (reduce) configuration value of `after_commit_delay` to be workload-based rather than disk-based
-- STUNE: Simplify (increase) configuration value of `bgwriter_delay` (8ms reduction per 1000 IOPS than 10ms)
 - STUNE: Reduce the upper bound of `vacuum_*_min_age` from 25% of associated `vacuum_*_max_age` to 15%
 - STUNE: Stop enforce the option `opt_wal_buffers` to be higher than `PG_PROFILE_OPTMODE.NONE`
 - STUNE: Reduce by half the alignment size of `min_wal_size`, `max_wal_size`, and `wal_keep_size` (The configuration would be better detailed).
@@ -46,6 +45,7 @@ Algorithm Changes:
 - STUNE: A typo in `backend_flush_after` has been corrected from 512 MiB to 512 KiB.
 - STUNE: Re-calibrate the algorithm of WAL pre-allocation of zero-filled WAL file (ignore the parameter `wal_init_zero`).
 - STUNE: Re-calibrate the background writer behaviour by optimizing the `bgwriter_delay` and `bgwriter_lru_maxpages`
+- STUNE: The `checkpoint_flush_after` is now 512 KiB across all disk specification.
 
 Others:
 - PY_BKE: The GC has been pushed more with better GC management.

@@ -321,14 +321,10 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         # is still work-in-place (WIP)
         # TODO: Preview patches later in version 18+
 
-        after_checkpoint_flush_after = managed_cache['checkpoint_flush_after']
+        after_checkpoint_flush_after = 512 * Ki     # Directly bump to 512 KiB
         after_wal_writer_flush_after = managed_cache['wal_writer_flush_after']
         after_bgwriter_flush_after = managed_cache['bgwriter_flush_after']
-
-        if PG_DISK_SIZING.match_disk_series(data_iops, RANDOM_IOPS, 'san', interval='strong'):
-            after_checkpoint_flush_after = 512 * Ki
-            after_bgwriter_flush_after = 512 * Ki
-        elif PG_DISK_SIZING.match_disk_series_in_range(data_iops, RANDOM_IOPS, 'ssd', 'nvme'):
+        if PG_DISK_SIZING.match_disk_series_in_range(data_iops, RANDOM_IOPS, 'ssd', 'nvme'):
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
         _ApplyItmTune('bgwriter_flush_after', after_bgwriter_flush_after, scope=PG_SCOPE.OTHERS, 
@@ -373,7 +369,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # workload required WRITE-intensive operation during daily.
     # See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     # https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
-    bg_io_per_cycle = 0.05  # 4 % of random IO per cycle (should be around than 3-10%)
+    bg_io_per_cycle = 0.065  # Random IO per cycle (should be around than 3-10%)
     assert bg_io_per_cycle < 1.0, 'The bg_io_per_cycle should be less than 1.0, otherwise it is not a valid ratio.'
     assert 0 < bg_io_per_cycle <= 0.15, 'The bg_io_per_cycle should be between 0 and 0.15 to not trash out the bgwriter.'
     iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  # write/(write + delay) = bg_io_per_cycle
