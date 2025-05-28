@@ -254,14 +254,13 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         // the *_flush_after when database is powered down. But loss is maximum from wal_buffers and 3x wal_writer_delay
         // not from these setting, since under the OS crash (with synchronous_commit=ON or LOCAL, it still can allow
         // a REDO to update into data files)
-        // Note that these are not related to the io_combine_limit in PostgreSQL v17 as they only vectorized the
-        // READ operation only (if not believe, check three patches in release notes). At least the FlushBuffer()
-        // is still work-in-place (WIP)
-        // TODO: Preview patches later in version 18+
         let after_checkpoint_flush_after = 512 * Ki     // Directly bump to 512 KiB
         let after_wal_writer_flush_after = managed_cache['wal_writer_flush_after']
         let after_bgwriter_flush_after = managed_cache['bgwriter_flush_after']
-        if (PG_DISK_SIZING.matchDiskSeriesInRange(data_iops, RANDOM_IOPS, 'ssd', 'nvme')) {
+        if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'san', 'strong')) {
+            after_checkpoint_flush_after = 768 * Ki
+            after_bgwriter_flush_after = 768 * Ki
+        } else if (PG_DISK_SIZING.matchDiskSeriesInRange(data_iops, RANDOM_IOPS, 'ssd', 'nvme')) {
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
         }
@@ -1009,7 +1008,7 @@ function _wrk_mem_tune(request, response) {
 
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
     // and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
-    // the time of reading 64 WAL files sequentially by 30% and writing those data randomly by 30%
+    // the time of reading 64 WAL files sequentially by 25% and writing those data randomly by 25%
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
     // method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
     // buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
@@ -1017,10 +1016,17 @@ function _wrk_mem_tune(request, response) {
     // The minimum data amount is under normal condition of working (not initial bulk load)
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _data_iops = request.options.data_index_spec.perf()[1]
-    const _data_trans_tput = 0.70 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -2.5)
+    const _wal_tput = request.options.wal_spec.perf()[0]
+    const _data_trans_tput = 0.75 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -2.5)
     let _shared_buffers_ratio = 0.30    // Don't used for tuning, just an estimate of how checkpoint data writes
-    if (request.options.workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR]) {
+    if (request.options.workload_type === PG_WORKLOAD.OLAP) {
         _shared_buffers_ratio = 0.15
+    } else if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
+        _shared_buffers_ratio = 0.02
+    } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
+        // This workload requires a lot of INSERT operations at large where as the monitoring don't perform
+        // an equivalent amount of SELECT operations
+        _shared_buffers_ratio = 0.99
     }
 
     // max_wal_size is added for automatic checkpoint as threshold
@@ -1032,13 +1038,23 @@ function _wrk_mem_tune(request, response) {
     )  // Measured by MiB.
     let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
     console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
-    const after_checkpoint_timeout = realign_value(
-        Math.max(managed_cache['checkpoint_timeout'] +
-            Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
-            min_ckpt_time / managed_cache['checkpoint_completion_target']), Math.floor(MINUTE / 2)
+    
+    let after_checkpoint_timeout = realign_value(
+        max(managed_cache['checkpoint_timeout'], 
+            min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.25), // 25% more to reserved thing (magic number)
+        Math.floor(MINUTE / 2)
     )[request.options.align_index]
-    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout / 10), PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    // WAL Sync Time: Time to flush additional dirty pages during the checkpoint from the first-byte-to-modify
+    // to let the data files keep up with the WAL files
+    after_checkpoint_timeout += Math.floor(
+        min(128 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput) 
+    )
+    
+    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, 
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 1.25 * (1 - managed_cache['checkpoint_completion_target'])), 
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
+    )
 
     return null;
 }
