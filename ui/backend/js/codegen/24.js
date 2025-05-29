@@ -291,23 +291,27 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the bgwriter_delay.
     // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     let after_bgwriter_delay = Math.floor(Math.max(
-        100, // Don't want too small to have too many frequent context switching
+        150, // Don't want too small to have too many frequent context switching
         // Don't use the number from general tuning since we want a smoothing IO stabilizer
         300 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10
-        ))
-    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response)
+        ));
+    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
     // Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
     // workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     // workload required WRITE-intensive operation during daily.
     // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     // https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
-    const bg_io_per_cycle = 0.065  // Random IO per cycle (should be around than 3-10%)
-    const iops_ratio = 1 / (1 / bg_io_per_cycle - 1)  // write/(write + delay) = bg_io_per_cycle
+    let bg_io_per_cycle = 0.060;  // Random IO per cycle (should be around than 3-10%)
+    if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
+    	bg_io_per_cycle = 0.035;
+    } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
+    	bg_io_per_cycle = 0.075;
+    }
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high
-        50 * request.options.workload_profile.num() + data_iops * cap_value(iops_ratio, 1e-6, 1e-1),
-        100 + 50 * request.options.workload_profile.num(), 10000
+        30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1),
+        100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
 
@@ -1007,8 +1011,7 @@ function _wrk_mem_tune(request, response) {
     console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
 
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
-    // and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
-    // the time of reading 64 WAL files sequentially by 25% and writing those data randomly by 25%
+    // and expected RTO.
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
     // method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
     // buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
@@ -1017,7 +1020,7 @@ function _wrk_mem_tune(request, response) {
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _data_iops = request.options.data_index_spec.perf()[1]
     const _wal_tput = request.options.wal_spec.perf()[0]
-    const _data_trans_tput = 0.75 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -2.5)
+    const _data_trans_tput = 0.90 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -3)
     let _shared_buffers_ratio = 0.30    // Don't used for tuning, just an estimate of how checkpoint data writes
     if (request.options.workload_type === PG_WORKLOAD.OLAP) {
         _shared_buffers_ratio = 0.15
@@ -1043,7 +1046,7 @@ function _wrk_mem_tune(request, response) {
     // WAL Sync Time: Time to sync the WAL files to flush additional dirty pages during the checkpoint
     // from the first-byte-to-modify to let the data files keep up with the WAL files
     let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.25)
-    total_ckpt_time += Math.ceil(128 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
+    total_ckpt_time += Math.ceil(256 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
     let after_checkpoint_timeout = realign_value(
         max(managed_cache['checkpoint_timeout'], total_ckpt_time), // 25% more to reserved thing (magic number)
         Math.floor(MINUTE / 2)
