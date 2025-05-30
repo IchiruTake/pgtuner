@@ -293,7 +293,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     let after_bgwriter_delay = Math.floor(Math.max(
         150, // Don't want too small to have too many frequent context switching
         // Don't use the number from general tuning since we want a smoothing IO stabilizer
-        300 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10
+        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
         ));
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
@@ -302,18 +302,19 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // workload required WRITE-intensive operation during daily.
     // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     // https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
-    let bg_io_per_cycle = 0.060;  // Random IO per cycle (should be around than 3-10%)
+    let bg_io_per_cycle = 0.065;  // Random IO per cycle (should be around than 3-10%) -> Multiply with K10 is the WRITE time
     if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
     	bg_io_per_cycle = 0.035;
     } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
-    	bg_io_per_cycle = 0.075;
+    	bg_io_per_cycle = 0.080;
     }
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high
-        30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1),
+        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
         100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
+    console.info(`The background writer is tuned to write at most ${after_bgwriter_lru_maxpages} pages per cycle with ${after_bgwriter_delay} ms delay. -> Resulting in maximum of ${_max_write_time} ms of WRITE time and peak utilization of ${(100 * _max_write_time / (_max_write_time + after_bgwriter_delay)).toFixed(2)} % of the disk IOPS.`)
 
     // ----------------------------------------------------------------------------------------------
     /**

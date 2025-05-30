@@ -358,7 +358,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     after_bgwriter_delay = floor(max(
         150,    # Don't want too small to have too many frequent context switching
         # Don't use the number from general tuning since we want a smoothing IO stabilizer
-        300 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
+        350 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
     ))
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, scope=PG_SCOPE.OTHERS, 
                  response=response, _log_pool=_logs)
@@ -368,11 +368,11 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # workload required WRITE-intensive operation during daily.
     # See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
     # https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
-    bg_io_per_cycle = 0.06  # Random IO per cycle (should be around than 3-10%)
+    bg_io_per_cycle = 0.065  # Random IO per cycle (should be around than 3-10%) -> Multiply with K10 is the WRITE time
     if request.options.workload_type == PG_WORKLOAD.VECTOR:
         bg_io_per_cycle = 0.035
     elif request.options.workload_type == PG_WORKLOAD.TSR_IOT:
-        bg_io_per_cycle = 0.075
+        bg_io_per_cycle = 0.080
 
     assert 0 < bg_io_per_cycle <= 0.10, 'The bg_io_per_cycle should be between 0 and 0.10 to not trash out the bgwriter.'
     after_bgwriter_lru_maxpages = cap_value(
@@ -382,7 +382,11 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     )
     _ApplyItmTune('bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
                   response=response, _log_pool=_logs)
-
+    _max_write_time = after_bgwriter_lru_maxpages / data_iops * K10  # In ms
+    _logs.append(f'The background writer is tuned to write at most {after_bgwriter_lru_maxpages} pages per cycle with '
+                 f'{after_bgwriter_delay} ms delay -> Resulting in maximum of {_max_write_time} ms of WRITE time and '
+                 f'peak utilization of {_max_write_time / (_max_write_time + after_bgwriter_delay) * 100:.2f} % of '
+                 f'the disk IOPS.')
     # -------------------------------------------------------------------------
     """
     This docstring aims to describe how we tune the autovacuum. Basically, we run autovacuum more frequently, the ratio
