@@ -1050,17 +1050,16 @@ function _wrk_mem_tune(request, response) {
     // from the first-byte-to-modify to let the data files keep up with the WAL files
     let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.50
     total_ckpt_time += Math.ceil(
-        max(
+        Math.max(
             32 * Mi + 48 * Mi * request.options.workload_profile.num(),
             4 * request.options.tuning_kwargs.wal_segment_size
-        ) * (1 / _data_trans_tput + 1 / _wal_tput)
+        ) / Mi * (1 / _data_trans_tput + 1 / _wal_tput)
     )
     let after_checkpoint_timeout = realign_value(
-        max(managed_cache['checkpoint_timeout'], total_ckpt_time),
+        Math.max(managed_cache['checkpoint_timeout'], total_ckpt_time),
         Math.floor(MINUTE / 2)
     )[request.options.align_index]
-    console.info(`The checkpoint timeout is estimated to be ${after_checkpoint_timeout.toFixed(1)} seconds under
-        estimation of ${total_ckpt_time.toFixed(1)} seconds.`)
+    console.info(`The checkpoint timeout is selected to be ${after_checkpoint_timeout.toFixed(1)} seconds under the minimum estimated time of ${total_ckpt_time.toFixed(1)} seconds.`)
     
     _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, 
         PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)

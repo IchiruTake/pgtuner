@@ -1174,14 +1174,14 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # to let the data files keep up with the WAL files
     total_ckpt_time += int(
         max(32 * Mi + 64 * Mi * request.options.workload_profile.num(),
-            4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
+            4 * request.options.tuning_kwargs.wal_segment_size) / Mi * (1 / _data_trans_tput + 1 / _wal_tput)
     )
     after_checkpoint_timeout = realign_value(
         max(managed_cache['checkpoint_timeout'], total_ckpt_time),
         page_size=MINUTE // 2
     )[request.options.align_index]
     _logs.append(f'The checkpoint timeout is estimated to be {after_checkpoint_timeout:.1f} seconds under the '
-                 f'estimation checkpoint time is {total_ckpt_time:.1f} seconds ')
+                 f'minimum estimated time is {total_ckpt_time:.1f} seconds.')
 
     _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
