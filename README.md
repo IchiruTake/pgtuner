@@ -1,10 +1,10 @@
-# PostgreSQL: DBA and Tuner (pgtuner_dba)
+# PostgreSQL: DBA and Tuner (pgtune)
 
 ## Overview
 
-The :project:`pgtuner` (or PostgreSQL: Tuner as DBA) is a SQL/Python-based project designed to manage and optimize kernel parameters and database settings, focusing on TCP networking on kernel (connection management, retries, timeouts, and **buffering**), and database utilization (memory, disk, integrity); bringing the highest performance with stability, data integrity, and concurrency from various system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, many DBA experts at PostgreSQL community (Azure, OnGres, PostgresPro, PostgreSQL core developers, real-world use cases, ...) and my own experience. 
+The :project:`pgtuner` is a SQL/Python-based project designed to manage and optimize kernel parameters and database settings, focusing on TCP networking on kernel (connection management, retries, timeouts, and **buffering**), and database utilization (memory, disk, integrity); bringing the highest performance with stability, data integrity, and concurrency from various system configurations. The tuning is inspired by many successful world-wide clusters (Notion, Cloudflare, ...) from OS part, many DBA experts at PostgreSQL community (Azure, OnGres, PostgresPro, PostgreSQL core developers, real-world use cases, ...) and my own experience; and pushing those performance tuning to the next level.
 
-You can experience our on-demand tool under the URL https://pgtuner.onrender.com, or clone our repository and run it on your local machine (follow the instruction below). 
+You can experience our on-demand tool under the URL https://pgtuner.onrender.com or https://ichiru.github.io/pgtuner or clone our repository and run it on your local machine (follow the instruction below). 
 
 ## How tuning works?
 
@@ -24,6 +24,8 @@ This project is licensed under the MIT License. See the `LICENSE` file for more 
 
 ## Build and Test on Local
 
-Build your Docker container in Dockerfile; or create a virtual environment with Python 3.12 and install the dependencies from `requirements.*.txt`. The project is tested on Python 3.12+, but you can free to run at Python 3.11 on local machine. Its web interface is run on the port 8001 by default, but it can be changed by the environment variable `PORT` in the environment file `web.*.env`.
+Build your Docker container in Dockerfile; or create a virtual environment with Python 3.12 or higher and install the dependencies from `requirements.*.txt`. The project is tested on Python 3.12+, but you can free to run at Python 3.11 on local machine. Its web interface is run on the port 8001 by default, but it can be changed by the environment variable `PORT` in the environment file `./conf/web.*.env`.
 
-If you decide to work on its backend only, install the `requirements.bump.cli.txt`. If you attempt to improve the frontend server hosting, then install the `requirements.bump.web.txt`. For full development, including the UI change, install both the `requirements.bump.web.txt` and `requirements.html.txt` (for HTML/CSS/JS minification).
+If you decide to work on its backend only, install the `requirements.bump.cli.txt`. If you attempt to improve the frontend server hosting, then install the `requirements.bump.web.txt`. For full development, including the UI change, install both the `requirements.bump.web.txt` and `requirements.html.txt` (for HTML/CSS/JS minification). 
+
+If you intend to modify the UI of this project, focused on the Javascript at `./ui/backend/*` and `./ui/dev/*'` for the HTML. Once the modification is done, ensure that the packages declared at `requirements.html.txt` are installed and run the Python code at `./cicd_codegen_minifier.py` to complete the backend code generation and HTML minification. The file at `./docs/*` (for GitHub Page Site), `./ui/prod/*`, and `./ui/frontend/*` are the generated files, and they should not be modified.

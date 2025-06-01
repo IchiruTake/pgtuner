@@ -33,11 +33,11 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     # generalized. Even on PostgreSQL 14, the scaling is significant when the PostgreSQL server is not virtualized and
     # have a lot of CPU to use (> 32 - 96|128 cores).
     cpu_to_connection_scale_ratio: PositiveFloat = Field(
-        default=4, ge=2.5, le=10, frozen=True,
+        default=5, ge=2.5, le=10, frozen=True,
         description='The scale ratio of the CPU to the number of connections. The supported range is [2.5, 10], default '
-                    'is 4. This value is used to estimate the number of connections that can be handled by the server '
+                    'is 5. This value is used to estimate the number of connections that can be handled by the server '
                     'based on the number of CPU cores. The higher value means more connections can be handled by the '
-                    'server. From modern perspective, the good ratio is between 4-6, but default to 4 for optimal ' \
+                    'server. From modern perspective, the good ratio is between 4-6, but default to 5 for balanced ' \
                     'performance with less risk for idle connection overhead.'
     )
     superuser_reserved_connections_scale_ratio: PositiveFloat = Field(
@@ -77,10 +77,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'enable the correction_tuning, you should ignore this value.'
     )
     max_work_buffer_ratio: PositiveFloat = Field(
-        default=0.075, gt=0, le=0.50, frozen=False,
+        default=0.1, gt=0, le=0.50, frozen=False,
         description='The starting ratio of the maximum PostgreSQL available memory (after excluding shared_buffers and '
                     'others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). '
-                    'The supported range is (0, 0.50], default is 0.075. The algorithm is temp_buffers + work_mem = '
+                    'The supported range is (0, 0.50], default is 0.1. The algorithm is temp_buffers + work_mem = '
                     '(pgmem_available * max_work_buffer_ratio) / active_user_connections. However, if you enable the '
                     'correction_tuning, you can adjust this value *slowly* to increase the memory budget for query '
                     'operation. Under correction tuning, the absolute difference between :attr:`shared_buffers_ratio` '
@@ -115,7 +115,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'background tasks.'
     )
     mem_pool_tuning_ratio: float = Field(
-        default=0.4, ge=0.0, le=1.0, frozen=True,
+        default=0.45, ge=0.0, le=1.0, frozen=True,
         description='The memory tuning ratio in correction tuning between shared_buffers and work_buffers. Supported '
                     'value is [0, 1] and default is 0.4; Higher value meant that the tuning would prefer the '
                     ':arg`shared_buffers` over the :arg:`work_buffers`, and vice versa.'
@@ -181,25 +181,25 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'archive_timeout, wal_buffers, and checkpoint_timeout to better suit your workload. '
     )
     min_wal_size_ratio: PositiveFloat = Field(
-        default=0.05, ge=0.0, le=0.15, frozen=True,
-        description='The ratio of the min_wal_size against the total WAL volume. The supported range is [0.0, 0.15], '
-                    'default to 0.05 (5% of the WAL volume), meaning that 5% of the WAL volume is reserved to handle '
+        default=0.025, ge=0.0, le=0.10, frozen=True,
+        description='The ratio of the min_wal_size against the total WAL volume. The supported range is [0.0, 0.10], '
+                    'default to 0.025 (2.5% of the WAL volume), meaning that 5% of the WAL volume is reserved to handle '
                     'spikes in WAL usage, allowing time for CHECKPOINT and ARCHIVE to run to cleanup WAL archive, '
                     'ensuring the non-full WAL (for SATA/NVME SSD to have write cache) and updated data files. '
                     'Internally, the :arg:`min_wal_size` has an internal lower bound of 32 WAL files or 2 GiB and an '
                     'upper bound of 1.05x of :arg:`max_wal_size` (since the :arg:`max_wal_size` is a soft limit). '
     )
     max_wal_size_ratio: PositiveFloat = Field(
-        default=0.05, ge=0.0, le=0.30, frozen=True,
-        description='The ratio of the max_wal_size against the total WAL volume. The supported range is [0.0, 0.30], '
-                    'default to 0.05 (5% of WAL volume). But internally, the max_wal_size has an internal lower bound '
+        default=0.04, ge=0.0, le=0.20, frozen=True,
+        description='The ratio of the max_wal_size against the total WAL volume. The supported range is [0.0, 0.20], '
+                    'default to 0.04 (4% of WAL volume). But internally, the max_wal_size has an internal lower bound '
                     'of 64 WAL files or 4 GiB (prevent the default running too frequently during burst, causing the '
                     'WAL spike); and the upper bound of 64 GiB to ensure fast recovery on burst at large scale.'
     )
     wal_keep_size_ratio: PositiveFloat = (
-        Field(default=0.05, ge=0.0, le=0.30, frozen=True,
+        Field(default=0.05, ge=0.0, le=0.20, frozen=True,
               description='The ratio of the wal_keep_size against the total WAL volume. The supported range is '
-                          '[0.0, 0.30], default to 0.05 (5% of WAL volume). This value is used to ensure that the '
+                          '[0.0, 0.20], default to 0.04 (4% of WAL volume). This value is used to ensure that the '
                           'WAL archive is kept for a certain period of time before it is removed. Azure uses 400 MiB '
                           'of WAL which is 25 WAL files. Internally, the wal_keep_size has an internal lower bound '
                           'of 32 WAL files or 2 GiB to ensure a good time for retrying the WAL streaming and an upper '

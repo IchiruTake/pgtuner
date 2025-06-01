@@ -182,10 +182,10 @@ function _CalcWalBuffers(group_cache, global_cache, options, response, minimum, 
     let shared_buffers = global_cache['shared_buffers'];
     let usable_ram_noswap = options.usable_ram;
     function fn(x) {
-        return 1024 * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
+        return Ki * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
     }
     let oldstyle_wal_buffers = Math.min(Math.floor(shared_buffers / 32), options.tuning_kwargs.wal_segment_size);  // Measured in bytes
-    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki);
+    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki); // Measured in bytes
     return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), DB_PAGE_SIZE)[options.align_index];
 }
 
@@ -330,7 +330,7 @@ _DB_BGWRITER_PROFILE = {
     // We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     // to tune it
     'bgwriter_delay': {
-        'default': 300,
+        'default': 200,
         'hardware_scope': 'overall',
         'partial_func': (value) => `${value}ms`,
     },
@@ -449,7 +449,7 @@ _DB_WAL_PROFILE = {
     },
     'wal_buffers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            _CalcWalBuffers(group_cache, global_cache, options, response, Math.floor(BASE_WAL_SEGMENT_SIZE / 2),
+            _CalcWalBuffers(group_cache, global_cache, options, response, BASE_WAL_SEGMENT_SIZE,
                 BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',

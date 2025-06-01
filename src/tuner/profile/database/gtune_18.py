@@ -63,7 +63,7 @@ _DB_ASYNC_DISK_PROFILE = {
                    'but not more than 64.',
     },
     'io_method': {
-        'default': 'io_uring',
+        'default': 'worker',
         'comment': 'Selects the method for executing asynchronous I/O. Possible values are: `worker` (execute '
                    'asynchronous I/O using worker processes), `io_uring` (execute asynchronous I/O using io_uring, '
                    'requires a build with --with-liburing / -Dliburing), and `sync` (execute asynchronous-eligible '

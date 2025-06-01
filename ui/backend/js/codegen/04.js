@@ -7,19 +7,19 @@ class PG_TUNE_USR_KWARGS {
     constructor(options = {}) {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
-        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 4;
+        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
         // Memory Utilization (Basic)
         this.effective_cache_size_available_ratio = options.effective_cache_size_available_ratio ?? 0.985;
         this.shared_buffers_ratio = options.shared_buffers_ratio ?? 0.25;
-        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.075;
+        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.10;
         this.effective_connection_ratio = options.effective_connection_ratio ?? 0.75;
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
         this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
-        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.4;
+        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.45;
         this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
         // Tune logging behaviour
@@ -28,9 +28,9 @@ class PG_TUNE_USR_KWARGS {
         this.max_runtime_ratio_to_explain_slow_query = options.max_runtime_ratio_to_explain_slow_query ?? 1.5;
         // WAL control parameters
         this.wal_segment_size = options.wal_segment_size ?? BASE_WAL_SEGMENT_SIZE;
-        this.min_wal_size_ratio = options.min_wal_size_ratio ?? 0.05;
-        this.max_wal_size_ratio = options.max_wal_size_ratio ?? 0.05;
-        this.wal_keep_size_ratio = options.wal_keep_size_ratio ?? 0.05;
+        this.min_wal_size_ratio = options.min_wal_size_ratio ?? 0.025;
+        this.max_wal_size_ratio = options.max_wal_size_ratio ?? 0.04;
+        this.wal_keep_size_ratio = options.wal_keep_size_ratio ?? 0.04;
         // Vacuum Tuning
         this.autovacuum_utilization_ratio = options.autovacuum_utilization_ratio ?? 0.80;
         this.vacuum_safety_level = options.vacuum_safety_level ?? 2;

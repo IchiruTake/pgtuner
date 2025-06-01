@@ -44,8 +44,8 @@ function _ApplyItmTune(key, after, scope, response, suffix_text = '') {
     // Versioning should NOT be acknowledged here by this function
     if (!(key in items) || !(key in cache)) {
         const msg = `WARNING: The ${key} is not found in the managed tuning item list, probably the scope is invalid.`
-        console.error(msg)
-        throw new Error(msg)
+        console.warn(msg)
+        return null
     }
 
     const before = cache[key]
@@ -254,16 +254,12 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         // the *_flush_after when database is powered down. But loss is maximum from wal_buffers and 3x wal_writer_delay
         // not from these setting, since under the OS crash (with synchronous_commit=ON or LOCAL, it still can allow
         // a REDO to update into data files)
-        // Note that these are not related to the io_combine_limit in PostgreSQL v17 as they only vectorized the
-        // READ operation only (if not believe, check three patches in release notes). At least the FlushBuffer()
-        // is still work-in-place (WIP)
-        // TODO: Preview patches later in version 18+
-        let after_checkpoint_flush_after = managed_cache['checkpoint_flush_after']
+        let after_checkpoint_flush_after = 512 * Ki     // Directly bump to 512 KiB
         let after_wal_writer_flush_after = managed_cache['wal_writer_flush_after']
         let after_bgwriter_flush_after = managed_cache['bgwriter_flush_after']
         if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'san', 'strong')) {
-            after_checkpoint_flush_after = 512 * Ki
-            after_bgwriter_flush_after = 512 * Ki
+            after_checkpoint_flush_after = 768 * Ki
+            after_bgwriter_flush_after = 768 * Ki
         } else if (PG_DISK_SIZING.matchDiskSeriesInRange(data_iops, RANDOM_IOPS, 'ssd', 'nvme')) {
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
@@ -292,25 +288,33 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
 
     // ----------------------------------------------------------------------------------------------
     console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.\nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.`)
-    // Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
-    // --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
-    let after_bgwriter_delay = Math.floor(Math.max(100, managed_cache['bgwriter_delay'] - 8 * data_iops / K10))
-    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response)
+    // Tune the bgwriter_delay.
+    // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
+    let after_bgwriter_delay = Math.floor(Math.max(
+        150, // Don't want too small to have too many frequent context switching
+        // Don't use the number from general tuning since we want a smoothing IO stabilizer
+        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
+        ));
+    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
     // Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
     // workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     // workload required WRITE-intensive operation during daily.
-    if ((request.options.workload_type === PG_WORKLOAD.VECTOR && request.options.workload_profile >= PG_SIZING.MALL) || request.options.workload_type !== PG_WORKLOAD.VECTOR) {
-        let after_bgwriter_lru_maxpages = Math.floor(managed_cache['bgwriter_lru_maxpages']) // Make a copy
-        if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd', 'weak')) {
-            after_bgwriter_lru_maxpages += 100
-        } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd', 'strong')) {
-            after_bgwriter_lru_maxpages += 100 + 150
-        } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'nvme')) {
-            after_bgwriter_lru_maxpages += 100 + 150 + 200
-        }
-        _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response)
+    // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
+    // https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
+    let bg_io_per_cycle = 0.065;  // Random IO per cycle (should be around than 3-10%) -> Multiply with K10 is the WRITE time
+    if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
+    	bg_io_per_cycle = 0.035;
+    } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
+    	bg_io_per_cycle = 0.080;
     }
+    const after_bgwriter_lru_maxpages = cap_value(
+        // Should not be too high
+        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
+        100 + 30 * request.options.workload_profile.num(), 4000
+    );
+    _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
+    console.info(`The background writer is tuned to write at most ${after_bgwriter_lru_maxpages} pages per cycle with ${after_bgwriter_delay} ms delay. -> Resulting in maximum of ${_max_write_time} ms of WRITE time and peak utilization of ${(100 * _max_write_time / (_max_write_time + after_bgwriter_delay)).toFixed(2)} % of the disk IOPS.`)
 
     // ----------------------------------------------------------------------------------------------
     /**
@@ -765,7 +769,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         Math.min(32 * _kwargs.wal_segment_size, 2 * Gi),
         64 * Gi
     )
-    after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
+    after_wal_keep_size = realign_value(after_wal_keep_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
     _ApplyItmTune('wal_keep_size', after_wal_keep_size, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // -------------------------------------------------------------------------
@@ -808,12 +812,13 @@ function _wal_integrity_buffer_size_tune(request, response) {
     )[1]  // Bump to higher WAL buffers
     let transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
     while (transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
-        after_wal_writer_delay, wal_tput)['total_time']) {
+        after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['total_time']) {
         current_wal_buffers -= decay_rate
     }
 
     _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
+    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
+        after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['msg']
     console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} -> ${wal_time_report}.`)
     return null
 }
@@ -1007,8 +1012,7 @@ function _wrk_mem_tune(request, response) {
     console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
 
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
-    // and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
-    // the time of reading 64 WAL files sequentially by 30% and writing those data randomly by 30%
+    // and expected RTO.
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
     // method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
     // buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
@@ -1016,10 +1020,17 @@ function _wrk_mem_tune(request, response) {
     // The minimum data amount is under normal condition of working (not initial bulk load)
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _data_iops = request.options.data_index_spec.perf()[1]
-    const _data_trans_tput = 0.70 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -2.5)
+    const _wal_tput = request.options.wal_spec.perf()[0]
+    const _data_trans_tput = 0.90 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -3)
     let _shared_buffers_ratio = 0.30    // Don't used for tuning, just an estimate of how checkpoint data writes
-    if (request.options.workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR]) {
+    if (request.options.workload_type === PG_WORKLOAD.OLAP) {
         _shared_buffers_ratio = 0.15
+    } else if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
+        _shared_buffers_ratio = 0.02
+    } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
+        // This workload requires a lot of INSERT operations at large where as the monitoring don't perform
+        // an equivalent amount of SELECT operations
+        _shared_buffers_ratio = 0.99
     }
 
     // max_wal_size is added for automatic checkpoint as threshold
@@ -1031,13 +1042,24 @@ function _wrk_mem_tune(request, response) {
     )  // Measured by MiB.
     let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
     console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
-    const after_checkpoint_timeout = realign_value(
-        Math.max(managed_cache['checkpoint_timeout'] +
-            Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
-            min_ckpt_time / managed_cache['checkpoint_completion_target']), Math.floor(MINUTE / 2)
+
+    // WAL Write Time: Time to write the WAL files during the checkpoint with 25% buffer
+    // WAL Sync Time: Time to sync the WAL files to flush additional dirty pages during the checkpoint
+    // from the first-byte-to-modify to let the data files keep up with the WAL files
+    let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.25)
+    total_ckpt_time += Math.ceil(256 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
+    let after_checkpoint_timeout = realign_value(
+        max(managed_cache['checkpoint_timeout'], total_ckpt_time), // 25% more to reserved thing (magic number)
+        Math.floor(MINUTE / 2)
     )[request.options.align_index]
-    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout / 10), PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    console.info(`The checkpoint timeout is estimated to be ${after_checkpoint_timeout.toFixed(1)} seconds under
+        estimation of ${total_ckpt_time.toFixed(1)} seconds.`)
+    
+    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, 
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 1.25 * (1 - managed_cache['checkpoint_completion_target'])), 
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
+    )
 
     return null;
 }
@@ -1068,6 +1090,20 @@ function _logger_tune(request, response) {
     return null;
 }
 
+function _stune_v18(request, response) {
+    // This is the tuning for PostgreSQL 18
+    if (request.options.pgsql_version < 18) {
+        console.warn(`The PostgreSQL version is ${request.options.pgsql_version} < 18 -> Skip the PostgreSQL 18 tuning`)
+        return null;
+    }
+    console.info(`===== PostgreSQL 18 Tuning =====`)
+    console.info(`Start tuning the PostgreSQL 18 database server based on the new features and changes in PostgreSQL 18. \nImpacted attributes: io_uring`)
+
+    const after_io_method = ['windows', 'macos'].includes(request.options.operating_system) ? 'worker' : 'io_uring'
+    _ApplyItmTune('io_method', after_io_method, PG_SCOPE.OTHERS, response)
+
+}
+
 function correction_tune(request, response) {
     if (!request.options.enable_database_correction_tuning) {
         console.warn('The database correction tuning is disabled by the user -> Skip the workload tuning')
@@ -1092,8 +1128,11 @@ function correction_tune(request, response) {
     // -------------------------------------------------------------------------
     // Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    // -------------------------------------------------------------------------
+    // Version Adaptation Tuning
+    _stune_v18(request, response)
+
+
     return null;
 }
-
-// -----------------------------------------------
-// Sample

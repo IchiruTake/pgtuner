@@ -6,7 +6,7 @@
 const _DB16_VACUUM_PROFILE = {
     'vacuum_buffer_usage_limit': {
         "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         "default": 2 * Mi,
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -17,7 +17,6 @@ const _DB16_WAL_PROFILE = {
     "wal_compression": { "default": "zstd", },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB16_CONFIG_MAPPING = {
     maintenance: [PG_SCOPE.MAINTENANCE, _DB16_VACUUM_PROFILE, { hardware_scope: 'overall' }],
@@ -25,7 +24,12 @@ const DB16_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-let DB16_CONFIG_PROFILE = { ...DB15_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB16_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB15_CONFIG_PROFILE)) {
+    DB16_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {

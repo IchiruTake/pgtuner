@@ -1300,19 +1300,19 @@ class PG_TUNE_USR_KWARGS {
     constructor(options = {}) {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
-        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 4;
+        this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
         // Memory Utilization (Basic)
         this.effective_cache_size_available_ratio = options.effective_cache_size_available_ratio ?? 0.985;
         this.shared_buffers_ratio = options.shared_buffers_ratio ?? 0.25;
-        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.075;
+        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.10;
         this.effective_connection_ratio = options.effective_connection_ratio ?? 0.75;
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
         this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
-        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.4;
+        this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.45;
         this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
         // Tune logging behaviour
@@ -1321,9 +1321,9 @@ class PG_TUNE_USR_KWARGS {
         this.max_runtime_ratio_to_explain_slow_query = options.max_runtime_ratio_to_explain_slow_query ?? 1.5;
         // WAL control parameters
         this.wal_segment_size = options.wal_segment_size ?? BASE_WAL_SEGMENT_SIZE;
-        this.min_wal_size_ratio = options.min_wal_size_ratio ?? 0.05;
-        this.max_wal_size_ratio = options.max_wal_size_ratio ?? 0.05;
-        this.wal_keep_size_ratio = options.wal_keep_size_ratio ?? 0.05;
+        this.min_wal_size_ratio = options.min_wal_size_ratio ?? 0.025;
+        this.max_wal_size_ratio = options.max_wal_size_ratio ?? 0.04;
+        this.wal_keep_size_ratio = options.wal_keep_size_ratio ?? 0.04;
         // Vacuum Tuning
         this.autovacuum_utilization_ratio = options.autovacuum_utilization_ratio ?? 0.80;
         this.vacuum_safety_level = options.vacuum_safety_level ?? 2;
@@ -1639,10 +1639,10 @@ function _CalcWalBuffers(group_cache, global_cache, options, response, minimum, 
     let shared_buffers = global_cache['shared_buffers'];
     let usable_ram_noswap = options.usable_ram;
     function fn(x) {
-        return 1024 * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
+        return Ki * (37.25 * Math.log(x) + 2) * 0.90;  // Measure in KiB
     }
     let oldstyle_wal_buffers = Math.min(Math.floor(shared_buffers / 32), options.tuning_kwargs.wal_segment_size);  // Measured in bytes
-    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki);
+    let wal_buffers = Math.max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki); // Measured in bytes
     return realign_value(cap_value(Math.ceil(wal_buffers), minimum, maximum), DB_PAGE_SIZE)[options.align_index];
 }
 
@@ -1787,7 +1787,7 @@ _DB_BGWRITER_PROFILE = {
     // We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     // to tune it
     'bgwriter_delay': {
-        'default': 300,
+        'default': 200,
         'hardware_scope': 'overall',
         'partial_func': (value) => `${value}ms`,
     },
@@ -1906,7 +1906,7 @@ _DB_WAL_PROFILE = {
     },
     'wal_buffers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            _CalcWalBuffers(group_cache, global_cache, options, response, Math.floor(BASE_WAL_SEGMENT_SIZE / 2),
+            _CalcWalBuffers(group_cache, global_cache, options, response, BASE_WAL_SEGMENT_SIZE,
                 BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
@@ -2166,7 +2166,12 @@ type_validation(DB0_CONFIG_PROFILE);
  * Original Source File: ./src/tuner/profile/database/gtune_13.py
  */
 
-const DB13_CONFIG_PROFILE = { ...DB0_CONFIG_PROFILE };
+const DB13_CONFIG_PROFILE = { };
+// Pseudo Deep Copy
+for (const [key, value] of Object.entries(DB0_CONFIG_PROFILE)) {
+    DB13_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 // console.debug(`DB13_CONFIG_PROFILE`);
 // show_profile(DB13_CONFIG_PROFILE);
 
@@ -2197,7 +2202,11 @@ const DB14_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB14_CONFIG_MAPPING);
 type_validation(DB14_CONFIG_MAPPING);
-let DB14_CONFIG_PROFILE = { ...DB13_CONFIG_PROFILE};
+// Pseudo Deep Copy
+const DB14_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB13_CONFIG_PROFILE)) {
+    DB14_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB14_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB14_CONFIG_MAPPING)) {
         if (key in DB14_CONFIG_PROFILE) {
@@ -2225,14 +2234,18 @@ const _DB15_LOG_PROFILE = {
     "log_startup_progress_interval": { "default": K10, "partial_func": value => `${value}s`, },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB15_CONFIG_MAPPING = {
     log: [PG_SCOPE.LOGGING, _DB15_LOG_PROFILE, { hardware_scope: 'disk' }],
 };
+
 merge_extra_info_to_profile(DB15_CONFIG_MAPPING);
 type_validation(DB15_CONFIG_MAPPING);
-let DB15_CONFIG_PROFILE = { ...DB14_CONFIG_PROFILE};
+// Pseudo Deep Copy
+const DB15_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB14_CONFIG_PROFILE)) {
+    DB15_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB15_CONFIG_MAPPING)) {
         if (key in DB15_CONFIG_PROFILE) {
@@ -2258,7 +2271,7 @@ if (Object.keys(DB15_CONFIG_MAPPING).length > 0) {
 const _DB16_VACUUM_PROFILE = {
     'vacuum_buffer_usage_limit': {
         "tune_op": (group_cache, global_cache, options, response) =>
-            realign_value(cap_value(Math.floor(group_cache['maintenance_work_mem'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
+            realign_value(cap_value(Math.floor(group_cache['shared_buffers'] / 16), 2 * Mi, 16 * Gi), DB_PAGE_SIZE)[options.align_index],
         "default": 2 * Mi,
         "hardware_scope": "mem",
         "partial_func": value => `${Math.floor(value / Mi)}MB`,
@@ -2269,7 +2282,6 @@ const _DB16_WAL_PROFILE = {
     "wal_compression": { "default": "zstd", },
 };
 
-
 // Merge mapping: use tuples as arrays
 const DB16_CONFIG_MAPPING = {
     maintenance: [PG_SCOPE.MAINTENANCE, _DB16_VACUUM_PROFILE, { hardware_scope: 'overall' }],
@@ -2277,7 +2289,12 @@ const DB16_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB16_CONFIG_MAPPING);
 type_validation(DB16_CONFIG_MAPPING);
-let DB16_CONFIG_PROFILE = { ...DB15_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB16_CONFIG_PROFILE = { };
+for (const [key, value] of Object.entries(DB15_CONFIG_PROFILE)) {
+    DB16_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB16_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB16_CONFIG_MAPPING)) {
         if (key in DB16_CONFIG_PROFILE) {
@@ -2325,7 +2342,12 @@ const DB17_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB17_CONFIG_MAPPING);
 type_validation(DB17_CONFIG_MAPPING);
-let DB17_CONFIG_PROFILE = { ...DB16_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB17_CONFIG_PROFILE = { }
+for (const [key, value] of Object.entries(DB16_CONFIG_PROFILE)) {
+    DB17_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
+
 if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB17_CONFIG_MAPPING)) {
         if (key in DB17_CONFIG_PROFILE) {
@@ -2351,8 +2373,8 @@ if (Object.keys(DB17_CONFIG_MAPPING).length > 0) {
 // AsyncIO profile
 const _DB18_ASYNC_DISK_PROFILE = {
     "io_max_combine_limit": { "default": 128 * Ki, "partial_func": value => `${Math.floor(value / DB_PAGE_SIZE) * Math.floor(DB_PAGE_SIZE / Ki)}kB`, },
-    "io_max_concurrency": { "default": cap_value(-1, -1,1024) },
-    "io_method": { "default": "io_uring", },
+    "io_max_concurrency": { "default": cap_value(-1, -1, 1024) },
+    "io_method": { "default": "worker", },
     "io_workers": { "default": cap_value(3, 1, 32), },
 };
 
@@ -2395,7 +2417,11 @@ const DB18_CONFIG_MAPPING = {
 };
 merge_extra_info_to_profile(DB18_CONFIG_MAPPING);
 type_validation(DB18_CONFIG_MAPPING);
-let DB18_CONFIG_PROFILE = { ...DB17_CONFIG_PROFILE}
+// Pseudo Deep Copy
+const DB18_CONFIG_PROFILE = { }
+for (const [key, value] of Object.entries(DB17_CONFIG_PROFILE)) {
+    DB18_CONFIG_PROFILE[key] = [value[0], { ...value[1] }, value[2]];
+}
 if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
     for (const [key, value] of Object.entries(DB18_CONFIG_MAPPING)) {
         if (key in DB18_CONFIG_PROFILE) {
@@ -2421,15 +2447,20 @@ if (Object.keys(DB18_CONFIG_MAPPING).length > 0) {
 
 // The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 // Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
-const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized
-function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput) {
+const _FILE_ROTATION_TIME_MS = 0.21 * 2  // 0.21 ms on average when direct bare-metal, 2-3x on virtualized (0.72-0.75ms tested on GCP VM)
+const _DISK_ZERO_SPEED = 2.9 * Ki        // The speed of creating a zero-filled file, measured by MiB/s
+function wal_time(wal_buffers, data_amount_ratio, wal_segment_size, wal_writer_delay_in_ms, wal_throughput,
+                  options, wal_init_zero) {
     // The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     // or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     console.debug('Estimate the time required to flush the full WAL buffers to disk');
     const data_amount = Math.floor(wal_buffers * data_amount_ratio);
     const num_wal_files_required = Math.floor(data_amount / wal_segment_size) + 1;
-    const rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
+    let rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS;
     const write_time_in_ms = (data_amount / Mi) / wal_throughput * K10;
+    if (wal_init_zero === 'on' && options.operating_system !== 'windows') {
+        rotate_time_in_ms += num_wal_files_required * ((wal_segment_size / Mi) / _DISK_ZERO_SPEED * K10);
+    }
 
     // Calculate maximum how many delay time
     let delay_time = 0;
@@ -2714,9 +2745,15 @@ class PG_TUNE_RESPONSE {
 
         // WAL Times
         const wal_throughput = options.wal_spec.perf()[0];
-        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
-        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, managed_cache['wal_writer_delay'], wal_throughput);
+        const wal_writer_delay = managed_cache['wal_writer_delay']
+        const wal05 = wal_time(wal_buffers, 0.5, _kwargs.wal_segment_size, wal_writer_delay,
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal10 = wal_time(wal_buffers, 1.0, _kwargs.wal_segment_size, wal_writer_delay,
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal15 = wal_time(wal_buffers, 1.5, _kwargs.wal_segment_size, wal_writer_delay,
+            wal_throughput, options, managed_cache['wal_init_zero']);
+        const wal20 = wal_time(wal_buffers, 2.0, _kwargs.wal_segment_size, wal_writer_delay,
+            wal_throughput, options, managed_cache['wal_init_zero']);
 
         // Vacuum and Maintenance
         let real_autovacuum_work_mem = managed_cache['autovacuum_work_mem'];
@@ -2892,25 +2929,30 @@ Report Summary (others):
     - Batched Commit Delay: ${managed_cache['commit_delay']} (ms)
     
 * Write-Ahead Logging and Data Integrity:
-    - WAL Level: ${managed_cache['wal_level']} with ${managed_cache['wal_compression']} compression algorithm
-    - WAL Segment Size (1 file): ${bytesize_to_hr(_kwargs.wal_segment_size)}
+    - WAL Level: ${managed_cache['wal_level']} :: Compression: ${managed_cache['wal_compression']}
+    - Single WAL File Size (1 file): ${bytesize_to_hr(_kwargs.wal_segment_size)}
     - Integrity:
         + Synchronous Commit: ${managed_cache['synchronous_commit']}
         + Full Page Writes: ${managed_cache['full_page_writes']}
         + Fsync: ${managed_cache['fsync']}
     - Buffers Write Cycle within Data Loss Time: ${options.max_time_transaction_loss_allow_in_millisecond} ms (depend on WAL volume throughput)
+        WAL Buffers: ${bytesize_to_hr(wal_buffers)} or ${(wal_buffers / usable_ram_noswap * 100).toFixed(2)} (%)
+        + 0.5x when opt_wal_buffers=${PG_PROFILE_OPTMODE.NONE}:
+            -> Elapsed Time :: Rotate: ${wal05['rotate_time'].toFixed(2)} ms :: Write: ${wal05['write_time'].toFixed(2)} ms :: Delay: ${wal05['delay_time'].toFixed(2)} ms
+            -> Total Time :: ${wal05['total_time'].toFixed(2)} ms during ${wal05['num_wal_files']} WAL files
+            -> Status (O at Best/Avg/Worst): ${wal05['total_time'] <= wal_writer_delay}/${wal05['total_time'] <= wal_writer_delay * 2}/${wal05['total_time'] <= wal_writer_delay * 3}
         + 1.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.SPIDEY}:
             -> Elapsed Time :: Rotate: ${wal10['rotate_time'].toFixed(2)} ms :: Write: ${wal10['write_time'].toFixed(2)} ms :: Delay: ${wal10['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal10['total_time'].toFixed(2)} ms during ${wal10['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal10['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal10['total_time'] <= wal_writer_delay}/${wal10['total_time'] <= wal_writer_delay * 2}/${wal10['total_time'] <= wal_writer_delay * 3}
         + 1.5x when opt_wal_buffers=${PG_PROFILE_OPTMODE.OPTIMUS_PRIME}:
             -> Elapsed Time :: Rotate: ${wal15['rotate_time'].toFixed(2)} ms :: Write: ${wal15['write_time'].toFixed(2)} ms :: Delay: ${wal15['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal15['total_time'].toFixed(2)} ms during ${wal15['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal15['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal15['total_time'] <= wal_writer_delay}/${wal15['total_time'] <= wal_writer_delay * 2}/${wal15['total_time'] <= wal_writer_delay * 3}
         + 2.0x when opt_wal_buffers=${PG_PROFILE_OPTMODE.PRIMORDIAL}:
             -> Elapsed Time :: Rotate: ${wal20['rotate_time'].toFixed(2)} ms :: Write: ${wal20['write_time'].toFixed(2)} ms :: Delay: ${wal20['delay_time'].toFixed(2)} ms
             -> Total Time :: ${wal20['total_time'].toFixed(2)} ms during ${wal20['num_wal_files']} WAL files
-            -> OK for Transaction Loss: ${wal20['total_time'] <= options.max_time_transaction_loss_allow_in_millisecond}
+            -> Status (O at Best/Avg/Worst): ${wal20['total_time'] <= wal_writer_delay}/${wal20['total_time'] <= wal_writer_delay * 2}/${wal20['total_time'] <= wal_writer_delay * 3}
     - WAL Sizing:  
         + Max WAL Size for Automatic Checkpoint: ${bytesize_to_hr(managed_cache['max_wal_size'])} or ${managed_cache['max_wal_size'] / options.wal_spec.perf()[0]} seconds
         + Min WAL Size for WAL recycle instead of removal: ${bytesize_to_hr(managed_cache['min_wal_size'])}
@@ -3168,8 +3210,8 @@ function _ApplyItmTune(key, after, scope, response, suffix_text = '') {
     // Versioning should NOT be acknowledged here by this function
     if (!(key in items) || !(key in cache)) {
         const msg = `WARNING: The ${key} is not found in the managed tuning item list, probably the scope is invalid.`
-        console.error(msg)
-        throw new Error(msg)
+        console.warn(msg)
+        return null
     }
 
     const before = cache[key]
@@ -3378,16 +3420,12 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         // the *_flush_after when database is powered down. But loss is maximum from wal_buffers and 3x wal_writer_delay
         // not from these setting, since under the OS crash (with synchronous_commit=ON or LOCAL, it still can allow
         // a REDO to update into data files)
-        // Note that these are not related to the io_combine_limit in PostgreSQL v17 as they only vectorized the
-        // READ operation only (if not believe, check three patches in release notes). At least the FlushBuffer()
-        // is still work-in-place (WIP)
-        // TODO: Preview patches later in version 18+
-        let after_checkpoint_flush_after = managed_cache['checkpoint_flush_after']
+        let after_checkpoint_flush_after = 512 * Ki     // Directly bump to 512 KiB
         let after_wal_writer_flush_after = managed_cache['wal_writer_flush_after']
         let after_bgwriter_flush_after = managed_cache['bgwriter_flush_after']
         if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'san', 'strong')) {
-            after_checkpoint_flush_after = 512 * Ki
-            after_bgwriter_flush_after = 512 * Ki
+            after_checkpoint_flush_after = 768 * Ki
+            after_bgwriter_flush_after = 768 * Ki
         } else if (PG_DISK_SIZING.matchDiskSeriesInRange(data_iops, RANDOM_IOPS, 'ssd', 'nvme')) {
             after_checkpoint_flush_after = 1 * Mi
             after_bgwriter_flush_after = 1 * Mi
@@ -3416,25 +3454,33 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
 
     // ----------------------------------------------------------------------------------------------
     console.info(`Start tuning the autovacuum of the PostgreSQL database server based on the database workload.\nImpacted Attributes: bgwriter_lru_maxpages, bgwriter_delay.`)
-    // Tune the bgwriter_delay (8 ms per 1K iops, starting at 300ms). At 25K IOPS, the delay is 100 ms -->
-    // --> Equivalent of 3000 pages per second or 23.4 MiB/s (at 8 KiB/page)
-    let after_bgwriter_delay = Math.floor(Math.max(100, managed_cache['bgwriter_delay'] - 8 * data_iops / K10))
-    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response)
+    // Tune the bgwriter_delay.
+    // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
+    let after_bgwriter_delay = Math.floor(Math.max(
+        150, // Don't want too small to have too many frequent context switching
+        // Don't use the number from general tuning since we want a smoothing IO stabilizer
+        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
+        ));
+    _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
     // Tune the bgwriter_lru_maxpages. We only tune under assumption that strong disk corresponding to high
     // workload, hopefully dirty buffers can get flushed at large amount of data. We are aiming at possible
     // workload required WRITE-intensive operation during daily.
-    if ((request.options.workload_type === PG_WORKLOAD.VECTOR && request.options.workload_profile >= PG_SIZING.MALL) || request.options.workload_type !== PG_WORKLOAD.VECTOR) {
-        let after_bgwriter_lru_maxpages = Math.floor(managed_cache['bgwriter_lru_maxpages']) // Make a copy
-        if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd', 'weak')) {
-            after_bgwriter_lru_maxpages += 100
-        } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'ssd', 'strong')) {
-            after_bgwriter_lru_maxpages += 100 + 150
-        } else if (PG_DISK_SIZING.matchDiskSeries(data_iops, RANDOM_IOPS, 'nvme')) {
-            after_bgwriter_lru_maxpages += 100 + 150 + 200
-        }
-        _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response)
+    // See BackgroundWriterMain*() at line 88 of ./src/backend/postmaster/bgwriter.c
+    // https://www.postgresql.org/message-id/flat/CAGjGUALHnmQFXmBYaFCupXQu7nx7HZ79xN29%2BHoE5s-USqprUg%40mail.gmail.com
+    let bg_io_per_cycle = 0.065;  // Random IO per cycle (should be around than 3-10%) -> Multiply with K10 is the WRITE time
+    if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
+    	bg_io_per_cycle = 0.035;
+    } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
+    	bg_io_per_cycle = 0.080;
     }
+    const after_bgwriter_lru_maxpages = cap_value(
+        // Should not be too high
+        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
+        100 + 30 * request.options.workload_profile.num(), 4000
+    );
+    _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
+    console.info(`The background writer is tuned to write at most ${after_bgwriter_lru_maxpages} pages per cycle with ${after_bgwriter_delay} ms delay. -> Resulting in maximum of ${_max_write_time} ms of WRITE time and peak utilization of ${(100 * _max_write_time / (_max_write_time + after_bgwriter_delay)).toFixed(2)} % of the disk IOPS.`)
 
     // ----------------------------------------------------------------------------------------------
     /**
@@ -3889,7 +3935,7 @@ function _wal_integrity_buffer_size_tune(request, response) {
         Math.min(32 * _kwargs.wal_segment_size, 2 * Gi),
         64 * Gi
     )
-    after_wal_keep_size = realign_value(after_wal_keep_size, 16 * _kwargs.wal_segment_size)[request.options.align_index]
+    after_wal_keep_size = realign_value(after_wal_keep_size, 8 * _kwargs.wal_segment_size)[request.options.align_index]
     _ApplyItmTune('wal_keep_size', after_wal_keep_size, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
 
     // -------------------------------------------------------------------------
@@ -3932,12 +3978,13 @@ function _wal_integrity_buffer_size_tune(request, response) {
     )[1]  // Bump to higher WAL buffers
     let transaction_loss_time = request.options.max_time_transaction_loss_allow_in_millisecond * transaction_loss_ratio
     while (transaction_loss_time <= wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
-        after_wal_writer_delay, wal_tput)['total_time']) {
+        after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['total_time']) {
         current_wal_buffers -= decay_rate
     }
 
     _ApplyItmTune('wal_buffers', current_wal_buffers, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size, after_wal_writer_delay, wal_tput)['msg']
+    const wal_time_report = wal_time(current_wal_buffers, data_amount_ratio_input, _kwargs.wal_segment_size,
+        after_wal_writer_delay, wal_tput, request.options, managed_cache['wal_init_zero'])['msg']
     console.info(`The wal_buffers is set to ${bytesize_to_hr(current_wal_buffers)} -> ${wal_time_report}.`)
     return null
 }
@@ -4131,8 +4178,7 @@ function _wrk_mem_tune(request, response) {
     console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
 
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
-    // and expected RTO. For best practice, we must ensure that the checkpoint_timeout must be larger than
-    // the time of reading 64 WAL files sequentially by 30% and writing those data randomly by 30%
+    // and expected RTO.
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
     // method IssuePendingWritebacks() in the same file (line 5971-5972) -> wb_context to store all the writing
     // buffers and the nr_pending linking with checkpoint_flush_after (256 KiB = 32 BLCKSZ)
@@ -4140,10 +4186,17 @@ function _wrk_mem_tune(request, response) {
     // The minimum data amount is under normal condition of working (not initial bulk load)
     const _data_tput = request.options.data_index_spec.perf()[0]
     const _data_iops = request.options.data_index_spec.perf()[1]
-    const _data_trans_tput = 0.70 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -2.5)
+    const _wal_tput = request.options.wal_spec.perf()[0]
+    const _data_trans_tput = 0.90 * generalized_mean([PG_DISK_PERF.iops_to_throughput(_data_iops), _data_tput], -3)
     let _shared_buffers_ratio = 0.30    // Don't used for tuning, just an estimate of how checkpoint data writes
-    if (request.options.workload_type in [PG_WORKLOAD.OLAP, PG_WORKLOAD.VECTOR]) {
+    if (request.options.workload_type === PG_WORKLOAD.OLAP) {
         _shared_buffers_ratio = 0.15
+    } else if (request.options.workload_type === PG_WORKLOAD.VECTOR) {
+        _shared_buffers_ratio = 0.02
+    } else if (request.options.workload_type === PG_WORKLOAD.TSR_IOT) {
+        // This workload requires a lot of INSERT operations at large where as the monitoring don't perform
+        // an equivalent amount of SELECT operations
+        _shared_buffers_ratio = 0.99
     }
 
     // max_wal_size is added for automatic checkpoint as threshold
@@ -4155,13 +4208,24 @@ function _wrk_mem_tune(request, response) {
     )  // Measured by MiB.
     let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
     console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
-    const after_checkpoint_timeout = realign_value(
-        Math.max(managed_cache['checkpoint_timeout'] +
-            Math.floor(Math.floor(Math.log2(_kwargs.wal_segment_size / BASE_WAL_SEGMENT_SIZE)) * 7.5 * MINUTE),
-            min_ckpt_time / managed_cache['checkpoint_completion_target']), Math.floor(MINUTE / 2)
+
+    // WAL Write Time: Time to write the WAL files during the checkpoint with 25% buffer
+    // WAL Sync Time: Time to sync the WAL files to flush additional dirty pages during the checkpoint
+    // from the first-byte-to-modify to let the data files keep up with the WAL files
+    let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.25)
+    total_ckpt_time += Math.ceil(256 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
+    let after_checkpoint_timeout = realign_value(
+        max(managed_cache['checkpoint_timeout'], total_ckpt_time), // 25% more to reserved thing (magic number)
+        Math.floor(MINUTE / 2)
     )[request.options.align_index]
-    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout / 10), PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    console.info(`The checkpoint timeout is estimated to be ${after_checkpoint_timeout.toFixed(1)} seconds under
+        estimation of ${total_ckpt_time.toFixed(1)} seconds.`)
+    
+    _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, 
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
+    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 1.25 * (1 - managed_cache['checkpoint_completion_target'])), 
+        PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
+    )
 
     return null;
 }
@@ -4192,6 +4256,20 @@ function _logger_tune(request, response) {
     return null;
 }
 
+function _stune_v18(request, response) {
+    // This is the tuning for PostgreSQL 18
+    if (request.options.pgsql_version < 18) {
+        console.warn(`The PostgreSQL version is ${request.options.pgsql_version} < 18 -> Skip the PostgreSQL 18 tuning`)
+        return null;
+    }
+    console.info(`===== PostgreSQL 18 Tuning =====`)
+    console.info(`Start tuning the PostgreSQL 18 database server based on the new features and changes in PostgreSQL 18. \nImpacted attributes: io_uring`)
+
+    const after_io_method = ['windows', 'macos'].includes(request.options.operating_system) ? 'worker' : 'io_uring'
+    _ApplyItmTune('io_method', after_io_method, PG_SCOPE.OTHERS, response)
+
+}
+
 function correction_tune(request, response) {
     if (!request.options.enable_database_correction_tuning) {
         console.warn('The database correction tuning is disabled by the user -> Skip the workload tuning')
@@ -4216,11 +4294,14 @@ function correction_tune(request, response) {
     // -------------------------------------------------------------------------
     // Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    // -------------------------------------------------------------------------
+    // Version Adaptation Tuning
+    _stune_v18(request, response)
+
+
     return null;
 }
-
-// -----------------------------------------------
-// Sample
 
 
 function _get_text_element(element) {

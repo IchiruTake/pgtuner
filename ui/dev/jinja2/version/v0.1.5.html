@@ -24,12 +24,13 @@
                     Input Changes
                     <ul>
                         <li>PY_BKE: Now user has to self-supplied the configuration they wanted rather than naively use the default input. See `./pgtuner_cli.py` for usage</li>
-                        <li>CONF: Introduce the parameter `cpu_to_connection_scale_ratio` with default to 4 (range from [2.5, 10]) to support the variety of scaling the number of connections in the general optimization phase.</li>
+                        <li>CONF: Introduce the parameter `cpu_to_connection_scale_ratio` with default to 5 (range from [2.5, 10]) to support the variety of scaling the number of connections in the general optimization phase.</li>
                         <li>CONF: Increase the parameter `memory_connection_to_dedicated_os_ratio` from 0.3 to 0.7</li>
                         <li>CONF: Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multiplier is 2.0, the working memory usage per connection for one arbitrary operation is increased from 1.1196 to 1.1417 </li>
                         <li>CONF: Revert the upper bound parameter of `wal_segment_size` to 2 GiB instead of 128 MiB (scale from 3 to 7)</li>
-                        <li>CONF: Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.05</li>
-                        <li>CONF: Change the default parameter of `mem_pool_tuning_ratio` from 0.6 to 0.4</li>
+                        <li>CONF: Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.025</li>
+                        <li>CONF: Change the default parameter of `mem_pool_tuning_ratio` from 0.6 to 0.45</li>
+                        <li>CONF: Change the default parameter of `max_wal_size_ratio` and `wal_keep_size_ratio` from 0.05 to 0.04</li>
                         <li>CONF: Remove all `*_profile` parameters except the `workload_profile` parameter.</li>
                         <li>CONF: The supported PostgreSQL version is using the integer instead of string (including the term 'latest').</li>
                         <li>CONF: Remove parameters of the OS and DB Log disk </li>
@@ -51,12 +52,14 @@
                         <li>STUNE: Reduce the result of `cpu_tuple_cost` and `parallel_tuple_cost`</li>
                         <li>STUNE: Simplify (reduce) configuration value of `default_statistics_target`</li>
                         <li>STUNE: Simplify (reduce) configuration value of `after_commit_delay` to be workload-based rather than disk-based</li>
-                        <li>STUNE: Simplify (increase) configuration value of `bgwriter_delay` (8ms reduction per 1000 IOPS than 10ms)</li>
                         <li>STUNE: Reduce the upper bound of `vacuum_*_min_age` from 25% of associated `vacuum_*_max_age` to 15%</li>
                         <li>STUNE: Stop enforce the option `opt_wal_buffers` to be higher than `PG_PROFILE_OPTMODE.NONE`</li>
                         <li>STUNE: Reduce by half the alignment size of `min_wal_size`, `max_wal_size`, and `wal_keep_size` (The configuration would be better detailed).</li>
                         <li>STUNE: The two parameters `statement_timeout` and `lock_timeout` is reduced significantly.</li>
-                        <li>STUNE: A typo in `backend_flsuh_after` has been corrected from 512 MiB to 512 KiB.</li>
+                        <li>STUNE: A typo in `backend_flush_after` has been corrected from 512 MiB to 512 KiB.</li>
+                        <li>STUNE: Re-calibrate the algorithm of WAL pre-allocation of zero-filled WAL file (ignore the parameter `wal_init_zero`).</li>
+                        <li>STUNE: Re-calibrate the background writer behaviour by optimizing the `bgwriter_delay` and `bgwriter_lru_maxpages`</li>
+                        <li>STUNE: The `checkpoint_flush_after` is now 512 KiB across all disk specification.</li>
                     </ul>
                 </li>
 

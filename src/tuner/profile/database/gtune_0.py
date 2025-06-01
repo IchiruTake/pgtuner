@@ -232,9 +232,10 @@ def _CalcWalBuffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, res
     # We don't care the large of one single WAL file
     shared_buffers = global_cache['shared_buffers']
     usable_ram_noswap = options.usable_ram
-    fn = lambda x: 1024 * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
+    fn = lambda x: Ki * (37.25 * math.log(x) + 2) * 0.90  # Measure in KiB
+    # See function XLOGChooseNumBuffers() in line 4800 at ./src/backend/access/transam/xlog.c
     oldstyle_wal_buffers = min(shared_buffers // 32, options.tuning_kwargs.wal_segment_size)  # Measured in bytes
-    wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki)
+    wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki) # Measured in bytes
     return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=DB_PAGE_SIZE)[options.align_index]
 
 
@@ -571,13 +572,13 @@ _DB_BGWRITER_PROFILE = {
     # We don't tune the bgwriter_flush_after = 512 KiB as it is already optimal and PostgreSQL said we don't need
     # to tune it
     'bgwriter_delay': {
-        'default': 300,
+        'default': 200,
         'hardware_scope': 'overall',
         'comment': "Specifies the delay between activity rounds for the background writer. In each round the writer "
                    "issues writes for some number of dirty buffers (controllable by the following parameters). It "
                    "then sleeps for the length of :var:`bgwriter_delay`, and repeats. When there are no dirty buffers "
                    "in the buffer pool, though, it goes into a longer sleep regardless of :var:`bgwriter_delay`. "
-                   "Default value is 300 milliseconds (300ms)",
+                   "Default value is 200 milliseconds (200ms)",
         'partial_func': lambda value: f"{value}ms",
     },
     'bgwriter_lru_maxpages': {
@@ -914,7 +915,7 @@ _DB_WAL_PROFILE = {
         'partial_func': lambda value: f'{value // Mi}MB',
     },
     'wal_buffers': {
-        'tune_op': partial(_CalcWalBuffers, minimum=BASE_WAL_SEGMENT_SIZE // 2, maximum=BASE_WAL_SEGMENT_SIZE * 16),
+        'tune_op': partial(_CalcWalBuffers, minimum=BASE_WAL_SEGMENT_SIZE, maximum=BASE_WAL_SEGMENT_SIZE * 16),
         'default': 2 * BASE_WAL_SEGMENT_SIZE,
         'hardware_scope': 'mem',
         'comment': 'The amount of shared memory used for WAL data that has not yet been written to disk. The default '

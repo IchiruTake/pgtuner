@@ -8,25 +8,30 @@ from math import floor, ceil
 from pydantic import ByteSize
 
 from src.tuner.data.disks import PG_DISK_PERF
+from src.tuner.data.options import PG_TUNE_USR_OPTIONS
 from src.utils.pydantic_utils import bytesize_to_hr
-from src.utils.static import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE
+from src.utils.static import APP_NAME_UPPER, Mi, K10, DB_PAGE_SIZE, Ki
 
 __all__ = ['wal_time', 'checkpoint_time', 'vacuum_time', 'vacuum_scale']
 _logger = logging.getLogger(APP_NAME_UPPER)
 
 # The time required to create, opened and close a file. This has been tested with all disk cache flushed,
 # Windows (NTFS) and Linux (EXT4/XFS) on i7-8700H with Python 3.12 on NVMEv3 SSD and old HDD
+_DISK_ZERO_SPEED = 2.9 * Ki        # The speed of creating a zero-filled file, measured by 2.5 GiB/s
 _FILE_ROTATION_TIME_MS = 0.21 * 2  # 0.21 ms on average when direct bare-metal, 2-3x on virtualized
 
 
 def wal_time(wal_buffers: ByteSize | int, data_amount_ratio: int | float, wal_segment_size: ByteSize | int,
-             wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int) -> dict:
+             wal_writer_delay_in_ms: int, wal_throughput: ByteSize | int, options: PG_TUNE_USR_OPTIONS,
+             wal_init_zero: str) -> dict:
     # The time required to flush the full WAL buffers to disk (assuming we have no write after the flush)
     # or wal_writer_delay is being woken up or 2x of wal_buffers are synced
     _logger.debug('Estimate the time required to flush the full WAL buffers to disk')
     data_amount = int(wal_buffers * data_amount_ratio)
     num_wal_files_required = data_amount // wal_segment_size + 1
     rotate_time_in_ms = num_wal_files_required * _FILE_ROTATION_TIME_MS
+    if wal_init_zero == 'on' and options.operating_system != 'windows':
+        rotate_time_in_ms += num_wal_files_required * ((wal_segment_size / Mi) / _DISK_ZERO_SPEED * K10)
     # We don't add WAL_fill_time here because it is usually managed by min_wal_size and its cost is negligible
     write_time_in_ms = (data_amount / Mi) / wal_throughput * K10
 
