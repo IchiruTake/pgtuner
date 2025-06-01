@@ -1160,18 +1160,21 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
 
     # max_wal_size is added for automatic checkpoint as threshold
     # Technically the upper limit is at 1/2 of available RAM (since shared_buffers + effective_cache_size ~= RAM)
+    _ApplyItmTune('checkpoint_completion_target', 0.85, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+                  response=response, _log_pool=_logs)
     _data_amount = min(int(managed_cache['shared_buffers'] * _shared_buffers_ratio / Mi),
                        managed_cache['effective_cache_size'] // Ki,
                        managed_cache['max_wal_size'] // Ki, )  # Measured by MiB.
     min_ckpt_time = ceil(_data_amount * 1 / _data_trans_tput)
     _logs.append(f'The minimum checkpoint time is estimated to be {min_ckpt_time:.1f} seconds under estimation '
                  f'of {_data_amount} MiB of data amount and {_data_trans_tput:.2f} MiB/s of disk throughput.')
-    # WAL Write Time: Time to write the WAL files during the checkpoint with 25% buffer (magic number)
-    total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.25
+    # WAL Write Time: Time to write the WAL files during the checkpoint with 50% buffer (magic number)
+    total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.50
     # WAL Sync Time: Time to flush additional dirty pages during the checkpoint from the first-byte-to-modify
     # to let the data files keep up with the WAL files
     total_ckpt_time += int(
-        min(256 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
+        max(32 * Mi + 64 * Mi * request.options.workload_profile.num(),
+            4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
     )
     after_checkpoint_timeout = realign_value(
         max(managed_cache['checkpoint_timeout'], total_ckpt_time),
@@ -1182,7 +1185,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
 
     _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
                  response=response, _log_pool=_logs)
-    _ApplyItmTune('checkpoint_warning', int(after_checkpoint_timeout * 1.25 * (1 - managed_cache['checkpoint_completion_target'])), 
+    _ApplyItmTune('checkpoint_warning', int(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
                   scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
                  response=response, _log_pool=_logs)
     return _FlushLog(_logs)

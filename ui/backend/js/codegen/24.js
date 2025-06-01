@@ -1035,6 +1035,7 @@ function _wrk_mem_tune(request, response) {
 
     // max_wal_size is added for automatic checkpoint as threshold
     // Technically the upper limit is at 1/2 of available RAM (since shared_buffers + effective_cache_size ~= RAM)
+    _ApplyItmTune('checkpoint_completion_target', 0.85, PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
     let _data_amount = Math.min(
         Math.floor(managed_cache['shared_buffers'] * _shared_buffers_ratio / Mi),
         Math.floor(managed_cache['effective_cache_size'] / Ki),
@@ -1043,13 +1044,18 @@ function _wrk_mem_tune(request, response) {
     let min_ckpt_time = Math.ceil(_data_amount * 1 / _data_trans_tput)
     console.info(`The minimum checkpoint time is estimated to be ${min_ckpt_time.toFixed(1)} seconds under estimation of ${_data_amount} MiB of data amount and ${_data_trans_tput.toFixed(2)} MiB/s of disk throughput.`)
 
-    // WAL Write Time: Time to write the WAL files during the checkpoint with 25% buffer
+    // WAL Write Time: Time to write the WAL files during the checkpoint with 50% buffer
     // WAL Sync Time: Time to sync the WAL files to flush additional dirty pages during the checkpoint
     // from the first-byte-to-modify to let the data files keep up with the WAL files
-    let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.25)
-    total_ckpt_time += Math.ceil(256 * Mi, 4 * request.options.tuning_kwargs.wal_segment_size) * (1 / _data_trans_tput + 1 / _wal_tput)
+    let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.50)
+    total_ckpt_time += Math.ceil(
+        max(
+            32 * Mi + 64 * Mi * request.options.workload_profile.num(),
+            4 * request.options.tuning_kwargs.wal_segment_size
+        ) * (1 / _data_trans_tput + 1 / _wal_tput)
+    )
     let after_checkpoint_timeout = realign_value(
-        max(managed_cache['checkpoint_timeout'], total_ckpt_time), // 25% more to reserved thing (magic number)
+        max(managed_cache['checkpoint_timeout'], total_ckpt_time),
         Math.floor(MINUTE / 2)
     )[request.options.align_index]
     console.info(`The checkpoint timeout is estimated to be ${after_checkpoint_timeout.toFixed(1)} seconds under
@@ -1057,7 +1063,7 @@ function _wrk_mem_tune(request, response) {
     
     _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, 
         PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response)
-    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 1.25 * (1 - managed_cache['checkpoint_completion_target'])), 
+    _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
         PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
     )
 
