@@ -3480,6 +3480,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
+    const _max_write_time = Math.floor(after_bgwriter_lru_maxpages / data_iops * K10);     // In ms
     console.info(`The background writer is tuned to write at most ${after_bgwriter_lru_maxpages} pages per cycle with ${after_bgwriter_delay} ms delay. -> Resulting in maximum of ${_max_write_time} ms of WRITE time and peak utilization of ${(100 * _max_write_time / (_max_write_time + after_bgwriter_delay)).toFixed(2)} % of the disk IOPS.`)
 
     // ----------------------------------------------------------------------------------------------
@@ -4213,10 +4214,10 @@ function _wrk_mem_tune(request, response) {
     // WAL Write Time: Time to write the WAL files during the checkpoint with 50% buffer
     // WAL Sync Time: Time to sync the WAL files to flush additional dirty pages during the checkpoint
     // from the first-byte-to-modify to let the data files keep up with the WAL files
-    let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.50)
+    let total_ckpt_time = min_ckpt_time / managed_cache['checkpoint_completion_target'] * 1.50
     total_ckpt_time += Math.ceil(
         max(
-            32 * Mi + 64 * Mi * request.options.workload_profile.num(),
+            32 * Mi + 48 * Mi * request.options.workload_profile.num(),
             4 * request.options.tuning_kwargs.wal_segment_size
         ) * (1 / _data_trans_tput + 1 / _wal_tput)
     )
