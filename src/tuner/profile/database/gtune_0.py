@@ -257,8 +257,8 @@ _DB_CONN_PROFILE = {
     'reserved_connections': {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response:
-            _GetReservedConns(options, 0, 3, superuser_mode=False,
-                                   base_reserved_connection=1),
+                _GetReservedConns(options, 0, 3, superuser_mode=False,
+                                  base_reserved_connection=1),
             'medium': lambda group_cache, global_cache, options, response:
             _GetReservedConns(options, 0, 5, superuser_mode=False,
                                    base_reserved_connection=2),
