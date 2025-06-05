@@ -291,9 +291,9 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the bgwriter_delay.
     // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     let after_bgwriter_delay = Math.floor(Math.max(
-        150, // Don't want too small to have too many frequent context switching
+        200, // Don't want too small to have too many frequent context switching
         // Don't use the number from general tuning since we want a smoothing IO stabilizer
-        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
+        Math.floor(400 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
         ));
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
@@ -310,7 +310,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     }
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high
-        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
+        Math.floor(40 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
         100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);

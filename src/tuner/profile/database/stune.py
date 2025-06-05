@@ -356,9 +356,9 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # Tune the bgwriter_delay.
     # The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     after_bgwriter_delay = floor(max(
-        150,    # Don't want too small to have too many frequent context switching
+        200,    # Don't want too small to have too many frequent context switching
         # Don't use the number from general tuning since we want a smoothing IO stabilizer
-        350 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
+        400 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
     ))
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, scope=PG_SCOPE.OTHERS, 
                  response=response, _log_pool=_logs)
@@ -377,7 +377,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     assert 0 < bg_io_per_cycle <= 0.10, 'The bg_io_per_cycle should be between 0 and 0.10 to not trash out the bgwriter.'
     after_bgwriter_lru_maxpages = cap_value(
         # Should not be too high
-        30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1),
+        40 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1),
         100 + 30 * request.options.workload_profile.num(), 4000
     )
     _ApplyItmTune('bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
