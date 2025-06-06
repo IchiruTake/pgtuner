@@ -107,7 +107,7 @@ function _build_keywords_from_html(name = 'keywords') {
         'max_normal_memory_usage': _get_text_element(`${name}.max_normal_memory_usage`),
         'mem_pool_tuning_ratio': _get_text_element(`${name}.mem_pool_tuning_ratio`),
         'hash_mem_usage_level': _get_text_element(`${name}.hash_mem_usage_level`),
-        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? true,
+        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? 'auto',
 
         // Logging behaviour (query size, and query runtime)
         'max_query_length_in_bytes': _get_text_element(`${name}.max_query_length_in_bytes`),
