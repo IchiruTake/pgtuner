@@ -85,10 +85,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'enable the correction_tuning, you should ignore this value.'
     )
     max_work_buffer_ratio: PositiveFloat = Field(
-        default=0.1, gt=0, le=0.50, frozen=False,
+        default=0.15, gt=0, le=0.50, frozen=False,
         description='The starting ratio of the maximum PostgreSQL available memory (after excluding shared_buffers and '
                     'others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). '
-                    'The supported range is (0, 0.50], default is 0.1. The algorithm is temp_buffers + work_mem = '
+                    'The supported range is (0, 0.50], default is 0.15. The algorithm is temp_buffers + work_mem = '
                     '(pgmem_available * max_work_buffer_ratio) / active_user_connections. However, if you enable the '
                     'correction_tuning, you can adjust this value *slowly* to increase the memory budget for query '
                     'operation. Under correction tuning, the absolute difference between :attr:`shared_buffers_ratio` '
@@ -113,7 +113,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
 
     # Memory Utilization (Advanced)
     max_normal_memory_usage: PositiveFloat = Field(
-        default=0.50, ge=0.35, le=0.80,
+        default=0.55, ge=0.35, le=0.80,
         description='The maximum memory usage under normal PostgreSQL operation over the usable memory. This holds as '
                     'the upper bound to increase the variable before reaching the limit. The supported range is [0.35, '
                     '0.80], default is 0.50. Increase this ratio meant you are expecting your server would have more '
@@ -125,7 +125,7 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     mem_pool_tuning_ratio: float = Field(
         default=0.45, ge=0.0, le=1.0, frozen=True,
         description='The memory tuning ratio in correction tuning between shared_buffers and work_buffers. Supported '
-                    'value is [0, 1] and default is 0.4; Higher value meant that the tuning would prefer the '
+                    'value is [0, 1] and default is 0.45; Higher value meant that the tuning would prefer the '
                     ':arg`shared_buffers` over the :arg:`work_buffers`, and vice versa.'
     )
     # A too small or too large bound can lead to number overflow

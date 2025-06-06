@@ -15,11 +15,11 @@ class PG_TUNE_USR_KWARGS {
         // Memory Utilization (Basic)
         this.effective_cache_size_available_ratio = options.effective_cache_size_available_ratio ?? 0.985;
         this.shared_buffers_ratio = options.shared_buffers_ratio ?? 0.25;
-        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.10;
+        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.15;
         this.effective_connection_ratio = options.effective_connection_ratio ?? 0.75;
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
-        this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.50;
+        this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.55;
         this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.45;
         this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;

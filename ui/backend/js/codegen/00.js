@@ -16,7 +16,7 @@
  */
 
 // Application Information
-const __version__ = '0.1.5';
+const __version__ = '0.1.6';
 const __VERSION__ = __version__;
 const __AUTHOR__ = 'Ichiru Take';
 

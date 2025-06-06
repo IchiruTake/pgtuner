@@ -1172,7 +1172,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # WAL Sync Time: Time to flush additional dirty pages during the checkpoint from the first-byte-to-modify
     # to let the data files keep up with the WAL files
     total_ckpt_time += int(
-        max(32 * Mi + 64 * Mi * request.options.workload_profile.num(),
+        max(32 * Mi + 48 * Mi * request.options.workload_profile.num(),
             4 * request.options.tuning_kwargs.wal_segment_size) / Mi * (1 / _data_trans_tput + 1 / _wal_tput)
     )
     after_checkpoint_timeout = realign_value(

@@ -352,7 +352,7 @@ _DB_BGWRITER_PROFILE = {
 _DB_ASYNC_DISK_PROFILE = {
     'effective_io_concurrency': { 'default': 16, },
     'maintenance_io_concurrency': { 'default': 10, },
-    'backend_flush_after': { 'default': 0, },
+    'backend_flush_after': { 'default': 0, 'partial_func': (value) => `${Math.floor(value / Ki)}kB`, },
 }
 
 _DB_ASYNC_CPU_PROFILE = {

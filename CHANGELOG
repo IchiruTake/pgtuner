@@ -4,6 +4,27 @@ v0.x.x (TBD)
 - TODO: More refined documentation with icon symbol of importance
 - TODO: Rewrite application as Javascript to support global user (if necessary). Python backend is still maintained
 
+v0.1.6 (, 2025)
+=========================
+
+Generic:
+
+
+Input Changes:
+- *_BKE: Increase the memory usage by default by setting `max_normal_memory_usage` to 0.55 (from 0.45) and `max_work_buffer_ratio` to 0.15
+- *_BKE: Add the parameter `cpu_to_parallel_scale_ratio` in the advanced configuration with default at 2.0 (range from 1.5 to 3.0) and revise the use of parallel workers with better algorithm. This impact the `max_worker_processes`, `max_parallel_workers`, `max_parallel_workers_per_gather`, and `max_parallel_maintenance_workers` parameters.
+- *_BKE: Add the 'auto' option in the `mem_pool_parallel_estimate` parameter, allowing to infer whether the workload estimation needs to consider parallel operation. By default, if set to 'auto', the algorithm will assume parallel operation is used under OLTP and HTAP workloads, and ignore at other workloads. However, this is not introduced in the web interface yet.
+
+Algorithm Changes:
+- *_BKE: The background writer during correction tuning write 10 more pages per workload sizing, and has 50 millisecond delay extra between cycles
+
+
+Others:
+- JS_BKE: The `backend_flush_after` fix the missing of casting function
+- *_BKE: Fix several other issues
+
+
+
 v0.1.5 (May 13th, 2025)
 =========================
 
