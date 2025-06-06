@@ -5,7 +5,6 @@ This module is to perform specific tuning on the PostgreSQL database server.
 
 import logging
 from math import ceil, sqrt, floor, log2
-from pprint import pprint
 from typing import Callable, Any
 
 from pydantic import ValidationError

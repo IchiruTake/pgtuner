@@ -1301,6 +1301,7 @@ class PG_TUNE_USR_KWARGS {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
         this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
+        this.cpu_to_parallel_scale_ratio = options.cpu_to_parallel_scale_ratio ?? 2;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
@@ -1815,22 +1816,26 @@ _DB_ASYNC_DISK_PROFILE = {
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            cap_value(Math.ceil(options.vcpu * 1.5) + 2, 4, 512),
+            cap_value(Math.ceil(options.vcpu * (0.5 + options.tuning_kwargs.cpu_to_parallel_scale_ratio)) + 2,
+            4, 512),
         'default': 8,
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * options.tuning_kwargs.cpu_to_parallel_scale_ratio) + 1,
+            4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 3),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'max_parallel_maintenance_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 2.5),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'min_parallel_table_scan_size': {
@@ -4363,6 +4368,7 @@ function _build_keywords_from_backend(data) {
             // Connection
             user_max_connections: data.user_max_connections,
             cpu_to_connection_scale_ratio: data.cpu_to_connection_scale_ratio,
+            cpu_to_parallel_scale_ratio: data.cpu_to_parallel_scale_ratio,
             superuser_reserved_connections_scale_ratio: data.superuser_reserved_connections_scale_ratio,
             single_memory_connection_overhead: data.single_memory_connection_overhead,
             memory_connection_to_dedicated_os_ratio: data.memory_connection_to_dedicated_os_ratio,
@@ -4402,6 +4408,7 @@ function _build_keywords_from_html(name = 'keywords') {
         // Connection or ./tuner/adv.conn.html
         'user_max_connections': _get_text_element(`${name}.user_max_connections`),
         'cpu_to_connection_scale_ratio': _get_text_element(`${name}.cpu_to_connection_scale_ratio`),
+        'cpu_to_parallel_scale_ratio': _get_text_element(`${name}.cpu_to_parallel_scale_ratio`),
         'superuser_reserved_connections_scale_ratio': _get_text_element(`${name}.superuser_reserved_connections_scale_ratio`),
         'single_memory_connection_overhead': _get_text_element(`${name}.single_memory_connection_overhead_in_kib`) * Ki,
         'memory_connection_to_dedicated_os_ratio': _get_text_element(`${name}.memory_connection_to_dedicated_os_ratio`),

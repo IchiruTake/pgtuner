@@ -238,7 +238,6 @@ def _CalcWalBuffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, res
     wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki) # Measured in bytes
     return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=DB_PAGE_SIZE)[options.align_index]
 
-
 # =============================================================================
 _DB_CONN_PROFILE = {
     # Connections
@@ -662,9 +661,11 @@ _DB_ASYNC_DISK_PROFILE = {
 }
 
 _DB_ASYNC_CPU_PROFILE = {
+    # This function is
     'max_worker_processes': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        cap_value(int(options.vcpu * 1.5) + 2, 4, 512),
+        cap_value(int(options.vcpu * (0.5 + options.tuning_kwargs.cpu_to_parallel_scale_ratio)) + 2,
+                  4, 512),
         'default': 8,
         'comment': 'Sets the maximum number of background processes that the system can support. The supported range '
                    'is [4, 512], with default to 1.5x + 2 of the logical CPU count (8 by official documentation). We do '
@@ -673,7 +674,8 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
+        min(cap_value(int(options.vcpu * options.tuning_kwargs.cpu_to_parallel_scale_ratio) + 1,
+                      4, 512), group_cache['max_worker_processes']),
         'default': 8,
         'comment': 'Sets the maximum number of workers that the cluster can support for parallel operations. The '
                    'supported range is [4, 512], with default to 1.125x of the logical CPU count (8 by official '
@@ -682,9 +684,12 @@ _DB_ASYNC_CPU_PROFILE = {
                    'workers are retrieved from max_parallel_workers so higher value than max_worker_processes will '
                    'have no effect. See Ref [05] for more information.',
     },
+    # A too large number get diminish returns due to the algorithm, lock contention and memory usage.
+    # and peak performance for CPU-bound task is the number of vCPUs
     'max_parallel_workers_per_gather': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 3),
+                      2, 32), min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
         'comment': 'Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. '
                    'Parallel workers are taken from the pool of processes established by max_worker_processes, limited '
@@ -694,10 +699,10 @@ _DB_ASYNC_CPU_PROFILE = {
                    '*Gather* queries to be run. The supported range is [2, 32], with default to 1/3x of the logical '
                    'CPU count (2 by official documentation).',
     },
-
     'max_parallel_maintenance_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 2.5),
+                      2, 32), min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
         'comment': "Sets the maximum number of parallel workers that can be started by a single utility command. "
                    "Currently, the parallel utility commands that support the use of parallel workers are CREATE INDEX "

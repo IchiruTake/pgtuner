@@ -40,6 +40,14 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'server. From modern perspective, the good ratio is between 4-6, but default to 5 for balanced ' \
                     'performance with less risk for idle connection overhead.'
     )
+    cpu_to_parallel_scale_ratio: PositiveFloat = Field(
+        default=2.0, ge=1.5, le=3.0, frozen=True,
+        description='The scale ratio of the CPU to the number of parallel workers. The supported range is [1.5, 3.0], '
+                    'default is 2.0. Since with later version and Linux kernel, the performance of parallelism under '
+                    'IO-bound workload is improved, especially the asynchronous parallelism of IO (io_uring), the '
+                    'default scale factor may seems weird at first glance., but it is there for a reason. '
+    )
+
     superuser_reserved_connections_scale_ratio: PositiveFloat = Field(
         default=1.5, ge=1, le=3, frozen=True,
         description='The de-scale ratio for the reserved superuser connections over the normal reserved connection. '

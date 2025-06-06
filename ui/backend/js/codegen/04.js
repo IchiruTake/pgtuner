@@ -8,6 +8,7 @@ class PG_TUNE_USR_KWARGS {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
         this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
+        this.cpu_to_parallel_scale_ratio = options.cpu_to_parallel_scale_ratio ?? 2;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
