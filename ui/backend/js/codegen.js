@@ -1301,6 +1301,7 @@ class PG_TUNE_USR_KWARGS {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
         this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
+        this.cpu_to_parallel_scale_ratio = options.cpu_to_parallel_scale_ratio ?? 2;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
@@ -1311,7 +1312,7 @@ class PG_TUNE_USR_KWARGS {
         this.effective_connection_ratio = options.effective_connection_ratio ?? 0.75;
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
-        this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
+        this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.50;
         this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.45;
         this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
@@ -1435,6 +1436,15 @@ class PG_TUNE_USR_OPTIONS {
             'disk': this.workload_profile,
             'overall': this.workload_profile
         };
+
+        // Adjust the kwargs.mem_pool_parallel_estimate
+        if (this.tuning_kwargs.mem_pool_parallel_estimate === 'auto') {
+            if ([PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP].includes(this.workload_type)) {
+                this.tuning_kwargs.mem_pool_parallel_estimate = true;
+            } else {
+                this.tuning_kwargs.mem_pool_parallel_estimate = false;
+            }
+        }
     }
 
     /**
@@ -1815,22 +1825,26 @@ _DB_ASYNC_DISK_PROFILE = {
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            cap_value(Math.ceil(options.vcpu * 1.5) + 2, 4, 512),
+            cap_value(Math.ceil(options.vcpu * (0.5 + options.tuning_kwargs.cpu_to_parallel_scale_ratio)) + 2,
+            4, 512),
         'default': 8,
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * options.tuning_kwargs.cpu_to_parallel_scale_ratio) + 1,
+            4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 3),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'max_parallel_maintenance_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 2.5),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'min_parallel_table_scan_size': {
@@ -3457,9 +3471,9 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the bgwriter_delay.
     // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     let after_bgwriter_delay = Math.floor(Math.max(
-        150, // Don't want too small to have too many frequent context switching
+        200, // Don't want too small to have too many frequent context switching
         // Don't use the number from general tuning since we want a smoothing IO stabilizer
-        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
+        Math.floor(400 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
         ));
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
@@ -3476,7 +3490,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     }
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high
-        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
+        Math.floor(40 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
         100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
@@ -4363,6 +4377,7 @@ function _build_keywords_from_backend(data) {
             // Connection
             user_max_connections: data.user_max_connections,
             cpu_to_connection_scale_ratio: data.cpu_to_connection_scale_ratio,
+            cpu_to_parallel_scale_ratio: data.cpu_to_parallel_scale_ratio,
             superuser_reserved_connections_scale_ratio: data.superuser_reserved_connections_scale_ratio,
             single_memory_connection_overhead: data.single_memory_connection_overhead,
             memory_connection_to_dedicated_os_ratio: data.memory_connection_to_dedicated_os_ratio,
@@ -4402,6 +4417,7 @@ function _build_keywords_from_html(name = 'keywords') {
         // Connection or ./tuner/adv.conn.html
         'user_max_connections': _get_text_element(`${name}.user_max_connections`),
         'cpu_to_connection_scale_ratio': _get_text_element(`${name}.cpu_to_connection_scale_ratio`),
+        'cpu_to_parallel_scale_ratio': _get_text_element(`${name}.cpu_to_parallel_scale_ratio`),
         'superuser_reserved_connections_scale_ratio': _get_text_element(`${name}.superuser_reserved_connections_scale_ratio`),
         'single_memory_connection_overhead': _get_text_element(`${name}.single_memory_connection_overhead_in_kib`) * Ki,
         'memory_connection_to_dedicated_os_ratio': _get_text_element(`${name}.memory_connection_to_dedicated_os_ratio`),
@@ -4417,7 +4433,7 @@ function _build_keywords_from_html(name = 'keywords') {
         'max_normal_memory_usage': _get_text_element(`${name}.max_normal_memory_usage`),
         'mem_pool_tuning_ratio': _get_text_element(`${name}.mem_pool_tuning_ratio`),
         'hash_mem_usage_level': _get_text_element(`${name}.hash_mem_usage_level`),
-        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? true,
+        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? 'auto',
 
         // Logging behaviour (query size, and query runtime)
         'max_query_length_in_bytes': _get_text_element(`${name}.max_query_length_in_bytes`),

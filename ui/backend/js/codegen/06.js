@@ -358,22 +358,26 @@ _DB_ASYNC_DISK_PROFILE = {
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            cap_value(Math.ceil(options.vcpu * 1.5) + 2, 4, 512),
+            cap_value(Math.ceil(options.vcpu * (0.5 + options.tuning_kwargs.cpu_to_parallel_scale_ratio)) + 2,
+            4, 512),
         'default': 8,
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * options.tuning_kwargs.cpu_to_parallel_scale_ratio) + 1,
+            4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 3),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'max_parallel_maintenance_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 2.5),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'min_parallel_table_scan_size': {

@@ -51,6 +51,7 @@ function _build_keywords_from_backend(data) {
             // Connection
             user_max_connections: data.user_max_connections,
             cpu_to_connection_scale_ratio: data.cpu_to_connection_scale_ratio,
+            cpu_to_parallel_scale_ratio: data.cpu_to_parallel_scale_ratio,
             superuser_reserved_connections_scale_ratio: data.superuser_reserved_connections_scale_ratio,
             single_memory_connection_overhead: data.single_memory_connection_overhead,
             memory_connection_to_dedicated_os_ratio: data.memory_connection_to_dedicated_os_ratio,
@@ -90,6 +91,7 @@ function _build_keywords_from_html(name = 'keywords') {
         // Connection or ./tuner/adv.conn.html
         'user_max_connections': _get_text_element(`${name}.user_max_connections`),
         'cpu_to_connection_scale_ratio': _get_text_element(`${name}.cpu_to_connection_scale_ratio`),
+        'cpu_to_parallel_scale_ratio': _get_text_element(`${name}.cpu_to_parallel_scale_ratio`),
         'superuser_reserved_connections_scale_ratio': _get_text_element(`${name}.superuser_reserved_connections_scale_ratio`),
         'single_memory_connection_overhead': _get_text_element(`${name}.single_memory_connection_overhead_in_kib`) * Ki,
         'memory_connection_to_dedicated_os_ratio': _get_text_element(`${name}.memory_connection_to_dedicated_os_ratio`),
@@ -105,7 +107,7 @@ function _build_keywords_from_html(name = 'keywords') {
         'max_normal_memory_usage': _get_text_element(`${name}.max_normal_memory_usage`),
         'mem_pool_tuning_ratio': _get_text_element(`${name}.mem_pool_tuning_ratio`),
         'hash_mem_usage_level': _get_text_element(`${name}.hash_mem_usage_level`),
-        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? true,
+        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? 'auto',
 
         // Logging behaviour (query size, and query runtime)
         'max_query_length_in_bytes': _get_text_element(`${name}.max_query_length_in_bytes`),

@@ -40,6 +40,14 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'server. From modern perspective, the good ratio is between 4-6, but default to 5 for balanced ' \
                     'performance with less risk for idle connection overhead.'
     )
+    cpu_to_parallel_scale_ratio: PositiveFloat = Field(
+        default=2.0, ge=1.5, le=3.0, frozen=True,
+        description='The scale ratio of the CPU to the number of parallel workers. The supported range is [1.5, 3.0], '
+                    'default is 2.0. Since with later version and Linux kernel, the performance of parallelism under '
+                    'IO-bound workload is improved, especially the asynchronous parallelism of IO (io_uring), the '
+                    'default scale factor may seems weird at first glance., but it is there for a reason. '
+    )
+
     superuser_reserved_connections_scale_ratio: PositiveFloat = Field(
         default=1.5, ge=1, le=3, frozen=True,
         description='The de-scale ratio for the reserved superuser connections over the normal reserved connection. '
@@ -105,10 +113,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
 
     # Memory Utilization (Advanced)
     max_normal_memory_usage: PositiveFloat = Field(
-        default=0.45, ge=0.35, le=0.80,
+        default=0.50, ge=0.35, le=0.80,
         description='The maximum memory usage under normal PostgreSQL operation over the usable memory. This holds as '
                     'the upper bound to increase the variable before reaching the limit. The supported range is [0.35, '
-                    '0.80], default is 0.45. Increase this ratio meant you are expecting your server would have more '
+                    '0.80], default is 0.50. Increase this ratio meant you are expecting your server would have more '
                     'headroom for the tuning and thus for database workload. It is not recommended to set this value '
                     'too high, as there are multiple constraints that prevent further tuning to keep your server '
                     'function properly without unknown incident such as parallelism, maintenance, and other '
@@ -129,8 +137,8 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'vice versa. The supported range is [-50, 50], default is -6. The recommended range is around '
                     '-10 to 6, as beyond this level results in incorrect estimation and so on.'
     )   # Maximum float allowed is [-60, 60] under 64-bit system
-    mem_pool_parallel_estimate: bool = Field(
-        default=True, frozen=True,
+    mem_pool_parallel_estimate: Literal['auto', True, False] = Field(
+        default='auto', frozen=False,
         description='Set to True (default) will switch the memory consumption estimation in parallelism by assuming '
                     'all *query* workers are consumed (based on number of available workers per connection). This '
                     'would result a lower :arg:`max_work_buffer_ratio` can get.'
@@ -162,7 +170,6 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size (not recommended)
     # https://postgrespro.com/list/thread-id/1898949
     # TODO: Whilst PostgreSQL allows up to 2 GiB, my recommendation is to limited below 128 MiB
-    # Either I enforce constraint to prevent non optimal configuration or I let user to do it.
     # TODO: Update docs
     wal_segment_size: PositiveInt = Field(
         default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=BASE_WAL_SEGMENT_SIZE * (2 ** 7), frozen=True,
@@ -462,6 +469,14 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             _logger.warning(f'The database size {self.database_size_in_gib} GiB is larger than the data volume. The '
                             f'database size is silently capped at 90% of the data volume.')
             self.database_size_in_gib = _database_limit
+
+        # Update the mem_pool_parallel_estimate if 'auto'
+        if self.tuning_kwargs.mem_pool_parallel_estimate == 'auto':
+            if self.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP):
+                self.tuning_kwargs.mem_pool_parallel_estimate = True
+            else:
+                self.tuning_kwargs.mem_pool_parallel_estimate = False
+            _logger.info(f'The memory estimation for parallelism is enabled: {self.tuning_kwargs.mem_pool_parallel_estimate}')
 
         return None
 
