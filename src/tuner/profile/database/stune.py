@@ -1136,6 +1136,17 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     _mem_check_string = '; '.join([f'{scope}={bytesize_to_hr(func(request.options, response))}'
                                    for scope, func in _get_wrk_mem_func().items()])
     _logs.append(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.')
+    return _FlushLog(_logs)
+
+def _checkpoint_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
+    # Tune the checkpoint_timeout and checkpoint_completion_target based on the disk throughput and data amount
+    # This is to ensure that the checkpoint is not too frequent or too long
+    _logs = [
+        '\n ===== Checkpoint Tuning =====',
+        'Start tuning the checkpoint timeout and completion target based on the disk throughput and data amount. '
+        'Impacted attributes: checkpoint_timeout, checkpoint_completion_target, checkpoint_warning'
+    ]
+    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
 
     # Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
     # and expected RTO.
@@ -1153,7 +1164,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     elif request.options.workload_type == PG_WORKLOAD.VECTOR:
         _shared_buffers_ratio = 0.02
     elif request.options.workload_type == PG_WORKLOAD.TSR_IOT:
-        # This workload requires a lot of INSERT operations at large where as the monitoring don't perform 
+        # This workload requires a lot of INSERT operations at large where as the monitoring don't perform
         # an equivalent amount of SELECT operations
         _shared_buffers_ratio = 0.99
 
@@ -1183,12 +1194,11 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
                  f'minimum estimated time is {total_ckpt_time:.1f} seconds.')
 
     _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
-                 response=response, _log_pool=_logs)
+                  response=response, _log_pool=_logs)
     _ApplyItmTune('checkpoint_warning', int(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
-                  scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
-                 response=response, _log_pool=_logs)
+                  scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+                  response=response, _log_pool=_logs)
     return _FlushLog(_logs)
-
 
 # =============================================================================
 @time_decorator
@@ -1274,6 +1284,9 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     # -------------------------------------------------------------------------
     # Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    # Checkpoint Tuning
+    _checkpoint_tune(request, response)
 
     # -------------------------------------------------------------------------
     # Version Adaptation Tuning

@@ -4191,7 +4191,18 @@ function _wrk_mem_tune(request, response) {
         .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
         .join('; ');
     console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
+    return null;
+}
 
+function _checkpoint_tune(request, response) {
+    // Tune the shared_buffers and work_mem by boost the scale factor (we don't change heuristic connection
+    // as it represented their real-world workload). Similarly, with the ratio between temp_buffers and work_mem
+    // Enable extra tuning to increase the memory usage if not meet the expectation.
+    // Note that at this phase, we don't trigger auto-tuning from other function
+
+    // Additional workload for specific workload
+    console.info(`===== Checkpoint Tuning =====\nImpacted attributes: checkpoint_timeout, checkpoint_completion_target, checkpoint_warning`)
+    const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
     // and expected RTO.
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
@@ -4246,7 +4257,6 @@ function _wrk_mem_tune(request, response) {
     _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
         PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
     )
-
     return null;
 }
 
@@ -4314,6 +4324,9 @@ function correction_tune(request, response) {
     // -------------------------------------------------------------------------
     // Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    // Checkpoint Tuning
+    _checkpoint_tune(request, response)
 
     // -------------------------------------------------------------------------
     // Version Adaptation Tuning
