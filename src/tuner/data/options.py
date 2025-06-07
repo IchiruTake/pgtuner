@@ -85,10 +85,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'enable the correction_tuning, you should ignore this value.'
     )
     max_work_buffer_ratio: PositiveFloat = Field(
-        default=0.15, gt=0, le=0.50, frozen=False,
+        default=0.125, gt=0, le=0.50, frozen=False,
         description='The starting ratio of the maximum PostgreSQL available memory (after excluding shared_buffers and '
                     'others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). '
-                    'The supported range is (0, 0.50], default is 0.15. The algorithm is temp_buffers + work_mem = '
+                    'The supported range is (0, 0.50], default is 0.125. The algorithm is temp_buffers + work_mem = '
                     '(pgmem_available * max_work_buffer_ratio) / active_user_connections. However, if you enable the '
                     'correction_tuning, you can adjust this value *slowly* to increase the memory budget for query '
                     'operation. Under correction tuning, the absolute difference between :attr:`shared_buffers_ratio` '
@@ -129,13 +129,13 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     ':arg`shared_buffers` over the :arg:`work_buffers`, and vice versa.'
     )
     # A too small or too large bound can lead to number overflow
-    hash_mem_usage_level: int = Field(
-        default=-5, ge=-50, le=50, frozen=True,
+    hash_mem_usage_level: int | float = Field(
+        default=-3, ge=-50, le=50, frozen=True,
         description='The *average* hash memory usage level to determine the average work_mem in use by multiply with '
                     ':func:`generalized_mean(1, hash_mem, level=hash_mem_usage_level)`. Higher value would assume that '
                     'all PostgreSQL connections, on average, do more hash-based operations than normal operations, and '
-                    'vice versa. The supported range is [-50, 50], default is -6. The recommended range is around '
-                    '-10 to 6, as beyond this level results in incorrect estimation and so on.'
+                    'vice versa. The supported range is [-50, 50], default is -3. The recommended range is around '
+                    '-10 to 6, as beyond this level results in trivial increment/decrement.'
     )   # Maximum float allowed is [-60, 60] under 64-bit system
     mem_pool_parallel_estimate: Literal['auto', True, False] = Field(
         default='auto', frozen=False,

@@ -715,7 +715,7 @@ _DB_ASYNC_CPU_PROFILE = {
                    "apply per worker process. Parallel utility commands treat the resource limit maintenance_work_mem "
                    "as a limit to be applied to the entire utility command, regardless of the number of parallel worker "
                    "processes. However, parallel utility commands may still consume substantially more CPU resources "
-                   "and I/O bandwidth. The supported range is [2, 16], with default to 1/2x of the logical CPU count "
+                   "and I/O bandwidth. The supported range is [2, 32], with default to 1/2x of the logical CPU count "
                    "(2 by official documentation). See Ref [05] for more information.",
     },
     'min_parallel_table_scan_size': {
