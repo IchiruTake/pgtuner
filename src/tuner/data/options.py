@@ -133,8 +133,8 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'vice versa. The supported range is [-50, 50], default is -3. The recommended range is around '
                     '-10 to 6, as beyond this level results in trivial increment/decrement.'
     )   # Maximum float allowed is [-60, 60] under 64-bit system
-    mem_pool_parallel_estimate: Literal['auto', True, False] = Field(
-        default='auto', frozen=False,
+    mem_pool_parallel_estimate: bool = Field(
+        default=True, frozen=False,
         description='Set to True (default) will switch the memory consumption estimation in parallelism by assuming '
                     'all *query* workers are consumed (based on number of available workers per connection). This '
                     'would result a lower :arg:`max_work_buffer_ratio` can get.'
@@ -493,14 +493,6 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             _logger.warning(f'The database size {self.database_size_in_gib} GiB is larger than the data volume. The '
                             f'database size is silently capped at 90% of the data volume.')
             self.database_size_in_gib = _database_limit
-
-        # Update the mem_pool_parallel_estimate if 'auto'
-        if self.tuning_kwargs.mem_pool_parallel_estimate == 'auto':
-            if self.workload_type in (PG_WORKLOAD.OLAP, PG_WORKLOAD.HTAP):
-                self.tuning_kwargs.mem_pool_parallel_estimate = True
-            else:
-                self.tuning_kwargs.mem_pool_parallel_estimate = False
-            _logger.info(f'The memory estimation for parallelism is enabled: {self.tuning_kwargs.mem_pool_parallel_estimate}')
 
         # Enable the automatic calibration
         if self.automatic_calibration and self.workload_type in auto_calibrate_profiles:
