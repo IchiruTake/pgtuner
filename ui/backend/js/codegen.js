@@ -1436,15 +1436,6 @@ class PG_TUNE_USR_OPTIONS {
             'disk': this.workload_profile,
             'overall': this.workload_profile
         };
-
-        // Adjust the kwargs.mem_pool_parallel_estimate
-        if (this.tuning_kwargs.mem_pool_parallel_estimate === 'auto') {
-            if ([PG_WORKLOAD.HTAP, PG_WORKLOAD.OLTP].includes(this.workload_type)) {
-                this.tuning_kwargs.mem_pool_parallel_estimate = true;
-            } else {
-                this.tuning_kwargs.mem_pool_parallel_estimate = false;
-            }
-        }
     }
 
     /**
