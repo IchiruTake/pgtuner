@@ -134,7 +134,8 @@ function _GetMaxConns(options, group_cache, min_user_conns, max_user_conns) {
     let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;
     console.debug(`The max_connections variable is determined by the number of logical CPU count with the scale factor of ${_upscale.toFixed(1)}x.`);
     let _minimum = Math.max(min_user_conns, total_reserved_connections);
-    let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections;
+    let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns);
+    max_connections = realign_value(max_connections, 5)[1] + total_reserved_connections; // Align to 5
     console.debug(`max_connections: ${max_connections}`);
     return max_connections;
 }

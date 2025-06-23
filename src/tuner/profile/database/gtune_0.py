@@ -59,8 +59,8 @@ def _GetNumConnections(
         total_connections: int = managed_cache['max_connections']
         reserved_connections = managed_cache['reserved_connections'] + managed_cache['superuser_reserved_connections']
     except (IndexError, ValueError, KeyError) as e:
-        _logger.error(
-            f"This function required the connection must be triggered and placed in the managed cache: See error \n{e}.")
+        _logger.error(f"This function required the connection must be triggered and placed in the "
+                      f"managed cache: See error \n{e}.")
         return -1
     if not use_reserved_connection:
         total_connections -= reserved_connections
@@ -188,7 +188,10 @@ def _GetMaxConns(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_conns
     _logger.debug(f'The max_connections variable is determined by the number of logical CPU count with the scale '
                   f'factor of {_upscale:.1f}x.')
     _minimum = max(min_user_conns, total_reserved_connections)
-    max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections
+    max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns)
+
+    # Rounded up by a factor of 5 for easy division
+    max_connections = realign_value(max_connections, page_size=5)[1] + total_reserved_connections
     _logger.debug(f'max_connections: {max_connections}')
     return max_connections
 
