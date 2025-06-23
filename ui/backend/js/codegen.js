@@ -4380,9 +4380,9 @@ function _build_disk_from_backend(data) {
     return new PG_DISK_PERF(
         {
             'random_iops_spec': data.random_iops_spec,
-            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 1.0,
+            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 0.9,
             'throughput_spec': data.throughput_spec,
-            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 1.0,
+            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 0.9,
             'disk_usable_size': data.disk_usable_size,
             'num_disks': data.num_disks !== null ? data.num_disks : 1,
             'per_scale_in_raid': data.per_scale_in_raid !== null ? data.per_scale_in_raid : 0.75
@@ -4393,8 +4393,11 @@ function _build_disk_from_backend(data) {
 function _build_disk_from_html(name = 'data_index_spec') {
     return {
         'random_iops_spec': _get_text_element(`${name}.random_iops`),
+        'random_iops_scale_factor': 0.95,
         'throughput_spec': _get_text_element(`${name}.throughput`),
+        'throughput_scale_factor': 0.95,
         'disk_usable_size': _get_text_element(`${name}.disk_usable_size_in_gib`) * Gi,
+        'num_disks': 1,
     };
 }
 
