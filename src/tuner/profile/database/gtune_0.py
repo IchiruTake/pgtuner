@@ -272,11 +272,11 @@ _DB_CONN_PROFILE = {
     },
     'max_connections': {
         'instructions': {
-            'mini': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 10, 30),
-            'medium': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 65),
-            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 20, 100),
-            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 25, 175),
-            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 30, 250),
+            'mini': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 5, 30),
+            'medium': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 5, 65),
+            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 10, 100),
+            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 175),
+            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 250),
         },
         'default': 30,
         'comment': "The maximum number of client connections allowed. The default is 50. But by testing and some "

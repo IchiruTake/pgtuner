@@ -271,7 +271,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
             PG_DISK_SIZING.matchDiskSeriesInRange(wal_tput, THROUGHPUT, 'ssd', 'nvme')) {
             after_wal_writer_flush_after = 2 * Mi
-            if (request.options.workload_profile >= PG_SIZING.LARGE) {
+            if (request.options.workload_profile >= PG_SIZING.MALL) {
                 after_wal_writer_flush_after *= 2
             }
         }

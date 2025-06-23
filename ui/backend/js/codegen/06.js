@@ -211,11 +211,11 @@ _DB_CONN_PROFILE = {
     },
     'max_connections': {
         'instructions': {
-            'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 30),
-            'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 65),
-            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 20, 100),
-            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 25, 175),
-            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 250),
+            'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 5, 30),
+            'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 5, 65),
+            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 100),
+            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 175),
+            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 250),
         },
         'default': 30,
     },

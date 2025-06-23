@@ -18,7 +18,8 @@ Input Changes:
 
 Algorithm Changes:
 - *_BKE: The background writer during correction tuning write 10 more pages per workload sizing, and has 50 millisecond delay extra between cycles
-
+- *_BKE: Enforce the number of active user connections to be a multiple of 5 for well human quick calculation
+- *_BKE: Create an 'auto' option for automatic profile calibration that based on the workload type.
 
 Others:
 - JS_BKE: The `backend_flush_after` fix the missing of casting function

@@ -190,6 +190,18 @@
             </select>
         </div>
 
-
+        <!-- Auto Calibration Profile -->
+        <div class="col-4 mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <label class="form-label" for="opt_mem_pool"> Auto Calibration Profile </label>
+                <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+                   data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+                   data-bs-content="PGTuner would automatically calibrate the advanced optimization parameters for you based on the workload type"
+                   title="Memory Pool Optimization Mode">
+                </i>
+            <button id="auto-calibrate" class="btn btn-primary" onclick="_AutoCalibrateProfile()">
+                Auto Calibrate Settings</button>
+            </div>
+        </div>
     </div>
 </div>

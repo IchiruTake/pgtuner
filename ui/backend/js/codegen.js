@@ -1601,7 +1601,8 @@ function _GetMaxConns(options, group_cache, min_user_conns, max_user_conns) {
     let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;
     console.debug(`The max_connections variable is determined by the number of logical CPU count with the scale factor of ${_upscale.toFixed(1)}x.`);
     let _minimum = Math.max(min_user_conns, total_reserved_connections);
-    let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections;
+    let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns);
+    max_connections = realign_value(max_connections, 5)[1] + total_reserved_connections; // Align to 5
     console.debug(`max_connections: ${max_connections}`);
     return max_connections;
 }
@@ -1677,11 +1678,11 @@ _DB_CONN_PROFILE = {
     },
     'max_connections': {
         'instructions': {
-            'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 30),
-            'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 65),
-            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 20, 100),
-            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 25, 175),
-            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 250),
+            'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 5, 30),
+            'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 5, 65),
+            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 100),
+            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 175),
+            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 250),
         },
         'default': 30,
     },
@@ -3451,7 +3452,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
             PG_DISK_SIZING.matchDiskSeriesInRange(wal_tput, THROUGHPUT, 'ssd', 'nvme')) {
             after_wal_writer_flush_after = 2 * Mi
-            if (request.options.workload_profile >= PG_SIZING.LARGE) {
+            if (request.options.workload_profile >= PG_SIZING.MALL) {
                 after_wal_writer_flush_after *= 2
             }
         }
@@ -4351,6 +4352,29 @@ function _get_text_element(element) {
     return '';
 }
 
+function _set_text_element(element, value) {
+    let el = document.getElementById(element)
+    // console.log(element, el);
+    if (el.type === 'range' || el.type === 'number') {
+        // parseFloat if element.step in string has dot, parseInt
+        el.value = el.step.includes('.') ? parseFloat(value) : parseInt(value);
+    } else if (el.type === 'text') {
+        el.value = value;
+    } else if (el.type === 'select-one') {
+        el.value = value;
+    }
+
+    // If the element has an sliding (or _range) element, update it as well
+    try {
+        const range_el = document.getElementById(`${element}_range`);
+        if (range_el) {
+            range_el.value = el.value;
+        }
+    } catch (e) {
+        console.warn(`Error updating range element for ${element}: ${e}`);
+    }
+}
+
 function _get_checkbox_element(element) {
     let el = document.getElementById(element)
     // console.log(element, el);
@@ -4418,6 +4442,7 @@ function _build_keywords_from_backend(data) {
             min_wal_size_ratio: data.min_wal_size_ratio,
             max_wal_size_ratio: data.max_wal_size_ratio,
             wal_keep_size_ratio: data.wal_keep_size_ratio,
+
             // Vacuum Tuning
             autovacuum_utilization_ratio: data.autovacuum_utilization_ratio,
             vacuum_safety_level: data.vacuum_safety_level
@@ -4635,4 +4660,41 @@ function web_optimize(request) {
         'response': response,
     }
 }
+
+
+const _CalibrationProfile = {
+    [PG_WORKLOAD.OLAP]: {
+        'cpu_to_connection_scale_ratio': 2.5,
+        'hash_mem_usage_level': -2.0,
+        'shared_buffers_ratio': 0.33,
+        'max_work_buffer_ratio': 0.175,
+        'max_normal_memory_usage': 0.60,
+    },
+    [PG_WORKLOAD.HTAP]: {
+        'cpu_to_connection_scale_ratio': 4.0,
+        'hash_mem_usage_level': -2.5,
+        'shared_buffers_ratio': 0.30,
+        'max_work_buffer_ratio': 0.15,
+        'max_normal_memory_usage': 0.60,
+    },
+    [PG_WORKLOAD.VECTOR]: {
+        'shared_buffers_ratio': 0.33,
+        'temp_buffers_ratio': 0.125,
+    },
+    [PG_WORKLOAD.TSR_IOT]: {
+        'cpu_to_connection_scale_ratio': 6.0,
+        'temp_buffers_ratio': 0.20,
+        'hash_mem_usage_level': -4.0,
+    },
+}
+
+function _AutoCalibrateProfile() {
+    const workload_type = PG_WORKLOAD[_get_text_element(`workload_type`).toUpperCase()];
+    if (_CalibrationProfile.hasOwnProperty(workload_type)) {
+        for (const [key, value] of Object.entries(_CalibrationProfile[workload_type])) {
+            _set_text_element(`keywords.${key}`, value);
+        }
+    }
+}
+
 

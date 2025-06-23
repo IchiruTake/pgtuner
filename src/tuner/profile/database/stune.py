@@ -334,7 +334,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         if (PG_DISK_SIZING.match_disk_series(wal_tput, THROUGHPUT, 'san', interval='strong') or
                 PG_DISK_SIZING.match_disk_series_in_range(wal_tput, THROUGHPUT, 'ssd', 'nvme')):
             after_wal_writer_flush_after = 2 * Mi
-            if request.options.workload_profile >= PG_SIZING.LARGE:
+            if request.options.workload_profile >= PG_SIZING.MALL:
                 after_wal_writer_flush_after *= 2
         _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
