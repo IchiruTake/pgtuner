@@ -1,17 +1,10 @@
 <style>
-    .gradient-text {
-        background: linear-gradient(135deg, #2563eb, #1d4ed8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-
+    /* Gradient Background for Header */
     .glass-effect {
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
-
 </style>
 <header class="bg-gradient-to-br from-slate-50 to-blue-50">
     <nav class="glass-effect border-b border-white/20 sticky top-0 z-50">
@@ -19,11 +12,13 @@
             <div class="flex items-center justify-between">
                 <!-- Logo and Tool Name (Left) -->
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center shadow-lg">
-                        <i class="bi bi-database text-white text-lg"></i>
+                    <!-- Logo Icon -->
+                    <div class="w-13 h-13 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center shadow-lg">
+                        <i class="bi bi-database text-white text-2xl"></i>
                     </div>
+                    <!-- Tool Name -->
                     <div>
-                        <p class="font-bold text-xl vertical-align-left">
+                        <p class="font-bold text-xl">
                             <span class="text-gray-800">PGTuner</span>
                             <span class="text-gray-600"> v0.1.6</span>
                         </p>
