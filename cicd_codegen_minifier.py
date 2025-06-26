@@ -149,6 +149,7 @@ if __name__ == "__main__":
         ('tuner.html', 'tuner.html'),
         ('error/index.html', 'error.html'),
         ('changelog.html', 'changelog.html'),
+        ('description.html', 'description.html'),
     ]
     jinja_cleanup_file = True   # Set to False to keep up the intermediate files
 

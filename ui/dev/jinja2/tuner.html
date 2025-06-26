@@ -5,10 +5,10 @@
 <!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
 {% include './header.min.html' %}
 
-<body>
-<div class="container my-4">
-    <h2 class="mb-4">PGTuner Input Form</h2>
+{% include './description.min.html' %}
 
+<body class="bg-gradient-to-br from-slate-50 to-blue-50">
+    <h2 class="mb-4">PGTuner Input Form</h2>
     <!-- System, Workload and Optimization Mode -->
     {% include './tuner/01_workload.min.html' %}
 
@@ -29,7 +29,6 @@
 
     <!-- Generate Button and Response Box -->
     {% include './tuner/08_response.min.html' %}
-</div>
 
 </body>
 <script>
