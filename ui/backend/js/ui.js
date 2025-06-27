@@ -91,3 +91,49 @@ function downloadResponse() {
     a.click();
     URL.revokeObjectURL(url);
 }
+
+//------------------ Devlog Animation -----------------
+// Devlog entry expansion functionality
+document.querySelectorAll('.devlog-entry').forEach(entry => {
+    entry.addEventListener('click', function(e) {
+        // Prevent expansion if clicking on links
+        if (e.target.tagName === 'A' || e.target.closest('a')) {
+            return;
+        }
+
+        const details = this.querySelector('.devlog-details');
+        const icon = this.querySelector('.expand-icon');
+        const isExpanded = !details.classList.contains('hidden');
+
+        // Close all other entries
+        document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
+            if (otherEntry !== this) {
+                const otherDetails = otherEntry.querySelector('.devlog-details');
+                const otherIcon = otherEntry.querySelector('.expand-icon');
+
+                otherDetails.classList.add('hidden');
+                otherIcon.style.transform = 'rotate(0deg)';
+                otherEntry.classList.remove('ring-2', 'ring-blue-200');
+            }
+        });
+
+        // Toggle current entry
+        if (isExpanded) {
+            details.classList.add('hidden');
+            icon.style.transform = 'rotate(0deg)';
+            this.classList.remove('ring-2', 'ring-blue-200');
+        } else {
+            details.classList.remove('hidden');
+            icon.style.transform = 'rotate(180deg)';
+            this.classList.add('ring-2', 'ring-blue-200');
+
+            // Smooth scroll to show the expanded content
+            setTimeout(() => {
+                details.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest'
+                });
+            }, 100);
+        }
+    });
+});
