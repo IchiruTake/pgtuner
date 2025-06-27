@@ -21,13 +21,16 @@
         <!-- Expand Icon -->
         <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
     </div>
+
     <!-- Title the Update-->
     <h3 class="text-2xl font-bold text-gray-800 mb-4">PGTuner v0.1.6 (Coming Soon)</h3>
+
     <!-- Main Idea of the Update-->
     <p class="text-gray-600 mb-6 leading-relaxed">
         The codebase has been refactored with the decision of hosting dual-backend in the same repository. Multiple functions has been revised to reduce performance noise,
         and multiple optimizations has been added to the codebase
     </p>
+
     <!-- Show Detail -->
     <div class="devlog-details overflow-hidden transition-all duration-500">
         <div class="border-t border-gray-200 pt-6 mt-6">
@@ -68,11 +71,12 @@
                         <li>• <strong>CONF:</strong> Remove all `*_profile` parameters except the `workload_profile` parameter.</li>
                         <li>• <strong>CONF:</strong> The supported PostgreSQL version is using the integer instead of string (including the term 'latest').</li>
                         <li>• <strong>CONF:</strong> Remove parameters of the OS and DB Log disk</li>
-                        <li>• <strong>CONF:</strong>  the backup tool from string to :enum:`PG_BACKUP_TOOL`</li>
+                        <li>• <strong>CONF:</strong> The backup tool from string to :enum:`PG_BACKUP_TOOL`</li>
                         <li>• <strong>CONF:</strong> Remove the workload of SOLTP, LOG, DW in :enum:`PG_WORKLOAD`</li>
                         <li>• <strong>CONF:</strong> The only supported operating system is 'Linux', 'Windows', 'MacOS', 'Container', and 'PaaS'</li>
                     </ul>
                 </div>
+
                 <!-- Info 4 -->
                 <div>
                     <h5 class="font-medium text-gray-800 mb-3">Algorithm Improvements</h5>
@@ -96,6 +100,7 @@
                         <li>• <strong>STUNE:</strong> The `checkpoint_flush_after` is now 512 KiB across all disk specification.</li>
                     </ul>
                 </div>
+
                 <!-- Info 5 -->
                 <div>
                     <h5 class="font-medium text-gray-800 mb-3">Others</h5>
@@ -110,9 +115,11 @@
                         <li>• <strong>CONF:</strong> Refactor the enum `PG_SIZING`.</li>
                     </ul>
                 </div>
+
             </div>
         </div>
     </div>
+
     <!-- HashTag -->
     <div class="flex flex-wrap gap-2">
         <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#release</span>
