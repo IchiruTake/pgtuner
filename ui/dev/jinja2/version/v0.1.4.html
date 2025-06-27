@@ -82,10 +82,10 @@
                         <li>• The parameter `default_statistics_target` has minor change.</li>
                         <li>• The parameter `checkpoint_flush_after` is backed to 256 KiB at general tuning phase, and bump to 512 KiB and 1 MiB if data volume is strong.</li>
                         <li>• Revise failsafe at anti-wraparound tuning.</li>
-                        <li>• Fix the underlying meaning of `min_wal_size`, `max_wal_size`, and `wal_keep_size` in our PostgreSQL understanding by introducing new algorithm that is based on the WAL volume capacity, ensuring checkpoint can be run in a timely manner, during burst workload, and maintained a reasonable number WAL records for streaming replication.</li>
-                        <li>• The parameter `archive_timeout` is scaled by extra 10 minutes for one unit of larger WAL size (capped at 2 hour).</li>
-                        <li>• The parameter `checkpoint_timeout` added the minimum time of finishing the checkpoint (at 70 % of mixed data IOPS) depending on the type of workload (workload scale is independent) in the correction tuning phase.</li>
-                        <li>• The parameter `bgwriter_lru_maxpages` is increased when the disk performance is SSD or stronger.</li>
+                        <li>• Fix the underlying meaning of <code class="font-bold">min_wal_size</code>, <code class="font-bold">max_wal_size</code>, and <code class="font-bold">wal_keep_size</code> in our PostgreSQL understanding by introducing new algorithm that is based on the WAL volume capacity, ensuring checkpoint can be run in a timely manner, during burst workload, and maintained a reasonable number WAL records for streaming replication.</li>
+                        <li>• The parameter <code class="font-bold">archive_timeout</code> is scaled by extra 10 minutes for one unit of larger WAL size (capped at 2 hour).</li>
+                        <li>• The parameter <code class="font-bold">checkpoint_timeout</code> added the minimum time of finishing the checkpoint (at 70 % of mixed data IOPS) depending on the type of workload (workload scale is independent) in the correction tuning phase.</li>
+                        <li>• The parameter <code class="font-bold">bgwriter_lru_maxpages</code> is increased when the disk performance is SSD or stronger.</li>
                         <li>• The four parameters <code class="font-bold">*_flush_after</code> is added into the correction tuning phase</li>
                     </ul>
                 </div>
