@@ -1,0 +1,45 @@
+<h5 class="mb-3">Autovacuum</h5>
+<div class="row">
+    <!-- autovacuum_utilization_ratio -->
+    <div class="col-4 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <label class="form-label" for="keywords.autovacuum_utilization_ratio">
+                Autovacuum Utilization Ratio </label>
+            <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+               data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+               data-bs-content="The utilization ratio of the random IOPS of data volume used for the autovacuum process. Higher value meant that more estimated READ/WRITE IOPs would be spent on the autovacuum process to reduce the autovacuum time; but it is not recommended to set this beyond 0.90."
+               title="Autovacuum Utilization Ratio">
+            </i>
+        </div>
+        <div class="d-flex align-items-center">
+            <input class="form-range me-3" name="keywords.autovacuum_utilization_ratio"
+                   id="keywords.autovacuum_utilization_ratio_range"
+                   max="0.95" min="0.30" step="0.01" value="0.80" type="range"
+                   onchange="syncSliderToNumber('keywords.autovacuum_utilization_ratio')">
+            <input class="form-control w-auto" id="keywords.autovacuum_utilization_ratio"
+                   max="0.95" min="0.30" step="0.01" value="0.80" type="number"
+                   onchange="syncNumberToSlider('keywords.autovacuum_utilization_ratio')">
+        </div>
+    </div>
+    <!-- vacuum_safety_level -->
+    <div class="col-4 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <label class="form-label" for="keywords.vacuum_safety_level">
+                Autovacuum Utilization </label>
+            <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
+               data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
+               data-bs-content="The safety level of the vacuum process. Higher level would increase the risk during vacuum process (by pushing its limit). Non-zero value would not protect from pure READ page during the vacuum process, but ensuring never throttle on WRITE page(s) during VACUUM, and protect the server under balanced distribution of READ/WRITE page from disks. Unless you lower the :var:`autovacuum_utilization_ratio`, it is recommended to set this value low to zero to when you do not know how your application access pattern and VACUUM behaves. This parameter is feasible only due to the use of optimized autovacuum configuration and visibility map, and is recommended a zero value if your PostgreSQL is at version 12 or older."
+               title="Autovacuum Utilization">
+            </i>
+        </div>
+        <div class="d-flex align-items-center">
+            <input class="form-range me-3" name="keywords.vacuum_safety_level"
+                   id="keywords.vacuum_safety_level_range"
+                   max="12" min="0" step="1" value="2" type="range"
+                   onchange="syncSliderToNumber('keywords.vacuum_safety_level')">
+            <input class="form-control w-auto" id="keywords.vacuum_safety_level"
+                   max="12" min="0" step="1" value="2" type="number"
+                   onchange="syncNumberToSlider('keywords.vacuum_safety_level')">
+        </div>
+    </div>
+</div>

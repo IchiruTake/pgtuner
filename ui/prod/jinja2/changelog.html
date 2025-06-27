@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+{% include './head.min.html' %}
+
+<!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
+{% include './header.min.html' %}
+
+<body>
+    <section class="py-20 bg-white/50">
+        <div class="container mx-auto px-4">
+            <!-- Changelog Header -->
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mb-6">Development Log</h2>
+                    <p class="text-xl text-gray-600">Stay updated with the latest features, improvements, and releases</p>
+                </div>
+                <div class="space-y-8">
+                    <!-- Changelog Item (v0.2.x) -->
+                    {% include './version/v0.2.0.min.html' %}
+
+                    <!-- Changelog Item (v0.1.x) -->
+                    {% include './version/v0.1.6.min.html' %}
+                    {% include './version/v0.1.5.min.html' %}
+                    {% include './version/v0.1.4.min.html' %}
+                    {% include './version/v0.1.3.min.html' %}
+                    {% include './version/v0.1.2.min.html' %}
+                    {% include './version/v0.1.1.min.html' %}
+                    {% include './version/v0.1.0.min.html' %}
+                </div>
+
+                <div class="text-center mt-12">
+                    <a href="https://github.com/IchiruTake/pgtuner" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center space-x-3 bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition-colors duration-200 font-semibold text-lg shadow-lg">
+                        <i class="bi bi-github text-xl"></i>
+                        <span>View All Releases on GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </section>
+</body>
+
+<!-- Footer -->
+{% include './footer.min.html' %}
+
+<!-- Animation for Details Devlog -->
+<script>
+    // Devlog entry expansion functionality
+    document.querySelectorAll('.devlog-entry').forEach(entry => {
+        entry.addEventListener('click', function(e) {
+            // Prevent expansion if clicking on links
+            if (e.target.tagName === 'A' || e.target.closest('a')) {
+                return;
+            }
+
+            const details = this.querySelector('.devlog-details');
+            const icon = this.querySelector('.expand-icon');
+            const isExpanded = !details.classList.contains('hidden');
+
+            // Close all other entries
+            document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
+                if (otherEntry !== this) {
+                    const otherDetails = otherEntry.querySelector('.devlog-details');
+                    const otherIcon = otherEntry.querySelector('.expand-icon');
+
+                    otherDetails.classList.add('hidden');
+                    otherIcon.style.transform = 'rotate(0deg)';
+                    otherEntry.classList.remove('ring-2', 'ring-blue-200');
+                }
+            });
+
+            // Toggle current entry
+            if (isExpanded) {
+                details.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+                this.classList.remove('ring-2', 'ring-blue-200');
+            } else {
+                details.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+                this.classList.add('ring-2', 'ring-blue-200');
+
+                // Smooth scroll to show the expanded content
+                setTimeout(() => {
+                    details.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                }, 100);
+            }
+        });
+    });
+</script>
+</html>
