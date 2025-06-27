@@ -32,7 +32,7 @@
     </p>
 
     <!-- Show Detail -->
-    <div class="devlog-details overflow-hidden transition-all duration-500">
+    <div class="devlog-details hidden overflow-hidden transition-all duration-500">
         <div class="border-t border-gray-200 pt-6 mt-6">
             <!-- Title -->
             <h4 class="text-lg font-semibold text-gray-800 mb-4">What's New in v0.1.6</h4>
@@ -60,20 +60,20 @@
                 <div>
                     <h5 class="font-medium text-gray-800 mb-3">Input Changes</h5>
                     <ul class="text-sm text-gray-600 space-y-2">
-                        <li>• <strong>PY_BKE:</strong> Now user has to self-supplied the configuration they wanted rather than naively use the default input. See `./pgtuner_cli.py` for usage</li>
-                        <li>• <strong>CONF:</strong> Introduce the parameter `cpu_to_connection_scale_ratio` with default to 5 (range from [2.5, 10]) to support the variety of scaling the number of connections in the general optimization phase.</li>
-                        <li>• <strong>CONF:</strong> Increase the parameter `memory_connection_to_dedicated_os_ratio` from 0.3 to 0.7</li>
-                        <li>• <strong>CONF:</strong> Change the default parameter of `hash_mem_usage_level` is changed from -6 to -5. If hash_mem_multiplier is 2.0, the working memory usage per connection for one arbitrary operation is increased from 1.1196 to 1.1417</li>
-                        <li>• <strong>CONF:</strong> Revert the upper bound parameter of `wal_segment_size` to 2 GiB instead of 128 MiB (scale from 3 to 7)</li>
-                        <li>• <strong>CONF:</strong> Change the default parameter of `min_wal_size_ratio` from 0.03 to 0.025</li>
-                        <li>• <strong>CONF:</strong> Change the default parameter of `mem_pool_tuning_ratio` from 0.6 to 0.45</li>
-                        <li>• <strong>CONF:</strong> Change the default parameter of `max_wal_size_ratio` and `wal_keep_size_ratio` from 0.05 to 0.04</li>
-                        <li>• <strong>CONF:</strong> Remove all `*_profile` parameters except the `workload_profile` parameter.</li>
+                        <li>• <strong>PY_BKE:</strong> Now user has to self-supplied the configuration they wanted rather than naively use the default input. See <code class="font-bold">./pgtuner_cli.py</code> for usage.</li>
+                        <li>• <strong>CONF:</strong> Introduce the parameter <code class="font-bold">cpu_to_connection_scale_ratio</code> with default to 5 (range from [2.5, 10]) to support the variety of scaling the number of connections in the general optimization phase.</li>
+                        <li>• <strong>CONF:</strong> Increase the parameter <code class="font-bold">memory_connection_to_dedicated_os_ratio</code> from 0.3 to 0.7.</li>
+                        <li>• <strong>CONF:</strong> Change the default parameter of <code class="font-bold">hash_mem_usage_level</code> is changed from -6 to -5. If hash_mem_multiplier is 2.0, the working memory usage per connection for one arbitrary operation is increased from 1.1196 to 1.1417.</li>
+                        <li>• <strong>CONF:</strong> Revert the upper bound parameter of <code class="font-bold">wal_segment_size</code> to 2 GiB instead of 128 MiB (scale from 3 to 7).</li>
+                        <li>• <strong>CONF:</strong> Change the default parameter of <code class="font-bold">min_wal_size_ratio</code> from 0.03 to 0.025.</li>
+                        <li>• <strong>CONF:</strong> Change the default parameter of <code class="font-bold">mem_pool_tuning_ratio</code> from 0.6 to 0.45.</li>
+                        <li>• <strong>CONF:</strong> Change the default parameter of <code class="font-bold">max_wal_size_ratio</code> and <code class="font-bold">wal_keep_size_ratio</code> from 0.05 to 0.04.</li>
+                        <li>• <strong>CONF:</strong> Remove all <code class="font-bold">*_profile</code> parameters except the <code class="font-bold">workload_profile</code> parameter.</li>
                         <li>• <strong>CONF:</strong> The supported PostgreSQL version is using the integer instead of string (including the term 'latest').</li>
                         <li>• <strong>CONF:</strong> Remove parameters of the OS and DB Log disk</li>
-                        <li>• <strong>CONF:</strong> The backup tool from string to :enum:`PG_BACKUP_TOOL`</li>
-                        <li>• <strong>CONF:</strong> Remove the workload of SOLTP, LOG, DW in :enum:`PG_WORKLOAD`</li>
-                        <li>• <strong>CONF:</strong> The only supported operating system is 'Linux', 'Windows', 'MacOS', 'Container', and 'PaaS'</li>
+                        <li>• <strong>CONF:</strong> The backup tool from string to :enum:<code class="font-bold">PG_BACKUP_TOOL</code><./li>
+                        <li>• <strong>CONF:</strong> Remove the workload of SOLTP, LOG, DW in <code class="font-bold">:enum:PG_WORKLOAD</code>.</li>
+                        <li>• <strong>CONF:</strong> The only supported operating system is <code class="font-bold">Linux, Windows, MacOS, Container, and PaaS</code>.</li>
                     </ul>
                 </div>
 
@@ -81,23 +81,23 @@
                 <div>
                     <h5 class="font-medium text-gray-800 mb-3">Algorithm Improvements</h5>
                     <ul class="text-sm text-gray-600 space-y-2">
-                        <li>• <strong>PY_BKE:</strong> Disable SYSCTL tuning if the OS is not Linux </li>
-                        <li>• <strong>GTUNE:</strong> Add the condition for `bgwriter_lru_maxpages` to be well-adapted with associated workload</li>
-                        <li>• <strong>GTUNE:</strong> The parameter `archive_timeout` is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.</li>
-                        <li>• <strong>GTUNE:</strong> Add the configurations of `join_collapse_limit`, `from_collapse_limit`, and `plan_cache_mode`.</li>
-                        <li>• <strong>GTUNE:</strong> Rework the self-tuning of `parallel_tuple_cost` configuration</li>
-                        <li>• <strong>GTUNE:</strong> Adjust the scale ratio `max_parallel_workers` (vcpu * 1.125 ->> vcpu * 1.25 + 1) and `max_parallel_workers_per_gather` (vcpu / 3 ->> vcpu / 2.5) to have more parallel workers</li>
-                        <li>• <strong>STUNE:</strong> Reduce the result of `cpu_tuple_cost` and `parallel_tuple_cost`</li>
-                        <li>• <strong>STUNE:</strong> Simplify (reduce) configuration value of `default_statistics_target`/li>
-                        <li>• <strong>STUNE:</strong> Simplify (reduce) configuration value of `after_commit_delay` to be workload-based rather than disk-based</li>
-                        <li>• <strong>STUNE:</strong> Reduce the upper bound of `vacuum_*_min_age` from 25% of associated `vacuum_*_max_age` to 15%</li>
-                        <li>• <strong>STUNE:</strong> Stop enforce the option `opt_wal_buffers` to be higher than `PG_PROFILE_OPTMODE.NONE`</li>
-                        <li>• <strong>STUNE:</strong> Reduce by half the alignment size of `min_wal_size`, `max_wal_size`, and `wal_keep_size` (The configuration would be better detailed).</li>
-                        <li>• <strong>STUNE:</strong> The two parameters `statement_timeout` and `lock_timeout` is reduced significantly.</li>
-                        <li>• <strong>STUNE:</strong> A typo in `backend_flush_after` has been corrected from 512 MiB to 512 KiB.</li>
-                        <li>• <strong>STUNE:</strong> Re-calibrate the algorithm of WAL pre-allocation of zero-filled WAL file (ignore the parameter `wal_init_zero`).</li>
-                        <li>• <strong>STUNE:</strong> Re-calibrate the background writer behaviour by optimizing the `bgwriter_delay` and `bgwriter_lru_maxpages`.</li>
-                        <li>• <strong>STUNE:</strong> The `checkpoint_flush_after` is now 512 KiB across all disk specification.</li>
+                        <li>• <strong>PY_BKE:</strong> Disable SYSCTL tuning if the OS is not Linux.</li>
+                        <li>• <strong>GTUNE:</strong> Add the condition for <code class="font-bold">bgwriter_lru_maxpages</code> to be well-adapted with associated workload.</li>
+                        <li>• <strong>GTUNE:</strong> The parameter <code class="font-bold">archive_timeout</code> is from 15 minutes bumped to 30-45 minutes as many current servers don't use the log-shipping method anymore, but streaming and logical replication.</li>
+                        <li>• <strong>GTUNE:</strong> Add the configurations of <code class="font-bold">join_collapse_limit, from_collapse_limit, and plan_cache_mode</code>.</li>
+                        <li>• <strong>GTUNE:</strong> Rework the self-tuning of <code class="font-bold">parallel_tuple_cost</code> configuration.</li>
+                        <li>• <strong>GTUNE:</strong> Adjust the scale ratio <code class="font-bold">max_parallel_workers</code> (vcpu * 1.125 ->> vcpu * 1.25 + 1) and `max_parallel_workers_per_gather` (vcpu / 3 ->> vcpu / 2.5) to have more parallel workers.</li>
+                        <li>• <strong>STUNE:</strong> Reduce the result of <code class="font-bold">cpu_tuple_cost</code> and <code class="font-bold">parallel_tuple_cost</code>.</li>
+                        <li>• <strong>STUNE:</strong> Simplify (reduce) configuration value of <code class="font-bold">default_statistics_target</code>.</li>
+                        <li>• <strong>STUNE:</strong> Simplify (reduce) configuration value of <code class="font-bold">after_commit_delay</code> to be workload-based rather than disk-based.</li>
+                        <li>• <strong>STUNE:</strong> Reduce the upper bound of <code class="font-bold">vacuum_*_min_age</code> from 25% of associated <code class="font-bold">vacuum_*_max_age</code> to 15%.</li>
+                        <li>• <strong>STUNE:</strong> Stop enforce the option <code class="font-bold">opt_wal_buffers</code> to be higher than <code class="font-bold">PG_PROFILE_OPTMODE.NONE</code>.</li>
+                        <li>• <strong>STUNE:</strong> Reduce by half the alignment size of <code class="font-bold">min_wal_size, max_wal_size, and wal_keep_size</code> (The configuration would be better detailed).</li>
+                        <li>• <strong>STUNE:</strong> The two parameters <code class="font-bold">statement_timeout</code> and <code class="font-bold">lock_timeout</code> is reduced significantly.</li>
+                        <li>• <strong>STUNE:</strong> A typo in <code class="font-bold">backend_flush_after</code> has been corrected from 512 MiB to 512 KiB.</li>
+                        <li>• <strong>STUNE:</strong> Re-calibrate the algorithm of WAL pre-allocation of zero-filled WAL file (ignore the parameter <code class="font-bold">wal_init_zero</code>).</li>
+                        <li>• <strong>STUNE:</strong> Re-calibrate the background writer behaviour by optimizing the <code class="font-bold">bgwriter_delay</code> and <code class="font-bold">bgwriter_lru_maxpages</code>.</li>
+                        <li>• <strong>STUNE:</strong> The <code class="font-bold">checkpoint_flush_after</code> is now 512 KiB across all disk specification.</li>
                     </ul>
                 </div>
 
@@ -107,12 +107,12 @@
                     <ul class="text-sm text-gray-600 space-y-2">
                         <li>• <strong>PY_BKE:</strong> The GC has been pushed more with better GC management.</li>
                         <li>• <strong>PY_WEB:</strong> The request's limit has been bumped from 15 reqs per window to 250 reqs (on DEV) and 180 (on PROD).</li>
-                        <li>• <strong>PY_BKE:</strong> The initialization on `./src/__init__.py` is improved with better logic. This includes the change in the `./src/utils`, `./src/static` (removed), `./src/tuner/data`, ... modules.</li>
+                        <li>• <strong>PY_BKE:</strong> The initialization on <code class="font-bold">./src/__init__.py</code> is improved with better logic. This includes the change in the <code class="font-bold">./src/utils, ./src/static (removed), ./src/tuner/data</code>, ... modules.</li>
                         <li>• <strong>PY_BKE:</strong> TThe general optimizer has been moved out-of-class to be functional.</li>
-                        <li>• <strong>PY_BKE:</strong> TAdd the method :func:`PG_TUNE_ITEM.__repr__()` and remove the argument `output_if_difference_only` in :func:`PG_TUNE_ITEM.out()`.</li>
+                        <li>• <strong>PY_BKE:</strong> TAdd the method <code class="font-bold">:func:PG_TUNE_ITEM.__repr__()</code> and remove the argument <code class="font-bold">output_if_difference_only</code> in <code class="font-bold">:func:PG_TUNE_ITEM.out()</code>.</li>
                         <li>• <strong>PY_BKE:</strong> Enforce the warning when the database has less than 4 GiB of RAM.</li>
-                        <li>• <strong>CONF:</strong> Remove the scope of :enum:`PGTUNER_SCOPE.KERNEL_BOOT` optimize the boot settings for database.</li>
-                        <li>• <strong>CONF:</strong> Refactor the enum `PG_SIZING`.</li>
+                        <li>• <strong>CONF:</strong> Remove the scope of <code class="font-bold">:enum:PGTUNER_SCOPE.KERNEL_BOOT</code> optimize the boot settings for database.</li>
+                        <li>• <strong>CONF:</strong> Refactor the enum <code class="font-bold">PG_SIZING</code>.</li>
                     </ul>
                 </div>
 
