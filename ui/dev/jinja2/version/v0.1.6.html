@@ -71,7 +71,7 @@
                         <li>• <strong>CONF:</strong> Remove all <code class="font-bold">*_profile</code> parameters except the <code class="font-bold">workload_profile</code> parameter.</li>
                         <li>• <strong>CONF:</strong> The supported PostgreSQL version is using the integer instead of string (including the term 'latest').</li>
                         <li>• <strong>CONF:</strong> Remove parameters of the OS and DB Log disk</li>
-                        <li>• <strong>CONF:</strong> The backup tool from string to :enum:<code class="font-bold">PG_BACKUP_TOOL</code><./li>
+                        <li>• <strong>CONF:</strong> The backup tool from string to <code class="font-bold">:enum:PG_BACKUP_TOOL</code>.</li>
                         <li>• <strong>CONF:</strong> Remove the workload of SOLTP, LOG, DW in <code class="font-bold">:enum:PG_WORKLOAD</code>.</li>
                         <li>• <strong>CONF:</strong> The only supported operating system is <code class="font-bold">Linux, Windows, MacOS, Container, and PaaS</code>.</li>
                     </ul>
@@ -107,7 +107,7 @@
                     <ul class="text-sm text-gray-600 space-y-2">
                         <li>• <strong>PY_BKE:</strong> The GC has been pushed more with better GC management.</li>
                         <li>• <strong>PY_WEB:</strong> The request's limit has been bumped from 15 reqs per window to 250 reqs (on DEV) and 180 (on PROD).</li>
-                        <li>• <strong>PY_BKE:</strong> The initialization on <code class="font-bold">./src/__init__.py</code> is improved with better logic. This includes the change in the <code class="font-bold">./src/utils, ./src/static (removed), ./src/tuner/data</code>, ... modules.</li>
+                        <li>• <strong>PY_BKE:</strong> The initialization on <code class="font-bold">./src/__init__.py</code> is improved with better logic. This includes the change in the <code class="font-bold">./src/utils, ./src/static (removed), ./src/tuner/data, ... modules</code>.</li>
                         <li>• <strong>PY_BKE:</strong> TThe general optimizer has been moved out-of-class to be functional.</li>
                         <li>• <strong>PY_BKE:</strong> TAdd the method <code class="font-bold">:func:PG_TUNE_ITEM.__repr__()</code> and remove the argument <code class="font-bold">output_if_difference_only</code> in <code class="font-bold">:func:PG_TUNE_ITEM.out()</code>.</li>
                         <li>• <strong>PY_BKE:</strong> Enforce the warning when the database has less than 4 GiB of RAM.</li>
