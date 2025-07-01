@@ -1,60 +1,24 @@
 <div>
-    <h4>System, Workload and Optimization Mode</h4>
-    <div>
-        <!-- Overall Profile -->
-        <div>
-            <div>
-                <label for="workload_profile"> Workload Sizing </label>
-                <i ></i>
-            </div>
-            <select id="workload_profile" name="workload_profile">
-                <option value="mini">Mini: Self-hosted or Development</option>
-                <option value="medium">Medium: Mini website or Small internal usage</option>
-                <option selected value="large">Large: City-level Scale </option>
-                <option value="mall">Mall: Metropolis-level or Country-level Scale</option>
-                <option value="bigt">BigTech: Multinational-level Scale</option>
-            </select>
-        </div>
+    <!-- Title 1: System, Workload and Optimization Mode -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-server text-blue-600 mr-3"></i>
+            System, Workload and Optimization Mode
+        </h3>
+        <p class="text-gray-600">Tell us about your server hardware and operating system</p>
+    </div>
 
-        <!-- PostgreSQL Version (Similar format) -->
+    <!-- Details 1: System, Workload and Optimization Mode -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- Operating System -->
         <div>
-            <div>
-                <label for="pgsql_version">PostgreSQL Version</label>
-                <i >
-                </i>
-            </div>
-            <select id="pgsql_version" name="pgsql_version">
-                <option value="13">13</option>
-                <option value="14">14</option>
-                <option value="15">15</option>
-                <option value="16">16</option>
-                <option selected value="17">17</option>
-                <option value="18">18</option>
-            </select>
-        </div>
-
-        <!-- Workload Type -->
-        <div>
-            <div>
-                <label for="workload_type"> Workload Type </label>
-                <i ></i>
-            </div>
-            <select id="workload_type" name="workload_type">
-                <option value="tsr_iot">TST: Time Series Data of OLTP or IoT</option>
-                <option value="oltp">OLTP: Online Transaction Processing</option>
-                <option selected value="htap">HTAP: Hybrid Transactional/Analytical Processing</option>
-                <option value="olap">OLAP: Online Analytical Processing</option>
-                <option value="vector">Vector: Full-Text Search, RAG, Geospatial Data</option>
-            </select>
-        </div>
-
-        <!-- Operating System and its Specification (CPU, RAM) -->
-        <div>
-            <div>
-                <label for="operating_system"> Operating System </label>
-                <i ></i>
-            </div>
-            <select id="operating_system" name="operating_system" onchange="ram_calculator()">
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="operating_system">
+                Operating System
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The operating system that the PostgreSQL server is running on. Default is Linux. If the memory usage of kernel and monitoring is set to -1, the pgtuner would self-calculate your basic RAM usage based on the developer testing. Set the memory usage of kernel and monitoring to 0 bytes if you have done your measurement." data-tooltip-header="Operating System">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="operating_system" name="operating_system" onchange="ram_calculator()">
                 <option selected value="linux">Linux</option>
                 <option value="windows">Windows</option>
                 <option value="macos">MacOS</option>
@@ -63,89 +27,138 @@
             </select>
         </div>
 
+        <!-- Postgre Version -->
         <div>
-            <div>
-                <label  for="vcpu"> Number of vCPUs </label>
-                <i ></i>
-            </div>
-            <div >
-                <input  name="vcpu" id="vcpu_range"
-                       max="128" min="1" step="1" value="4" type="range"
-                       placeholder="Enter the number of logical CPUs"
-                       onchange="syncSliderToNumber('vcpu')">
-                <input  id="vcpu"
-                       max="128" min="1" step="1" value="4" type="number"
-                       onchange="syncNumberToSlider('vcpu')">
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="pgsql_version">
+                PostgreSQL Version
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The version of PostgreSQL that you are using. This helps us to optimize the settings based on the specific features and improvements available in that version." data-tooltip-header="PostgreSQL Version">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="pgsql_version" name="pgsql_version">
+                <option value="13">PostgreSQL 13</option>
+                <option value="14">PostgreSQL 14</option>
+                <option value="15">PostgreSQL 15</option>
+                <option value="16">PostgreSQL 16</option>
+                <option selected value="17">PostgreSQL 17</option>
+                <option value="18">PostgreSQL 18 (Beta)</option>
+            </select>
+        </div>
+
+        <!-- Number of vCPUs -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="vcpu">
+                Number of vCPUs
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The number of logical CPUs" data-tooltip-header="Number of vCPUs">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="vcpu" id="vcpu_range" type="range" max="128" min="1" step="1" value="4" onchange="syncSliderToNumber('vcpu')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>1 Core</span>
+                        <span>128 Cores</span>
+                    </div>
+                </div>
+                <input id="vcpu" max="128" min="1" step="1" value="4" type="number" onchange="syncNumberToSlider('vcpu')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
         </div>
+
+        <!-- Total RAM -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="total_ram_in_gib">
+                Total RAM Size (GiB)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Input your total RAM size in GiB (do not account the swap or reserved memory into this field). This can bond together with the Memory profile. However, please ensure that the RAM must be larger than total RAM in use. For the PostgreSQL database the minimum memory should be larger than 4 GiB (recommended to be larger than 8 GiB)." data-tooltip-header="Total RAM Size">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="total_ram_in_gib" id="total_ram_in_gib_range" max="1024" min="2" step="0.25" value="16" type="range" onchange="syncSliderToNumber('total_ram_in_gib'); ram_calculator()" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>2 GiB</span>
+                        <span>1024 GiB</span>
+                    </div>
+                </div>
+                <input id="total_ram_in_gib" max="1024" min="2" step="0.25" value="16" type="number" onchange="syncNumberToSlider('total_ram_in_gib'); ram_calculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<div>
+    <!-- Title 2: Workload Configuration -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-activity text-blue-600 mr-3"></i>
+            Workload Configuration
+        </h3>
+        <p class="text-gray-600">Describe your database workload and usage patterns</p>
+    </div>
+
+    <!-- Details 2: System, Workload and Optimization Mode -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- Workload Sizing -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="workload_profile">
+                Workload Sizing
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Choose your workload sizing suited for your system. Higher profile level means that the amount of data change is larger, with more running complex queries and connections ..." data-tooltip-header="Workload Sizing">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="workload_profile" name="workload_profile">
+                <option value="mini">Mini: Self-hosted or Development</option>
+                <option value="medium">Medium: Mini website or Small internal usage</option>
+                <option selected value="large">Large: City-level Scale </option>
+                <option value="mall">Mall: Metropolis-level or Country-level Scale</option>
+                <option value="bigt">BigTech: Multinational-level Scale</option>
+            </select>
+        </div>
+
+        <!-- Workload Type -->
 
         <div>
-            <div>
-                <label for="total_ram_in_gib"> Total RAM Size (GiB) </label>
-                <i ></i>
-            </div>
-            <div>
-                <input name="total_ram_in_gib" id="total_ram_in_gib_range"
-                       max="1024" min="2" step="0.25" value="16" type="range"
-                       onchange="syncSliderToNumber('total_ram_in_gib'); ram_calculator()">
-                <input id="total_ram_in_gib"
-                       max="1024" min="2" step="0.25" value="16" type="number"
-                       onchange="syncNumberToSlider('total_ram_in_gib'); ram_calculator()">
-            </div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="workload_type">
+                Workload Type
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Select the workload type for system tuning. The choice of workload type can impact some parameters, especially during the correction tuning and its associated risk level. Note that during the correction tuning, some workloads would be tuned differently according to the workload type." data-tooltip-header="Workload Type">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="workload_type" name="workload_type">
+                <option value="tsr_iot">TST: Time Series Data of OLTP or IoT</option>
+                <option value="oltp">OLTP: Online Transaction Processing</option>
+                <option selected value="htap">HTAP: Hybrid Transactional/Analytical Processing</option>
+                <option value="olap">OLAP: Online Analytical Processing</option>
+                <option value="vector">Vector: Full-Text Search, RAG, Geospatial Data</option>
+            </select>
         </div>
+    </div>
+</div>
 
-        <!-- RAM usage -->
-        <div >
-            <div >
-                <label  for="base_kernel_memory_usage_in_mib">Kernel Memory Usage (MiB)</label>
-                <i></i>
-            </div>
-            <div >
-                <input name="base_kernel_memory_usage_in_mib" id="base_kernel_memory_usage_in_mib_range"
-                       max="8192" min="-1" step="1" value="-1" type="range"
-                       onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib'); ram_calculator()">
-                <input  id="base_kernel_memory_usage_in_mib"
-                       max="8192" min="-1" step="1" value="-1" type="number"
-                       onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib'); ram_calculator()">
-            </div>
-        </div>
-        <div >
-            <div >
-                <label  for="base_monitoring_memory_usage_in_mib">Monitoring Memory Usage (MiB) </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  name="base_monitoring_memory_usage_in_mib"
-                       id="base_monitoring_memory_usage_in_mib_range"
-                       max="4096" min="-1" step="1" value="-1" type="range"
-                       onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); ram_calculator()">
-                <input  id="base_monitoring_memory_usage_in_mib"
-                       max="4096" min="-1" step="1" value="-1" type="number"
-                       onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()">
-            </div>
-        </div>
+<div>
+    <!-- Title 3: Memory Configuration -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-memory text-blue-600 mr-3"></i>
+            Memory Configuration
+        </h3>
+        <p class="text-gray-600">Configure memory allocation and optimization settings</p>
+    </div>
 
-        <!-- Display Total RAM in (MiB), not a form submit -->
-        <div >
-            <div >
-                <label  for="total_usable_ram">Total Usable RAM (MiB)</label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input id="total_usable_ram" disabled readonly value="???"
-                       onload="ram_calculator()">
-            </div>
-        </div>
-
+    <!-- Details 3: Memory Configuration -->
+    <div class="grid md:grid-cols-2 gap-8">
         <!-- Memory Pool Optimization Mode -->
-        <div >
-            <div >
-                <label  for="opt_mem_pool"> Memory Pool Optimization Mode </label>
-                <i></i>
-            </div>
-            <select  id="opt_mem_pool" name="opt_mem_pool">
+        <div class="md:col-span-2">
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="opt_mem_pool">
+                Memory Pool Optimization Mode
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="If not NONE, it would proceed the extra tuning to increase the memory usage to reach to your expectation (shared_buffers, work_mem, temp_buffer, ...); by altering the pool allocation. If the initial value of the pool are too large, then it would refuse to take action including reducing the pool size.." data-tooltip-header="Memory Pool Optimization Mode">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="opt_mem_pool" name="opt_mem_pool">
                 <option value="none">NONE: Ignore Optimization </option>
                 <option value="lightweight">SPIDEY: Light-weight Optimization</option>
                 <option selected value="general">OPTIMUS PRIME: General Optimization </option>
@@ -153,13 +166,61 @@
             </select>
         </div>
 
-        <!-- Auto Calibration Profile -->
-        <div >
-            <div >
-                <label  for="opt_mem_pool"> Auto Calibration Profile </label>
-                <i></i>
-            <button id="auto-calibrate"  onclick="_AutoCalibrateProfile()">
-                Auto Calibrate Settings</button>
+        <!-- Kernel Memory Usage (MiB) -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3"  for="base_kernel_memory_usage_in_mib">
+                Kernel Memory Usage (MiB)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Input your basic kernel memory usage in MiB, and probably other applications. Default to -1 meant that the pgtuner would self estimate based on the OS. Ensure your RAM capacity must be larger than this option and monitoring memory usage." data-tooltip-header="Kernel Memory Usage">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="base_kernel_memory_usage_in_mib" id="base_kernel_memory_usage_in_mib_range" max="8192" min="-1" step="1" value="-1" type="range" onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib'); ram_calculator()" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>1 MiB</span>
+                        <span>8192 MiB</span>
+                    </div>
+                </div>
+                <input id="base_kernel_memory_usage_in_mib" max="8192" min="-1" step="1" value="-1" type="number" onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib'); ram_calculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- Monitoring Memory Usage -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3"  for="base_monitoring_memory_usage_in_mib">
+                Monitoring Memory Usage (MiB)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Input your monitoring memory usage in MiB, and probably other applications. Default to -1 meant that the pgtuner would self estimate based on the OS. Ensure your RAM capacity must be larger than this option and kernel memory usage." data-tooltip-header="Monitoring Memory Usage">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="base_monitoring_memory_usage_in_mib" id="base_monitoring_memory_usage_in_mib_range" max="4096" min="-1" step="1" value="-1" type="range" onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); ram_calculator()" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>1 MiB</span>
+                        <span>4096 MiB</span>
+                    </div>
+                </div>
+                <input id="base_monitoring_memory_usage_in_mib" max="4096" min="-1" step="1" value="-1" type="number" onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Display Total RAM in (MiB), not a form submit -->
+<div>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h4 class="font-semibold text-blue-800">Usable RAM (MiB)</h4>
+                <p class="text-sm text-blue-600">Usable memory after excluding system and monitoring overhead</p>
+            </div>
+            <div class="items-left">
+                <input id="total_usable_ram" disabled readonly value="???" onload="ram_calculator()" class="text-2xl font-bold w-26">
+                <span class="text-2xl text-blue-600">MiB</span>
             </div>
         </div>
     </div>

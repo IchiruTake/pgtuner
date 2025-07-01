@@ -137,3 +137,49 @@ document.querySelectorAll('.devlog-entry').forEach(entry => {
         }
     });
 });
+
+//------------------ Tooltip Animation -----------------
+// Setup tooltips
+function setupTooltips() {
+    const tooltipTriggers = document.querySelectorAll('.tooltip-trigger');
+    const tooltip = document.getElementById('tooltip');
+    const tooltipContent = document.getElementById('tooltip-content');
+    const tooltipHeader = document.getElementById('tooltip-header');
+
+    tooltipTriggers.forEach(trigger => {
+        trigger.addEventListener('mouseenter', (e) => {
+            const content = trigger.getAttribute('data-tooltip');
+            const header = trigger.getAttribute('data-tooltip-header');
+
+            tooltipContent.textContent = content;
+            tooltipHeader.textContent = header;
+
+            const rect = trigger.getBoundingClientRect();
+            const tooltipHeight = tooltip.offsetHeight;
+
+            tooltip.style.top = `${rect.top - tooltipHeight - 10}px`;
+            tooltip.style.left = `${rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+            tooltip.classList.add('show');
+        });
+
+        trigger.addEventListener('mouseleave', () => {
+            tooltip.classList.remove('show');
+        });
+    });
+}
+// Reposition tooltips on scroll/resize
+window.addEventListener('scroll', function() {
+    const tooltip = document.getElementById('tooltip');
+    if (tooltip) tooltip.classList.remove('show');
+});
+
+window.addEventListener('resize', function() {
+    const tooltip = document.getElementById('tooltip');
+    if (tooltip) tooltip.classList.remove('show');
+});
+
+// ------------------- DOMContentLoaded-----------------
+// Initialize DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+        setupTooltips();
+});
