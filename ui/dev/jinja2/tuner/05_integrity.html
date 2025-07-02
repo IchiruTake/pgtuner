@@ -122,15 +122,15 @@
             <div class="flex items-center justify-between">
                 <div class="flex-1">
                     <h5 class="font-medium text-gray-800 mb-1">Offshore Replication (regional or international)</h5>
-                    <p class="text-sm text-gray-600">Set to True meant that you are planning to have a geo-replicated replicas in the offshore country or continent; this would increase the wal_sender_timeout to 2 minutes or more.</p>
+                    <p class="text-sm text-gray-600">Set to True meant that you are planning to have a geo-replicated replicas in the offshore country or continent. <strong>This would increase the <code>wal_sender_timeout</code> to 2 minutes or more.</strong></p>
                 </div>
                 <div class="flex items-center space-x-3 ml-4">
                     <span class="text-sm text-gray-500">No</span>
                     <label class="toggle-switch" for="offshore_replication">
-                        <input type="checkbox" name="high-concurrent-reads" data-question="high-concurrent-reads" role="switch" id="offshore_replication">
+                        <input type="checkbox" role="switch" id="offshore_replication">
                         <span class="toggle-slider"></span>
                     </label>
-                    <span class="text-sm text-gray-500" >Yes</span>
+                    <span class="text-sm text-gray-500">Yes</span>
                 </div>
             </div>
         </div>
