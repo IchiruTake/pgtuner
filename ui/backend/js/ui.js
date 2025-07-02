@@ -1,4 +1,4 @@
-// This JS file is dedicated for the UI display only
+// ----------------- UI Sync Functions -----------------
 function syncNumberToSlider(id) {
     const slider = document.getElementById(id + "_range");
     const numberInput = document.getElementById(id);
@@ -181,5 +181,5 @@ window.addEventListener('resize', function() {
 // ------------------- DOMContentLoaded-----------------
 // Initialize DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-        setupTooltips();
+    setupTooltips();
 });

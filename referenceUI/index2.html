@@ -104,6 +104,72 @@
             visibility: visible;
             opacity: 1;
         }
+
+        /* Yes/No Toggle Styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ef4444;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #22c55e;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        .question-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .question-card:hover {
+            border-color: #e5e7eb;
+            transform: translateY(-2px);
+        }
+
+        .question-card.answered-yes {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+        }
+
+        .question-card.answered-no {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
     </style>
 </head>
 
@@ -447,14 +513,290 @@
                                 Previous
                             </button>
                             <button type="button" class="next-step bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+                                Next: Usage Patterns
+                                <i class="bi bi-arrow-right ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Usage Patterns (Yes/No Questions) -->
+                    <div class="form-step hidden" id="step-3">
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                                <i class="bi bi-question-circle text-blue-600 mr-3"></i>
+                                Usage Patterns & Requirements
+                            </h3>
+                            <p class="text-gray-600">Answer these questions to help us optimize your PostgreSQL configuration</p>
+                        </div>
+
+                        <div class="space-y-6">
+                            <!-- Performance Questions -->
+                            <div class="bg-blue-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-blue-800 mb-4 flex items-center">
+                                    <i class="bi bi-speedometer2 mr-2"></i>
+                                    Performance & Load
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 1 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you expect high concurrent read operations?</h5>
+                                                <p class="text-sm text-gray-600">Multiple users reading data simultaneously</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="high-concurrent-reads" data-question="high-concurrent-reads">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 2 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you have frequent write-heavy operations?</h5>
+                                                <p class="text-sm text-gray-600">Lots of INSERT, UPDATE, DELETE operations</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="write-heavy-operations" data-question="write-heavy-operations">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 3 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you run complex analytical queries?</h5>
+                                                <p class="text-sm text-gray-600">Long-running queries with JOINs, aggregations, etc.</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="complex-analytical-queries" data-question="complex-analytical-queries">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Storage Questions -->
+                            <div class="bg-green-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-green-800 mb-4 flex items-center">
+                                    <i class="bi bi-hdd mr-2"></i>
+                                    Storage & Data
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 4 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Are you using SSD storage?</h5>
+                                                <p class="text-sm text-gray-600">Solid State Drives vs traditional HDDs</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="ssd-storage" data-question="ssd-storage">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 5 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you have large tables (>1GB)?</h5>
+                                                <p class="text-sm text-gray-600">Tables with millions of rows or significant data size</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="large-tables" data-question="large-tables">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 6 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you need point-in-time recovery?</h5>
+                                                <p class="text-sm text-gray-600">Ability to restore database to any specific time</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="point-in-time-recovery" data-question="point-in-time-recovery">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Availability Questions -->
+                            <div class="bg-purple-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-purple-800 mb-4 flex items-center">
+                                    <i class="bi bi-shield-check mr-2"></i>
+                                    Availability & Reliability
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 7 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Is high availability critical?</h5>
+                                                <p class="text-sm text-gray-600">Database must be available 24/7 with minimal downtime</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="high-availability" data-question="high-availability">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 8 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you use database replication?</h5>
+                                                <p class="text-sm text-gray-600">Master-slave or streaming replication setup</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="database-replication" data-question="database-replication">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 9 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you need automatic failover?</h5>
+                                                <p class="text-sm text-gray-600">Automatic switching to backup server on failure</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="automatic-failover" data-question="automatic-failover">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Monitoring Questions -->
+                            <div class="bg-orange-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-orange-800 mb-4 flex items-center">
+                                    <i class="bi bi-graph-up mr-2"></i>
+                                    Monitoring & Maintenance
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 10 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you use query performance monitoring?</h5>
+                                                <p class="text-sm text-gray-600">Tools like pg_stat_statements, monitoring slow queries</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="query-monitoring" data-question="query-monitoring">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 11 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you run automated maintenance tasks?</h5>
+                                                <p class="text-sm text-gray-600">Scheduled VACUUM, ANALYZE, index maintenance</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="automated-maintenance" data-question="automated-maintenance">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 12 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you need detailed logging?</h5>
+                                                <p class="text-sm text-gray-600">Comprehensive logs for debugging and auditing</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="detailed-logging" data-question="detailed-logging">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="prev-step bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
+                                <i class="bi bi-arrow-left mr-2"></i>
+                                Previous
+                            </button>
+                            <button type="button" class="next-step bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
                                 Next: Memory Settings
                                 <i class="bi bi-arrow-right ml-2"></i>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Step 3: Memory Configuration -->
-                    <div class="form-step hidden" id="step-3">
+                    <!-- Step 4: Memory Configuration -->
+                    <div class="form-step hidden" id="step-4">
                         <div class="mb-8">
                             <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
                                 <i class="bi bi-memory text-blue-600 mr-3"></i>
@@ -580,7 +922,7 @@
                                 <i class="bi bi-check-circle text-green-600 mr-3"></i>
                                 Configuration Generated Successfully!
                             </h3>
-                            <p class="text-gray-600">Here are your optimized PostgreSQL settings</p>
+                            <p class="text-gray-600">Here are your optimized PostgreSQL settings based on your requirements</p>
                         </div>
 
                         <div id="configuration-output" class="space-y-6">
@@ -676,66 +1018,12 @@
                             Added support for PostgreSQL 16, improved query analysis algorithms, and introduced real-time monitoring dashboard with enhanced visualization capabilities.
                         </p>
 
-                        <!-- Expandable Details -->
-                        <div class="devlog-details hidden overflow-hidden transition-all duration-500">
-                            <div class="border-t border-gray-200 pt-6 mt-6">
-                                <h4 class="text-lg font-semibold text-gray-800 mb-4">What's New in v2.1.0</h4>
-
-                                <div class="space-y-4 mb-6">
-                                    <div class="flex items-start space-x-3">
-                                        <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                        <div>
-                                            <h5 class="font-medium text-gray-800">PostgreSQL 16 Support</h5>
-                                            <p class="text-gray-600 text-sm">Full compatibility with the latest PostgreSQL version, including new performance features and optimizations.</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="flex items-start space-x-3">
-                                        <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                        <div>
-                                            <h5 class="font-medium text-gray-800">Enhanced Query Analysis</h5>
-                                            <p class="text-gray-600 text-sm">Improved algorithms that can detect complex query patterns and suggest more precise optimizations.</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="flex items-start space-x-3">
-                                        <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                        <div>
-                                            <h5 class="font-medium text-gray-800">Real-time Monitoring Dashboard</h5>
-                                            <p class="text-gray-600 text-sm">New interactive dashboard with live metrics, performance graphs, and customizable alerts.</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="flex items-start space-x-3">
-                                        <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
-                                        <div>
-                                            <h5 class="font-medium text-gray-800">API Improvements</h5>
-                                            <p class="text-gray-600 text-sm">RESTful API with better error handling and comprehensive documentation.</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="bg-gray-50 rounded-lg p-4 mb-4">
-                                    <h5 class="font-medium text-gray-800 mb-2">Installation</h5>
-                                    <code class="text-sm text-gray-700 bg-gray-200 px-2 py-1 rounded">npm install -g pgtuner@2.1.0</code>
-                                </div>
-
-                                <div class="flex items-center space-x-4 text-sm text-gray-500">
-                                    <span><i class="bi bi-download mr-1"></i>1,247 downloads</span>
-                                    <span><i class="bi bi-bug mr-1"></i>3 bug fixes</span>
-                                    <span><i class="bi bi-plus-circle mr-1"></i>5 new features</span>
-                                </div>
-                            </div>
-                        </div>
-
                         <div class="flex flex-wrap gap-2 mt-4">
                             <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#release</span>
                             <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#postgresql-16</span>
                             <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#monitoring</span>
                         </div>
                     </article>
-
-                    <!-- Additional devlog entries would go here... -->
                 </div>
 
                 <div class="text-center mt-12">
@@ -784,7 +1072,8 @@
 <script>
     // Form state management
     let currentStep = 1;
-    const totalSteps = 3;
+    const totalSteps = 4; // Updated to 4 steps
+    const yesNoAnswers = {};
 
     // Initialize form
     document.addEventListener('DOMContentLoaded', function() {
@@ -793,6 +1082,7 @@
         setupTooltips();
         setupFormNavigation();
         setupWorkloadOptions();
+        setupYesNoQuestions();
         calculateUsableRAM();
     });
 
@@ -801,6 +1091,41 @@
         const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
         document.getElementById('progress-bar').style.width = progress + '%';
         document.getElementById('progress-text').textContent = Math.round(progress) + '% Complete';
+    }
+
+    // Setup Yes/No questions
+    function setupYesNoQuestions() {
+        document.querySelectorAll('input[data-question]').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const questionId = this.getAttribute('data-question');
+                const questionCard = this.closest('.question-card');
+
+                // Update answer state
+                yesNoAnswers[questionId] = this.checked;
+
+                // Update visual feedback
+                questionCard.classList.remove('answered-yes', 'answered-no');
+                if (this.checked) {
+                    questionCard.classList.add('answered-yes');
+                } else {
+                    questionCard.classList.add('answered-no');
+                }
+
+                // Update progress for step 3
+                if (currentStep === 3) {
+                    updateQuestionProgress();
+                }
+            });
+        });
+    }
+
+    // Update question progress
+    function updateQuestionProgress() {
+        const totalQuestions = document.querySelectorAll('input[data-question]').length;
+        const answeredQuestions = Object.keys(yesNoAnswers).length;
+        const questionProgress = (answeredQuestions / totalQuestions) * 100;
+
+        // You could add a separate progress indicator for questions here if desired
     }
 
     // Setup sliders with real-time updates
@@ -817,12 +1142,14 @@
             const element = document.getElementById(slider.id);
             const valueElement = document.getElementById(slider.valueId);
 
-            element.addEventListener('input', function() {
-                valueElement.textContent = this.value + slider.suffix;
-                if (slider.id === 'total-ram' || slider.id === 'kernel-memory' || slider.id === 'monitoring-memory') {
-                    calculateUsableRAM();
-                }
-            });
+            if (element && valueElement) {
+                element.addEventListener('input', function() {
+                    valueElement.textContent = this.value + slider.suffix;
+                    if (slider.id === 'total-ram' || slider.id === 'kernel-memory' || slider.id === 'monitoring-memory') {
+                        calculateUsableRAM();
+                    }
+                });
+            }
         });
     }
 
@@ -963,14 +1290,15 @@
             maxConnections: document.getElementById('max-connections').value,
             optimizationMode: document.querySelector('input[name="optimization-mode"]:checked').value,
             kernelMemory: document.getElementById('kernel-memory').value,
-            monitoringMemory: document.getElementById('monitoring-memory').value
+            monitoringMemory: document.getElementById('monitoring-memory').value,
+            yesNoAnswers: yesNoAnswers
         };
 
         // Generate configuration based on inputs
         const config = generatePostgreSQLConfig(formData);
 
         // Display results
-        displayConfiguration(config);
+        displayConfiguration(config, formData);
 
         // Show results section
         document.getElementById('results-section').classList.remove('hidden');
@@ -999,6 +1327,9 @@
         if (data.workloadType === 'olap') workMemBase *= 4;
         if (data.workloadType === 'htap') workMemBase *= 2;
 
+        // Adjust based on yes/no answers
+        const answers = data.yesNoAnswers;
+
         const config = {
             'shared_buffers': `${Math.floor(sharedBuffers / 1024)}GB`,
             'effective_cache_size': `${Math.floor(effectiveCacheSize / 1024)}GB`,
@@ -1008,17 +1339,81 @@
             'checkpoint_completion_target': data.workloadType === 'oltp' ? '0.7' : '0.9',
             'wal_buffers': `${Math.min(64, Math.max(1, Math.floor(sharedBuffers * 0.03)))}MB`,
             'default_statistics_target': data.workloadType === 'olap' ? '500' : '100',
-            'random_page_cost': data.workloadType === 'olap' ? '1.1' : '4.0',
-            'effective_io_concurrency': data.os === 'linux' ? '200' : '1'
+            'random_page_cost': answers['ssd-storage'] ? '1.1' : '4.0',
+            'effective_io_concurrency': data.os === 'linux' && answers['ssd-storage'] ? '200' : '1'
         };
+
+        // Add conditional settings based on yes/no answers
+        if (answers['high-concurrent-reads']) {
+            config['max_worker_processes'] = Math.min(parseInt(data.cpuCores), 8);
+            config['max_parallel_workers'] = Math.min(parseInt(data.cpuCores), 8);
+            config['max_parallel_workers_per_gather'] = Math.min(Math.floor(parseInt(data.cpuCores) / 2), 4);
+        }
+
+        if (answers['write-heavy-operations']) {
+            config['checkpoint_timeout'] = '15min';
+            config['max_wal_size'] = '4GB';
+            config['min_wal_size'] = '1GB';
+        }
+
+        if (answers['complex-analytical-queries']) {
+            config['work_mem'] = `${Math.max(parseInt(config['work_mem'].replace('MB', '')), 256)}MB`;
+            config['hash_mem_multiplier'] = '2.0';
+        }
+
+        if (answers['point-in-time-recovery']) {
+            config['wal_level'] = 'replica';
+            config['archive_mode'] = 'on';
+            config['archive_command'] = "'cp %p /path/to/archive/%f'";
+        }
+
+        if (answers['database-replication']) {
+            config['max_wal_senders'] = '10';
+            config['wal_keep_size'] = '1GB';
+        }
+
+        if (answers['query-monitoring']) {
+            config['shared_preload_libraries'] = "'pg_stat_statements'";
+            config['pg_stat_statements.track'] = 'all';
+            config['log_min_duration_statement'] = '1000';
+        }
+
+        if (answers['detailed-logging']) {
+            config['log_destination'] = "'csvlog'";
+            config['logging_collector'] = 'on';
+            config['log_statement'] = 'all';
+            config['log_duration'] = 'on';
+        }
 
         return config;
     }
 
     // Display configuration
-    function displayConfiguration(config) {
+    function displayConfiguration(config, formData) {
         const output = document.getElementById('configuration-output');
         output.innerHTML = '';
+
+        // Configuration Summary
+        const summarySection = document.createElement('div');
+        summarySection.className = 'bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6';
+        summarySection.innerHTML = `
+                <h4 class="text-lg font-semibold text-blue-800 mb-4">
+                    <i class="bi bi-info-circle mr-2"></i>Configuration Summary
+                </h4>
+                <div class="grid md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p><strong>System:</strong> ${formData.os} with PostgreSQL ${formData.pgVersion}</p>
+                        <p><strong>Hardware:</strong> ${formData.cpuCores} cores, ${formData.totalRAM}GB RAM</p>
+                        <p><strong>Workload:</strong> ${formData.workloadType.toUpperCase()} (${formData.workloadScale})</p>
+                    </div>
+                    <div>
+                        <p><strong>Optimization:</strong> ${formData.optimizationMode} mode</p>
+                        <p><strong>Connections:</strong> ${formData.maxConnections} max concurrent</p>
+                        <p><strong>Questions answered:</strong> ${Object.keys(formData.yesNoAnswers).length}/12</p>
+                    </div>
+                </div>
+            `;
+        output.appendChild(summarySection);
 
         const configSection = document.createElement('div');
         configSection.className = 'bg-gray-50 rounded-lg p-6';
@@ -1032,7 +1427,8 @@
         configText.className = 'bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto text-sm font-mono';
 
         let configContent = '# PostgreSQL Configuration Generated by PGTuner\n';
-        configContent += '# Generated on: ' + new Date().toLocaleString() + '\n\n';
+        configContent += '# Generated on: ' + new Date().toLocaleString() + '\n';
+        configContent += '# Based on your system specifications and usage patterns\n\n';
 
         for (const [key, value] of Object.entries(config)) {
             configContent += `${key} = ${value}\n`;
@@ -1043,18 +1439,34 @@
 
         output.appendChild(configSection);
 
-        // Add performance tips
+        // Add performance tips based on answers
         const tipsSection = document.createElement('div');
-        tipsSection.className = 'bg-blue-50 border border-blue-200 rounded-lg p-6';
+        tipsSection.className = 'bg-green-50 border border-green-200 rounded-lg p-6';
+
+        let tips = [
+            'Always test configuration changes in a staging environment first',
+            'Monitor performance metrics after applying changes',
+            'Consider your specific workload patterns when fine-tuning',
+            'Regular maintenance tasks like VACUUM and ANALYZE are crucial'
+        ];
+
+        // Add specific tips based on yes/no answers
+        if (formData.yesNoAnswers['ssd-storage']) {
+            tips.push('SSD detected: Consider enabling synchronous_commit for better durability');
+        }
+        if (formData.yesNoAnswers['large-tables']) {
+            tips.push('Large tables detected: Consider partitioning for better performance');
+        }
+        if (formData.yesNoAnswers['high-availability']) {
+            tips.push('High availability required: Set up streaming replication and monitoring');
+        }
+
         tipsSection.innerHTML = `
-                <h4 class="text-lg font-semibold text-blue-800 mb-4">
+                <h4 class="text-lg font-semibold text-green-800 mb-4">
                     <i class="bi bi-lightbulb mr-2"></i>Performance Tips
                 </h4>
-                <ul class="text-blue-700 space-y-2">
-                    <li>• Always test configuration changes in a staging environment first</li>
-                    <li>• Monitor performance metrics after applying changes</li>
-                    <li>• Consider your specific workload patterns when fine-tuning</li>
-                    <li>• Regular maintenance tasks like VACUUM and ANALYZE are crucial</li>
+                <ul class="text-green-700 space-y-2">
+                    ${tips.map(tip => `<li>• ${tip}</li>`).join('')}
                 </ul>
             `;
 
@@ -1068,11 +1480,18 @@
         document.getElementById('step-1').classList.remove('hidden');
         document.getElementById('results-section').classList.add('hidden');
         document.getElementById('tuning-form').reset();
+
+        // Reset yes/no answers
+        Object.keys(yesNoAnswers).forEach(key => delete yesNoAnswers[key]);
+        document.querySelectorAll('.question-card').forEach(card => {
+            card.classList.remove('answered-yes', 'answered-no');
+        });
+
         updateProgress();
         calculateUsableRAM();
     }
 
-    // Mobile menu functionality (existing code)
+    // Mobile menu functionality
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuIcon = mobileMenuBtn.querySelector('i');
@@ -1106,7 +1525,7 @@
         });
     });
 
-    // Devlog entry expansion functionality (existing code)
+    // Devlog entry expansion functionality
     document.querySelectorAll('.devlog-entry').forEach(entry => {
         entry.addEventListener('click', function(e) {
             if (e.target.tagName === 'A' || e.target.closest('a')) {
@@ -1115,34 +1534,39 @@
 
             const details = this.querySelector('.devlog-details');
             const icon = this.querySelector('.expand-icon');
-            const isExpanded = !details.classList.contains('hidden');
 
-            document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
-                if (otherEntry !== this) {
-                    const otherDetails = otherEntry.querySelector('.devlog-details');
-                    const otherIcon = otherEntry.querySelector('.expand-icon');
+            if (details && icon) {
+                const isExpanded = !details.classList.contains('hidden');
 
-                    otherDetails.classList.add('hidden');
-                    otherIcon.style.transform = 'rotate(0deg)';
-                    otherEntry.classList.remove('ring-2', 'ring-blue-200');
+                document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
+                    if (otherEntry !== this) {
+                        const otherDetails = otherEntry.querySelector('.devlog-details');
+                        const otherIcon = otherEntry.querySelector('.expand-icon');
+
+                        if (otherDetails && otherIcon) {
+                            otherDetails.classList.add('hidden');
+                            otherIcon.style.transform = 'rotate(0deg)';
+                            otherEntry.classList.remove('ring-2', 'ring-blue-200');
+                        }
+                    }
+                });
+
+                if (isExpanded) {
+                    details.classList.add('hidden');
+                    icon.style.transform = 'rotate(0deg)';
+                    this.classList.remove('ring-2', 'ring-blue-200');
+                } else {
+                    details.classList.remove('hidden');
+                    icon.style.transform = 'rotate(180deg)';
+                    this.classList.add('ring-2', 'ring-blue-200');
+
+                    setTimeout(() => {
+                        details.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest'
+                        });
+                    }, 100);
                 }
-            });
-
-            if (isExpanded) {
-                details.classList.add('hidden');
-                icon.style.transform = 'rotate(0deg)';
-                this.classList.remove('ring-2', 'ring-blue-200');
-            } else {
-                details.classList.remove('hidden');
-                icon.style.transform = 'rotate(180deg)';
-                this.classList.add('ring-2', 'ring-blue-200');
-
-                setTimeout(() => {
-                    details.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
-                    });
-                }, 100);
             }
         });
     });

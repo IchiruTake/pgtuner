@@ -1,120 +1,167 @@
-<div >
-    <h4 >Disk: Data and WAL Specifications</h4>
-    <p > Warning: If you are using RAID, please ensure below calculation are suitable for RAID0 where READ and WRITE can be scaled equally (not linearly) and all disks has same capacity. If you are wandering if these calculations are correct, benchmark your whole volume in throughput (MiB/s) and random IOPS (with 8KiB page size) and set the number of disks to be 1 to disable the RAID estimation.
-    </p>
-    <p >
-        Note that for a performant PostgreSQL server, you should host your database on at least 4 disks or 4 separate volumes: 1 for PostgreSQL binaries, configuration, and transaction management; 1 for WAL; 1 for data and index; and 1 for database logging. Also, if you use tablespace to separate random IOPS for data/index volume then it would be great. You then also need a remote storage to store the backup, WAL archive, and compressed database logs.
-    </p>
+<!-- Header: Disk: Data and WAL Specifications -->
+<div class="mb-6 border-t border-gray-300 pt-2">
+    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+        <i class="bi bi-nvme text-blue-600 mr-3"></i>
+        Disk: Data and WAL Specifications
+    </h2>
+    <!-- Warning message -->
+    <p class="text-red-400 text-lg"><strong>Warning: </strong></p>
+    <span>If you are using RAID, please ensure below calculation are suitable for RAID0 where READ and WRITE can be scaled equally (not linearly) and all disks has same capacity. If you are wandering if these calculations are correct, benchmark your whole volume in throughput (MiB/s) and random IOPS (with 8KiB page size) and set the number of disks to be 1 to disable the RAID estimation.</span>
 
-    <div >
-        <h5> Data & Index Partition/Volume </h5>
-        <!-- Single disk performance: Random IOPS (8K) or throughput -->
-        <!-- Random IOPS (mainly used) -->
-        <div >
-            <div >
-                <label  for="data_index_spec.random_iops"> Random IOPS (8K-IO) </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  name="data_index_spec.random_iops" id="data_index_spec.random_iops_range"
-                       max="1400000" min="50" step="50" value="5000" type="range"
-                       onchange="syncSliderToNumber('data_index_spec.random_iops')">
-                <input  id="data_index_spec.random_iops"
-                       max="1400000" min="50" step="50" value="5000" type="number"
-                       onchange="syncNumberToSlider('data_index_spec.random_iops')">
-            </div>
-        </div>
+    <!-- Note message -->
+    <p class="text-green-400 text-lg"><strong>Note: </strong></p>
+    <span>that for a performant PostgreSQL server, you should host your database on at least 4 disks or 4 separate volumes: 1 for PostgreSQL binaries, configuration, and transaction management; 1 for WAL; 1 for data and index; and 1 for database logging. Also, if you use tablespace to separate random IOPS for data/index volume then it would be great. You then also need a remote storage to store the backup, WAL archive, and compressed database logs.</span>
+</div>
 
-        <!-- Throughput -->
-        <div >
-            <div >
-                <label  for="data_index_spec.throughput"> Throughput (MB/s)</label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  name="data_index_spec.throughput"
-                       id="data_index_spec.throughput_range"
-                       max="14000" min="50" step="50" value="300" type="range"
-                       onchange="syncSliderToNumber('data_index_spec.throughput')">
-                <input  id="data_index_spec.throughput"
-                       max="14000" min="50" step="50" value="300" type="number"
-                       onchange="syncNumberToSlider('data_index_spec.throughput')">
-            </div>
-        </div>
-
-        <!-- Disk Size (5 GiB -> 64 TiB) -->
-        <div >
-            <div >
-                <label  for="data_index_spec.disk_usable_size_in_gib"> Total Volume Size (GiB) </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  name="data_index_spec.disk_usable_size_in_gib"
-                       id="data_index_spec.disk_usable_size_in_gib_range"
-                       max="65536" min="5" step="1" value="256" type="range"
-                       onchange="syncSliderToNumber('data_index_spec.disk_usable_size_in_gib')">
-                <input  id="data_index_spec.disk_usable_size_in_gib"
-                       max="65536" min="5" step="1" value="256" type="number"
-                       onchange="syncNumberToSlider('data_index_spec.disk_usable_size_in_gib')">
-            </div>
-        </div>
+<div>
+    <!-- Title 1: Data & Index Partition/Volume -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-bar-chart-line text-blue-600 mr-3"></i>
+            Data & Index Partition/Volume
+        </h3>
+        <p class="text-gray-600">Tell us about your server data and index partition</p>
     </div>
 
-    <div >
-        <h5 >WAL Partition/Volume</h5>
+    <!-- Details 1: Data & Index Partition/Volume -->
+    <div class="grid md:grid-cols-1 gap-6">
         <!-- Single disk performance: Random IOPS (8K) or throughput -->
-        <!-- Random IOPS -->
-        <div >
-            <div >
-                <label  for="wal_spec.random_iops"> Random IOPS (8K-IO) </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  name="wal_spec.random_iops" id="wal_spec.random_iops_range"
-                       max="1400000" min="50" step="50" value="5000" type="range"
-                       onchange="syncSliderToNumber('wal_spec.random_iops')">
-                <input  id="wal_spec.random_iops"
-                       max="1400000" min="50" step="50" value="5000" type="number"
-                       onchange="syncNumberToSlider('wal_spec.random_iops')">
+        <!-- Random IOPS (mainly used) -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="data_index_spec.random_iops">
+                Random IOPS (8K-IO)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The number of random 8K-IOPS of the volume. It is best to provide result from benchmark rather than providing manufacturer's specification. On NVME SSD, the number of IOPS/throughput can be decayed, thus it is better to review those after 6-12 months of usage." data-tooltip-header="Random IOPS (8K-IO)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="data_index_spec.random_iops" id="data_index_spec.random_iops_range" max="1400000" min="50" step="50" value="5000" type="range" onchange="syncSliderToNumber('data_index_spec.random_iops')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>50 </span>
+                        <span>1400000</span>
+                    </div>
+                </div>
+                <input id="data_index_spec.random_iops" max="1400000" min="50" step="50" value="5000" type="number" onchange="syncNumberToSlider('data_index_spec.random_iops')" class="w-26 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
         </div>
 
         <!-- Throughput -->
-        <div >
-            <div >
-                <label  for="wal_spec.throughput"> Throughput (MB/s)</label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  name="wal_spec.throughput" id="wal_spec.throughput_range"
-                       max="14000" min="50" step="50" value="500" type="range"
-                       onchange="syncSliderToNumber('wal_spec.throughput')">
-                <input  id="wal_spec.throughput"
-                       max="14000" min="50" step="50" value="500" type="number"
-                       onchange="syncNumberToSlider('wal_spec.throughput')">
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="data_index_spec.throughput">
+                Throughput (MB/s)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The throughput (MB/s) of the volume. It is best to provide result from benchmark rather than providing manufacturer's specification. On NVME SSD, the number of IOPS/throughput can be decayed, thus it is better to review those after 6-12 months of usage." data-tooltip-header="Throughput (MB/s)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="data_index_spec.throughput" id="data_index_spec.throughput_range" max="14000" min="50" step="50" value="300" type="range" onchange="syncSliderToNumber('data_index_spec.throughput')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>50 MB/s</span>
+                        <span>14000 MB/s</span>
+                    </div>
+                </div>
+                <input id="data_index_spec.throughput" max="14000" min="50" step="50" value="300" type="number" onchange="syncNumberToSlider('data_index_spec.throughput')" class="w-26 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
         </div>
 
         <!-- Disk Size (5 GiB -> 64 TiB) -->
-        <div >
-            <div >
-                <label  for="wal_spec.disk_usable_size_in_gib"> Total Volume Size (GiB) </label>
-                <i>
-                </i>
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="data_index_spec.disk_usable_size_in_gib">
+                Total Volume Size (GiB)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The throughput (MB/s) of the volume. It is best to provide result from benchmark rather than providing manufacturer's specification. On NVME SSD, the number of IOPS/throughput can be decayed, thus it is better to review those after 6-12 months of usage." data-tooltip-header="Throughput (MB/s)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="data_index_spec.disk_usable_size_in_gib"
+                           id="data_index_spec.disk_usable_size_in_gib_range"
+                           max="65536" min="5" step="1" value="256" type="range"
+                           onchange="syncSliderToNumber('data_index_spec.disk_usable_size_in_gib')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>5 GiB</span>
+                        <span>65536 GiB</span>
+                    </div>
+                </div>
+                <input id="data_index_spec.disk_usable_size_in_gib" max="65536" min="5" step="1" value="256" type="number" onchange="syncNumberToSlider('data_index_spec.disk_usable_size_in_gib')" class="w-26 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
-            <div >
-                <input  name="wal_spec.disk_usable_size_in_gib"
-                       id="wal_spec.disk_usable_size_in_gib_range"
-                       max="65536" min="5" step="1" value="256" type="range"
-                       onchange="syncSliderToNumber('wal_spec.disk_usable_size_in_gib')">
-                <input  id="wal_spec.disk_usable_size_in_gib"
-                       max="65536" min="5" step="1" value="256" type="number"
-                       onchange="syncNumberToSlider('wal_spec.disk_usable_size_in_gib')">
+        </div>
+
+    </div>
+</div>
+
+<div>
+    <!-- Title 2: WAL Partition/Volume -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-bar-chart-line text-blue-600 mr-3"></i>
+            WAL Partition/Volume
+        </h3>
+        <p class="text-gray-600">Tell us about your server WAL partition</p>
+    </div>
+
+    <!-- Details 2: WAL Partition/Volume -->
+    <div class="grid md:grid-cols-1 gap-6">
+        <!-- Single disk performance: Random IOPS (8K) or throughput -->
+        <!-- Random IOPS -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="wal_spec.random_iops">
+                Random IOPS (8K-IO)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The number of random 8K-IOPS of the volume. It is best to provide result from benchmark rather than providing manufacturer's specification. On NVME SSD, the number of IOPS/throughput can be decayed, thus it is better to review those after 6-12 months of usage." data-tooltip-header="Random IOPS (8K-IO)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="wal_spec.random_iops" id="wal_spec.random_iops_range" max="1400000" min="50" step="50" value="5000" type="range" onchange="syncSliderToNumber('wal_spec.random_iops')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>50 IOPS</span>
+                        <span>1400000 IOPS</span>
+                    </div>
+                </div>
+                <input id="wal_spec.random_iops" max="1400000" min="50" step="50" value="5000" type="number" onchange="syncNumberToSlider('wal_spec.random_iops')" class="w-26 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- Throughput -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="wal_spec.throughput">
+                Throughput (MB/s)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The throughput (MB/s) of the volume. It is best to provide result from benchmark rather than providing manufacturer's specification. On NVME SSD, the number of IOPS/throughput can be decayed, thus it is better to review those after 6-12 months of usage." data-tooltip-header="Throughput (MB/s)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="wal_spec.throughput" id="wal_spec.throughput_range" max="14000" min="50" step="50" value="500" type="range" onchange="syncSliderToNumber('wal_spec.throughput')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>50 MB/s</span>
+                        <span>14000 MB/s</span>
+                    </div>
+                </div>
+                <input id="wal_spec.throughput" max="14000" min="50" step="50" value="500" type="number" onchange="syncNumberToSlider('wal_spec.throughput')" class="w-26 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- Disk Size (5 GiB -> 64 TiB) -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="wal_spec.disk_usable_size_in_gib">
+                Total Volume Size (GiB)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The throughput (MB/s) of the volume. It is best to provide result from benchmark rather than providing manufacturer's specification. On NVME SSD, the number of IOPS/throughput can be decayed, thus it is better to review those after 6-12 months of usage." data-tooltip-header="Throughput (MB/s)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="wal_spec.disk_usable_size_in_gib" id="wal_spec.disk_usable_size_in_gib_range" max="65536" min="5" step="1" value="256" type="range" onchange="syncSliderToNumber('wal_spec.disk_usable_size_in_gib')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>5 GiB</span>
+                        <span>65536 GiB</span>
+                    </div>
+                </div>
+                <input id="wal_spec.disk_usable_size_in_gib" max="65536" min="5" step="1" value="256" type="number" onchange="syncNumberToSlider('wal_spec.disk_usable_size_in_gib')" class="w-26 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
         </div>
 

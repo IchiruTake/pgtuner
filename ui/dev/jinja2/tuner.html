@@ -7,6 +7,7 @@
 
 {% include './tuner/description.min.html' %}
 <style>
+    /* Tooltip styles */
     .tooltip {
         visibility: hidden;
         opacity: 0;
@@ -14,6 +15,11 @@
         z-index: 1000;
         transition: opacity 0.2s, visibility 0.2s;
         pointer-events: none;
+    }
+
+    .tooltip.show {
+        visibility: visible;
+        opacity: 1;
     }
 
     .tooltip-arrow {
@@ -26,6 +32,7 @@
         background: inherit;
         transform: rotate(45deg);
     }
+    /* Custom styles for the range input */
     @layer components {
         input[type="range"] {
             @apply h-2 w-full bg-gray-200 rounded-lg appearance-none cursor-pointer;
@@ -46,6 +53,71 @@
         input[type="range"]::-moz-range-track {
             @apply bg-blue-600 h-2 rounded-lg;
         }
+    }
+    /* Yes/No Toggle Styles */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ef4444;
+        transition: .4s;
+        border-radius: 34px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+        background-color: #22c55e;
+    }
+
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+
+    .question-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .question-card:hover {
+        border-color: #e5e7eb;
+        transform: translateY(-2px);
+    }
+
+    .question-card.answered-yes {
+        border-color: #22c55e;
+        background-color: #f0fdf4;
+    }
+
+    .question-card.answered-no {
+        border-color: #ef4444;
+        background-color: #fef2f2;
     }
 </style>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50">
@@ -104,6 +176,7 @@
     // Wait until the bootstrap.bundle.min.js is loaded
     // let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
     // let tooltipList = tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+
     const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
     const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
 </script>
