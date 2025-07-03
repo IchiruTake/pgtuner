@@ -1,112 +1,174 @@
-<div >
-    <h4 >Tuning Mode</h4>
-    <div >
-        <!-- Database Tuning -->
-        <div >
-            <div >
-                <label  for="enable_database_general_tuning">
-                    Enable Database General Tuning
-                </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="enable_database_general_tuning" checked >
-                <label  for="enable_database_general_tuning">Yes</label>
-            </div>
-        </div>
-        <div >
-            <div >
-                <label  for="enable_database_correction_tuning">
-                    Enable Database Correction Tuning
-                </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="enable_database_correction_tuning" checked >
-                <label  for="enable_database_correction_tuning">Yes</label>
-            </div>
-        </div>
-        <!-- Sysctl Tuning -->
+<div class="mb-6 border-t border-gray-300 pt-2">
+    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+        <i class="bi bi-option text-blue-600 mr-3"></i>
+        Tuning Mode
+    </h2>
+    <p class="text-lg text-gray-600">Tuning Your Database</p>
+</div>
 
-        <!-- Some Query Tuning -->
+<div>
+    <!-- Title 1: Database Tuning -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-database-check text-blue-600 mr-3"></i>
+            Database Tuning
+        </h3>
+    </div>
+
+    <!-- Details 1: Database Tuning -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- Enable Database General Tuning -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Enable Database General Tuning</h5>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="enable_database_general_tuning">
+                        <input type="checkbox" role="switch" id="enable_database_general_tuning" checked >
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enable Database Correction Tuning -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Enable Database General Tuning</h5>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="enable_database_correction_tuning">
+                        <input type="checkbox" role="switch" id="enable_database_correction_tuning" checked >
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
+            </div>
+        </div>
 
     </div>
-    <div >
-        <!-- include_comment -->
-        <div >
-            <div >
-                <label  for="include_comment"> Include Comment </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="include_comment" >
-                <label  for="include_comment">No</label>
+</div>
+
+<div>
+    <!-- Title 2: Options -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-database-check text-blue-600 mr-3"></i>
+            Check List Options Tuning
+        </h3>
+    </div>
+
+    <!-- Details 1: Options -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- Including Comment -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Include Comment</h5>
+                    <p class="text-sm text-gray-600">Enable it to add the comment into the response.</p>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="include_comment">
+                        <input type="checkbox" role="switch" id="include_comment">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
             </div>
         </div>
 
-        <!-- custom_style -->
-        <div >
-            <div >
-                <label  for="custom_style"> Alter Style </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="custom_style" >
-                <label  for="custom_style">No</label>
-            </div>
-        </div>
-        <!-- backup_settings -->
-        <div >
-            <div >
-                <label  for="backup_settings"> Backup Settings </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="backup_settings" checked >
-                <label  for="backup_settings">Yes</label>
+        <!-- Custom Style -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Alter Style</h5>
+                    <p class="text-sm text-gray-600">Enable it to switch the format into ALTER SYSTEM SET.</p>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="custom_style">
+                        <input type="checkbox" role="switch" id="custom_style">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
             </div>
         </div>
-        <!-- analyze_with_full_connection_use -->
-        <div >
-            <div >
-                <label  for="analyze_with_full_connection_use"> Analyze Memory Usage when Full Connection </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="analyze_with_full_connection_use" checked>
-                <label  for="analyze_with_full_connection_use">Yes</label>
-            </div>
-        </div>
-        <!-- ignore_non_performance_setting -->
-        <div >
-            <div >
-                <label  for="ignore_non_performance_setting"> Ignore Non-Performance Setting </label>
-                <i>
-                </i>
-            </div>
-            <div >
-                <input  type="checkbox" role="switch" id="ignore_non_performance_setting">
-                <label  for="analyze_with_full_connection_use">No</label>
+
+        <!-- Analyze with full Connection Use -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Analyze Memory Usage when Full Connection</h5>
+                    <p class="text-sm text-gray-600">Enable it when you need the memory display when all connections are in maximum usage.</p>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="analyze_with_full_connection_use">
+                        <input type="checkbox" role="switch" id="analyze_with_full_connection_use" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
             </div>
         </div>
-        <!-- output_format -->
-        <div >
-            <div >
-                <label  for="output_format"> Output Format </label>
-                <i>
-                </i>
+
+        <!-- Ignore non performance settings -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Ignore Non-Performance Setting</h5>
+                    <p class="text-sm text-gray-600">Enable it when you need the memory display when all connections are in maximum usage.</p>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="ignore_non_performance_setting">
+                        <input type="checkbox" role="switch" id="ignore_non_performance_setting">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
             </div>
-            <select  id="output_format" name="output_format">
+        </div>
+
+        <!-- Backup Settings -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Backup Settings</h5>
+                    <p class="text-sm text-gray-600">Enable it to add the request's information.</p>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="backup_settings">
+                        <input  type="checkbox" role="switch" id="backup_settings" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output Format -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="output_format">
+                Output Format
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Select your desired output format." data-tooltip-header="Output Format">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="output_format" name="output_format">
                 <option value="conf">Conf: INI Format</option>
                 <option value="json">JSON: JSON Format</option>
                 <option selected value="file">File: Fully-Managed INI Format</option>
             </select>
         </div>
+
     </div>
 </div>
