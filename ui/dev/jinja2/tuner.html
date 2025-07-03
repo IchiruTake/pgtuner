@@ -22,16 +22,6 @@
         opacity: 1;
     }
 
-    .tooltip-arrow {
-        position: absolute;
-        bottom: -8px;
-        left: 50%;
-        margin-left: -4px;
-        width: 8px;
-        height: 8px;
-        background: inherit;
-        transform: rotate(45deg);
-    }
     /* Custom styles for the range input */
     @layer components {
         input[type="range"] {
@@ -143,22 +133,13 @@
 </body>
 
 <!-- Tooltips -->
-<div id="tooltip" class="tooltip absolute bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-lg z-50 max-w-xs">
-    <div id="tooltip-header"class="font-semibold mb-1"></div>
+<div id="tooltip" class="tooltip absolute bg-slate-50 text-black text-base px-3 py-2 rounded-lg shadow-lg z-50 max-w-xs border border-gray-500">
+    <div id="tooltip-header" class="font-bold mb-1"></div>
     <div class="border-t border-gray-20">
-        <div id="tooltip-content"></div>
+        <div id="tooltip-content" class="font-normal"></div>
     </div>
-    <div class="tooltip-arrow absolute w-2 h-2 bg-gray-800 transform rotate-45"></div>
 </div>
 
 <!-- Footer -->
 {% include './footer.min.html' %}
-<script>
-    // Wait until the bootstrap.bundle.min.js is loaded
-    // let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    // let tooltipList = tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-
-    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
-    const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
-</script>
 </html>

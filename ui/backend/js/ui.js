@@ -92,6 +92,20 @@ function downloadResponse() {
     URL.revokeObjectURL(url);
 }
 
+// ----------------- Show Advanced Settings -----------------
+function showHiddenDiv(idButton, idShow) {
+    const divShow = document.getElementById(idShow);
+    const toggleButton = document.getElementById(idButton);
+
+    if (divShow.classList.contains('hidden')) {
+        divShow.classList.remove('hidden');
+        toggleButton.textContent = 'Hide Advanced Settings';
+    } else {
+        divShow.classList.add('hidden');
+        toggleButton.textContent = 'Show Advanced Settings';
+    }
+}
+
 //------------------ Devlog Animation -----------------
 // Devlog entry expansion functionality
 document.querySelectorAll('.devlog-entry').forEach(entry => {

@@ -1,164 +1,205 @@
-<h5 >Memory Control (Basic)</h5>
-<div >
-    <!-- effective_cache_size_available_ratio -->
-    <div >
-        <div >
-            <label  for="keywords.effective_cache_size_available_ratio">
-                Effective Cache Size Available Ratio
-            </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.effective_cache_size_available_ratio"
-                   id="keywords.effective_cache_size_available_ratio_range"
-                   max="1.0" min="0.95" step="0.005" value="0.985" type="range"
-                   onchange="syncSliderToNumber('keywords.effective_cache_size_available_ratio')">
-            <input  id="keywords.effective_cache_size_available_ratio"
-                   max="1.0" min="0.95" step="0.005" value="0.985" type="number"
-                   onchange="syncNumberToSlider('keywords.effective_cache_size_available_ratio')">
-        </div>
+<div class="mb-6 border-t border-gray-300 pt-2">
+    <!-- Title 1: Memory Control (Basic) -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-memory text-blue-600 mr-3"></i>
+            Memory Control (Basic)
+        </h3>
     </div>
-    <!-- shared_buffers_ratio -->
-    <div >
-        <div >
-            <label  for="keywords.shared_buffers_ratio">
-                Shared Buffers Ratio
-            </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.shared_buffers_ratio"
-                   id="keywords.shared_buffers_ratio_range"
-                   max="0.60" min="0.15" step="0.01" value="0.25" type="range"
-                   onchange="syncSliderToNumber('keywords.shared_buffers_ratio')">
-            <input  id="keywords.shared_buffers_ratio"
-                   max="0.60" min="0.15" step="0.01" value="0.25" type="number"
-                   onchange="syncNumberToSlider('keywords.shared_buffers_ratio')">
-        </div>
-    </div>
-    <!-- max_work_buffer_ratio -->
-    <div >
-        <div >
-            <label  for="keywords.max_work_buffer_ratio"> Max Work Buffer Pool Ratio </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.max_work_buffer_ratio"
-                   id="keywords.max_work_buffer_ratio_range"
-                   max="0.50" min="0.01" step="0.005" value="0.125" type="range"
-                   onchange="syncSliderToNumber('keywords.max_work_buffer_ratio')">
-            <input  id="keywords.max_work_buffer_ratio"
-                   max="0.50" min="0.01" step="0.005" value="0.125" type="number"
-                   onchange="syncNumberToSlider('keywords.max_work_buffer_ratio')">
-        </div>
-    </div>
-    <!-- effective_connection_ratio -->
-    <div >
-        <div >
-            <label  for="keywords.effective_connection_ratio">
-                Effective Connection Ratio </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.effective_connection_ratio"
-                   id="keywords.effective_connection_ratio_range"
-                   max="1" min="0.25" step="0.05" value="0.75" type="range"
-                   onchange="syncSliderToNumber('keywords.effective_connection_ratio')">
-            <input  id="keywords.effective_connection_ratio"
-                   max="1" min="0.25" step="0.05" value="0.75" type="number"
-                   onchange="syncNumberToSlider('effective_connection_ratio')">
-        </div>
-    </div>
-    <!-- temp_buffers_ratio -->
-    <div >
-        <div >
-            <label  for="keywords.temp_buffers_ratio"> Temp Buffers Ratio </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.temp_buffers_ratio"
-                   id="keywords.temp_buffers_ratio_range"
-                   max="0.95" min="0.05" step="0.01" value="0.25" type="range"
-                   onchange="syncSliderToNumber('keywords.temp_buffers_ratio')">
-            <input  id="keywords.temp_buffers_ratio"
-                   max="0.95" min="0.05" step="0.01" value="0.25" type="number"
-                   onchange="syncNumberToSlider('keywords.temp_buffers_ratio')">
-        </div>
-    </div>
-</div>
 
-<h5 >Memory Control (Advanced)</h5>
-<div >
-    <!-- max_normal_memory_usage -->
-    <div >
-        <div >
-            <label  for="keywords.max_normal_memory_usage"> Max Normal Memory Usage </label>
-            <i>
-            </i>
+    <!-- Details 1: Memory Control (Basic) -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- effective_cache_size_available_ratio -->
+        <div class="md:col-span-2">
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.effective_cache_size_available_ratio">
+                Effective Cache Size Available Ratio
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The percentage of effective_cache_size over the total PostgreSQL available memory excluding the shared_buffers and others. It is recommended to set this value higher than 0.975 but not too close to 1.0 for OS memory page reservation against the worst extreme case." data-tooltip-header="Effective Cache Size Available Ratio">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.effective_cache_size_available_ratio" id="keywords.effective_cache_size_available_ratio_range" max="1.0" min="0.95" step="0.005" value="0.985" type="range" onchange="syncSliderToNumber('keywords.effective_cache_size_available_ratio')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>1.0</span>
+                        <span>0.95</span>
+                    </div>
+                </div>
+                <input id="keywords.effective_cache_size_available_ratio" max="1.0" min="0.95" step="0.005" value="0.985" type="number" onchange="syncNumberToSlider('keywords.effective_cache_size_available_ratio')" class="w-28 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
         </div>
-        <div >
-            <input  name="keywords.max_normal_memory_usage"
-                   id="keywords.max_normal_memory_usage_range"
-                   max="0.80" min="0.35" step="0.01" value="0.55" type="range"
-                   onchange="syncSliderToNumber('keywords.max_normal_memory_usage')">
-            <input  id="keywords.max_normal_memory_usage"
-                   max="0.80" min="0.35" step="0.01" value="0.55" type="number"
-                   onchange="syncNumberToSlider('keywords.max_normal_memory_usage')">
+
+        <!-- shared_buffers_ratio -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.shared_buffers_ratio">
+                Shared Buffers Ratio
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The ratio of shared_buffers to the PostgreSQL total non-database memory. The supported range is [0.15, 0.60), default is 0.25. However, we recommend that this value should be below 0.40 to prevent double caching unless you are making a read-only database, in-memory database, or a not-good synthetic benchmark." data-tooltip-header="Shared Buffers Ratio">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.shared_buffers_ratio" id="keywords.shared_buffers_ratio_range" max="0.60" min="0.15" step="0.01" value="0.25" type="range" onchange="syncSliderToNumber('keywords.shared_buffers_ratio')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>0.60</span>
+                        <span>0.15</span>
+                    </div>
+                </div>
+                <input id="keywords.shared_buffers_ratio" max="0.60" min="0.15" step="0.01" value="0.25" type="number" onchange="syncNumberToSlider('keywords.shared_buffers_ratio')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
         </div>
+
+        <!-- max_work_buffer_ratio -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.max_work_buffer_ratio">
+                Max Work Buffer Pool Ratio
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The ratio of the maximum PostgreSQL available memory (excluding shared_buffers and others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). The algorithm is temp_buffers + work_mem = (pgmem_available * max_work_buffer_ratio) / active_user_connections." data-tooltip-header="Max Work Buffer Pool Ratio">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.max_work_buffer_ratio" id="keywords.max_work_buffer_ratio_range" max="0.50" min="0.01" step="0.005" value="0.125" type="range" onchange="syncSliderToNumber('keywords.max_work_buffer_ratio')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>0.50</span>
+                        <span>0.01</span>
+                    </div>
+                </div>
+                <input id="keywords.max_work_buffer_ratio" max="0.50" min="0.01" step="0.005" value="0.125" type="number" onchange="syncNumberToSlider('keywords.max_work_buffer_ratio')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- effective_connection_ratio -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.effective_connection_ratio">
+                Effective Connection Ratio
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The percentage of the maximum non-reserved connection used to tune temp_buffers and work_mem. The supported range is [0.25, 1], default is 0.75. Set to 1 meant that we assume all the normal connections use the same temp_buffers and work_mem. Reduce this ratio would increase the temp_buffers and work_mem allowed for each connection by assuming not all active connections are running complex queries that requires high work_mem or temp_buffers." data-tooltip-header="Effective Connection Ratio">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.effective_connection_ratio" id="keywords.effective_connection_ratio_range" max="1" min="0.25" step="0.05" value="0.75" type="range" onchange="syncSliderToNumber('keywords.effective_connection_ratio')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>1.0</span>
+                        <span>0.25</span>
+                    </div>
+                </div>
+                <input id="keywords.effective_connection_ratio" max="1" min="0.25" step="0.05" value="0.75" type="number" onchange="syncNumberToSlider('effective_connection_ratio')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- temp_buffers_ratio -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.temp_buffers_ratio">
+                Temp Buffers Ratio
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The ratio of temp_buffers to the work_buffer pool above. The supported range is [0.25, 0.95], default is 2/3. Increase this value make the temp_buffers larger than the work_mem. If you have query that use much temporary object (temporary table, CTE, ...) then you can increase this value slowly. If you have query involving more WRITE and/or the WRITE query plan is complex involving HASH, JOIN, MERGE, ... then it is better to decrease this value." data-tooltip-header="Temp Buffers Ratio">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.temp_buffers_ratio" id="keywords.temp_buffers_ratio_range" max="0.95" min="0.05" step="0.01" value="0.25" type="range" onchange="syncSliderToNumber('keywords.temp_buffers_ratio')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>0.95</span>
+                        <span>0.05</span>
+                    </div>
+                </div>
+                <input id="keywords.temp_buffers_ratio" max="0.95" min="0.05" step="0.01" value="0.25" type="number" onchange="syncNumberToSlider('keywords.temp_buffers_ratio')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
     </div>
-    <!-- mem_pool_tuning_ratio -->
-    <div >
-        <div >
-            <label  for="keywords.mem_pool_tuning_ratio">
-                Memory Pool Tuning Ratio </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.mem_pool_tuning_ratio"
-                   id="keywords.mem_pool_tuning_ratio_range"
-                   max="1.0" min="0.0" step="0.025" value="0.45" type="range"
-                   onchange="syncSliderToNumber('keywords.mem_pool_tuning_ratio')">
-            <input  id="keywords.mem_pool_tuning_ratio"
-                   max="1.0" min="0.0" step="0.025" value="0.45" type="number"
-                   onchange="syncNumberToSlider('keywords.mem_pool_tuning_ratio')">
-        </div>
+
+    <!-- Title 2: Memory Control (Advanced) -->
+    <div class="my-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-memory text-blue-600 mr-3"></i>
+            Memory Control (Advanced)
+        </h3>
     </div>
-    <!-- mem_pool_parallel_estimate -->
-    <div >
-        <div >
-            <label  for="keywords.mem_pool_parallel_estimate">
-                Memory Pool Parallel Estimate </label>
-            <i>
-            </i>
+
+    <!-- Details 2: Memory Control (Advanced) -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- max_normal_memory_usage -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.max_normal_memory_usage">
+                Max Normal Memory Usage
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The maximum memory usage under normal PostgreSQL operation over the usable memory. This holds as the upper bound to increase the pool allocation before reaching the limit. The supported range is [0.35, 0.85], default is 0.45. Increase this ratio meant you are expecting your server would have more headroom for the tuning and thus for database workload. It is not recommended to set this value too high, as there are multiple constraints that prevent further tuning to keep your server function properly without unknown incident such as parallelism, maintenance, and other background tasks." data-tooltip-header="Max Normal Memory Usage">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.max_normal_memory_usage" id="keywords.max_normal_memory_usage_range" max="0.80" min="0.35" step="0.01" value="0.55" type="range" onchange="syncSliderToNumber('keywords.max_normal_memory_usage')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>0.80</span>
+                        <span>0.35</span>
+                    </div>
+                </div>
+                <input id="keywords.max_normal_memory_usage" max="0.80" min="0.35" step="0.01" value="0.55" type="number" onchange="syncNumberToSlider('keywords.max_normal_memory_usage')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
         </div>
-        <div >
-            <input  type="checkbox" role="switch" checked
-                   id="keywords.mem_pool_parallel_estimate">
-            <label  for="keywords.mem_pool_parallel_estimate">Yes</label>
+
+        <!-- mem_pool_tuning_ratio -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.mem_pool_tuning_ratio">
+                Memory Pool Tuning Ratio
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The memory tuning ratio in correction tuning between shared_buffers and work_buffers. Higher value meant that the tuning would prefer the shared_buffers over the work_buffers, and vice versa." data-tooltip-header="Memory Pool Tuning Ratio">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.mem_pool_tuning_ratio" id="keywords.mem_pool_tuning_ratio_range" max="1.0" min="0.0" step="0.025" value="0.45" type="range" onchange="syncSliderToNumber('keywords.mem_pool_tuning_ratio')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>0.0</span>
+                        <span>1.0</span>
+                    </div>
+                </div>
+                <input id="keywords.mem_pool_tuning_ratio" max="1.0" min="0.0" step="0.025" value="0.45" type="number" onchange="syncNumberToSlider('keywords.mem_pool_tuning_ratio')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
         </div>
+
+        <!-- hash_mem_usage_level -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.hash_mem_usage_level">
+                Hash Mem Usage Level
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The hash memory usage level. Higher value would assume that all PostgreSQL connections, on average,do more hash-based operations than normal operations, and vice versa. Recommended range is around -10 to 6." data-tooltip-header="Hash Mem Usage Level">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.hash_mem_usage_level" id="keywords.hash_mem_usage_level_range" max="50" min="-50" step="1" value="-3" type="range" onchange="syncSliderToNumber('keywords.hash_mem_usage_level')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>-50</span>
+                        <span>50</span>
+                    </div>
+                </div>
+                <input id="keywords.hash_mem_usage_level" max="50" min="-50" step="1" value="-3" type="number" onchange="syncNumberToSlider('keywords.hash_mem_usage_level')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- mem_pool_parallel_estimate -->
+        <div>
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h5 class="font-medium text-gray-800 mb-1">Memory Pool Parallel Estimate</h5>
+                    <p class="text-sm text-gray-600">The flag to use the parallel memory estimation during memory pool tuning.</p>
+                </div>
+                <div class="flex items-center space-x-3 ml-4">
+                    <span class="text-sm text-gray-500">No</span>
+                    <label class="toggle-switch" for="keywords.mem_pool_parallel_estimate">
+                        <input type="checkbox" role="switch" checked
+                               id="keywords.mem_pool_parallel_estimate">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="text-sm text-gray-500">Yes</span>
+                </div>
+            </div>
+        </div>
+
     </div>
-    <!-- hash_mem_usage_level -->
-    <div >
-        <div >
-            <label  for="keywords.hash_mem_usage_level">
-                Hash Mem Usage Level </label>
-            <i>
-            </i>
-        </div>
-        <div >
-            <input  name="keywords.hash_mem_usage_level"
-                   id="keywords.hash_mem_usage_level_range"
-                   max="50" min="-50" step="1" value="-3" type="range"
-                   onchange="syncSliderToNumber('keywords.hash_mem_usage_level')">
-            <input  id="keywords.hash_mem_usage_level"
-                   max="50" min="-50" step="1" value="-3" type="number"
-                   onchange="syncNumberToSlider('keywords.hash_mem_usage_level')">
-        </div>
-    </div>
+
 </div>
