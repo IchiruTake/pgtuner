@@ -5,38 +5,141 @@
 <!-- Include Bootstrap JS at the end of the body (ensure proper collapse and interactivity) -->
 {% include './header.min.html' %}
 
-<body>
-<div class="container my-4">
-    <h2 class="mb-4">PGTuner Input Form</h2>
+{% include './tuner/description.min.html' %}
+<style>
+    /* Tooltip styles */
+    .tooltip {
+        visibility: hidden;
+        opacity: 0;
+        position: fixed;
+        z-index: 1000;
+        transition: opacity 0.2s, visibility 0.2s;
+        pointer-events: none;
+    }
 
-    <!-- System, Workload and Optimization Mode -->
-    {% include './tuner/01_workload.min.html' %}
+    .tooltip.show {
+        visibility: visible;
+        opacity: 1;
+    }
 
-    <!-- Disk and WAL Specifications -->
-    {% include './tuner/03_volume.min.html' %}
+    /* Custom styles for the range input */
+    @layer components {
+        input[type="range"] {
+            @apply h-2 w-full bg-gray-200 rounded-lg appearance-none cursor-pointer;
+        }
 
-    <!-- Anti-wraparound Vacuum Tuning -->
-    {% include './tuner/04_wraparound.min.html' %}
+        input[type="range"]::-webkit-slider-thumb {
+            @apply appearance-none w-6 h-6 bg-blue-600 rounded-full hover:bg-blue-700;
+        }
 
-    <!-- Data Integrity, Transaction, Crash Recovery, and Replication -->
-    {% include './tuner/05_integrity.min.html' %}
+        input[type="range"]::-moz-range-thumb {
+            @apply w-6 h-6 bg-blue-600 border-0 rounded-full hover:bg-blue-700;
+        }
 
-    <!-- User/Format Tuning Options -->
-    {% include './tuner/06_format.min.html' %}
+        input[type="range"]::-webkit-slider-runnable-track {
+            @apply bg-blue-600 h-2 rounded-lg;
+        }
 
-    <!-- Advanced Settings -->
-    {% include './tuner/07_adv.min.html' %}
+        input[type="range"]::-moz-range-track {
+            @apply bg-blue-600 h-2 rounded-lg;
+        }
+    }
+    /* Yes/No Toggle Styles */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
 
-    <!-- Generate Button and Response Box -->
-    {% include './tuner/08_response.min.html' %}
-</div>
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ef4444;
+        transition: .4s;
+        border-radius: 34px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+        background-color: #22c55e;
+    }
+
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+
+</style>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50">
+    <section class="py-20 bg-white/80">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <!-- Header -->
+                <div class="text-center mb-12">
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mb-6">PostgreSQL Configuration Tuner</h2>
+                    <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                        Provide your system specifications and workload details to get personalized PostgreSQL configuration recommendations
+                    </p>
+                </div>
+
+                <!-- Tuning form -->
+                <form class="bg-white rounded-3xl shadow-2xl p-8 md:p-12 border border-gray-200 space-y-8">
+                    <!-- System, Workload and Optimization Mode -->
+                    {% include './tuner/01_workload.min.html' %}
+
+                    <!-- Disk and WAL Specifications -->
+                    {% include './tuner/03_volume.min.html' %}
+
+                    <!-- Anti-wraparound Vacuum Tuning -->
+                    {% include './tuner/04_wraparound.min.html' %}
+
+                    <!-- Data Integrity, Transaction, Crash Recovery, and Replication -->
+                    {% include './tuner/05_integrity.min.html' %}
+
+                    <!-- User/Format Tuning Options -->
+                    {% include './tuner/06_format.min.html' %}
+
+                    <!-- Advanced Settings -->
+                    {% include './tuner/07_adv.min.html' %}
+
+                    <!-- Generate Button and Response Box -->
+                    {% include './tuner/08_response.min.html' %}
+                </form>
+            </div>
+        </div>
+    </section>
 
 </body>
-<script>
-    // Wait until the bootstrap.bundle.min.js is loaded
-    // let tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    // let tooltipList = tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
-    const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
-</script>
+
+<!-- Tooltips -->
+<div id="tooltip" class="tooltip absolute bg-slate-50 text-black text-base px-3 py-2 rounded-lg shadow-lg z-50 max-w-xs border border-gray-500">
+    <div id="tooltip-header" class="font-bold mb-1"></div>
+    <div class="border-t border-gray-20">
+        <div id="tooltip-content" class="font-normal"></div>
+    </div>
+</div>
+
+<!-- Footer -->
+{% include './footer.min.html' %}
 </html>

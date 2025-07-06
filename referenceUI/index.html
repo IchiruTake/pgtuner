@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PGTuner - PostgreSQL Performance Tuner</title>
+    <meta name="description" content="Optimize your PostgreSQL database performance with intelligent tuning recommendations and real-time monitoring">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.6s ease-out'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <!-- Navigation Bar -->
+    <nav class="glass-effect border-b border-white/20 sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <!-- Logo/Brand -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center shadow-lg">
+                        <i class="bi bi-database text-white text-lg"></i>
+                    </div>
+                    <span class="font-bold text-xl text-gray-800">PGTuner</span>
+                </div>
+
+                <!-- Desktop Navigation Links -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#home" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                        <i class="bi bi-house"></i>
+                        <span>Home</span>
+                    </a>
+                    <a href="#devlog" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                        <i class="bi bi-journal-code"></i>
+                        <span>Devlog</span>
+                    </a>
+                    <a href="https://github.com/pgtuner/pgtuner" target="_blank" rel="noopener noreferrer" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                        <i class="bi bi-github"></i>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-btn" class="md:hidden text-gray-700 hover:text-blue-600 transition-colors">
+                    <i class="bi bi-list text-2xl"></i>
+                </button>
+            </div>
+
+            <!-- Mobile Navigation Menu -->
+            <div id="mobile-menu" class="md:hidden mt-4 pb-4 border-t border-white/20 hidden">
+                <div class="flex flex-col space-y-4 pt-4">
+                    <a href="#home" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                        <i class="bi bi-house"></i>
+                        <span>Home</span>
+                    </a>
+                    <a href="#devlog" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                        <i class="bi bi-journal-code"></i>
+                        <span>Devlog</span>
+                    </a>
+                    <a href="https://github.com/pgtuner/pgtuner" target="_blank" rel="noopener noreferrer" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                        <i class="bi bi-github"></i>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Hero Section -->
+        <section id="home" class="container mx-auto px-4 py-16">
+            <div class="flex flex-col items-center text-center space-y-8 animate-fade-in">
+                <!-- PostgreSQL Logo Section -->
+                <div class="flex items-center space-x-4 animate-slide-up">
+                    <div class="relative">
+                        <!-- PostgreSQL Logo -->
+                        <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center shadow-2xl">
+                            <i class="bi bi-database text-white text-3xl"></i>
+                        </div>
+                        <!-- Performance indicator -->
+                        <div class="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg">
+                            <i class="bi bi-lightning-charge text-yellow-800 text-sm"></i>
+                        </div>
+                    </div>
+                    <div class="text-left">
+                        <div class="text-lg text-gray-600 font-semibold">PostgreSQL</div>
+                        <div class="text-sm text-gray-500">Performance Tuner</div>
+                    </div>
+                </div>
+
+                <!-- Main Title -->
+                <div class="space-y-6 animate-slide-up">
+                    <h1 class="text-6xl md:text-7xl font-bold gradient-text">
+                        PGTuner
+                    </h1>
+
+                    <!-- Main Description -->
+                    <p class="text-2xl md:text-3xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
+                        Optimize your PostgreSQL database performance with intelligent tuning recommendations and real-time monitoring
+                    </p>
+
+                    <!-- Secondary Description -->
+                    <p class="text-lg text-gray-500 max-w-3xl mx-auto leading-relaxed">
+                        Automatically analyze your database configuration, identify bottlenecks, and get actionable insights to boost your PostgreSQL performance by up to 10x
+                    </p>
+                </div>
+
+                <!-- Feature Highlights -->
+                <div class="flex flex-wrap justify-center gap-6 mt-12 animate-slide-up">
+                    <div class="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg border border-white/30">
+                        <i class="bi bi-graph-up text-green-600 text-lg"></i>
+                        <span class="font-medium text-gray-700">Performance Analytics</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg border border-white/30">
+                        <i class="bi bi-lightning-charge text-yellow-600 text-lg"></i>
+                        <span class="font-medium text-gray-700">Auto-Tuning</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg border border-white/30">
+                        <i class="bi bi-database text-blue-600 text-lg"></i>
+                        <span class="font-medium text-gray-700">Query Optimization</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="container mx-auto px-4 py-16">
+            <div class="max-w-6xl mx-auto">
+                <div class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-12 border border-white/30">
+                    <div class="grid md:grid-cols-3 gap-8 text-center">
+                        <div class="space-y-4">
+                            <div class="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto">
+                                <i class="bi bi-database text-blue-600 text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-800">Database Analysis</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Deep dive into your PostgreSQL configuration and identify optimization opportunities with comprehensive analysis
+                            </p>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="w-16 h-16 bg-yellow-100 rounded-xl flex items-center justify-center mx-auto">
+                                <i class="bi bi-lightning-charge text-yellow-600 text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-800">Smart Tuning</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                AI-powered recommendations tailored to your specific workload patterns and database requirements
+                            </p>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mx-auto">
+                                <i class="bi bi-graph-up text-green-600 text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-800">Performance Boost</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Measure and track performance improvements with detailed metrics and real-time monitoring dashboards
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Devlog Section -->
+        <section id="devlog" class="py-20 bg-white/50">
+            <div class="container mx-auto px-4">
+                <div class="max-w-5xl mx-auto">
+                    <div class="text-center mb-16">
+                        <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mb-6">Development Log</h2>
+                        <p class="text-xl text-gray-600">Stay updated with the latest features, improvements, and releases</p>
+                    </div>
+
+                    <div class="space-y-8">
+                        <!-- Devlog Entry 1 -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="1">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-tag"></i>
+                                        <span>Release</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2024-01-15">January 15, 2024</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">PGTuner v2.1.0 Released</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Added support for PostgreSQL 16, improved query analysis algorithms, and introduced real-time monitoring dashboard with enhanced visualization capabilities.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">What's New in v2.1.0</h4>
+                                    
+                                    <div class="space-y-4 mb-6">
+                                        <div class="flex items-start space-x-3">
+                                            <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                            <div>
+                                                <h5 class="font-medium text-gray-800">PostgreSQL 16 Support</h5>
+                                                <p class="text-gray-600 text-sm">Full compatibility with the latest PostgreSQL version, including new performance features and optimizations.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-start space-x-3">
+                                            <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                            <div>
+                                                <h5 class="font-medium text-gray-800">Enhanced Query Analysis</h5>
+                                                <p class="text-gray-600 text-sm">Improved algorithms that can detect complex query patterns and suggest more precise optimizations.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-start space-x-3">
+                                            <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                            <div>
+                                                <h5 class="font-medium text-gray-800">Real-time Monitoring Dashboard</h5>
+                                                <p class="text-gray-600 text-sm">New interactive dashboard with live metrics, performance graphs, and customizable alerts.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-start space-x-3">
+                                            <i class="bi bi-check-circle-fill text-green-500 mt-1"></i>
+                                            <div>
+                                                <h5 class="font-medium text-gray-800">API Improvements</h5>
+                                                <p class="text-gray-600 text-sm">RESTful API with better error handling and comprehensive documentation.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                        <h5 class="font-medium text-gray-800 mb-2">Installation</h5>
+                                        <code class="text-sm text-gray-700 bg-gray-200 px-2 py-1 rounded">npm install -g pgtuner@2.1.0</code>
+                                    </div>
+                                    
+                                    <div class="flex items-center space-x-4 text-sm text-gray-500">
+                                        <span><i class="bi bi-download mr-1"></i>1,247 downloads</span>
+                                        <span><i class="bi bi-bug mr-1"></i>3 bug fixes</span>
+                                        <span><i class="bi bi-plus-circle mr-1"></i>5 new features</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#release</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#postgresql-16</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#monitoring</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 2 -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="2">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-yellow-100 text-yellow-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-gear"></i>
+                                        <span>Improvement</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2024-01-08">January 8, 2024</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">Performance Improvements in Query Analyzer</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Optimized the query analysis engine, reducing analysis time by 40% for large databases and improving overall system responsiveness.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Performance Improvements Details</h4>
+                                    
+                                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                                        <div class="bg-blue-50 rounded-lg p-4">
+                                            <h5 class="font-medium text-blue-800 mb-2">Before Optimization</h5>
+                                            <ul class="text-sm text-blue-700 space-y-1">
+                                                <li>• Analysis time: ~45 seconds</li>
+                                                <li>• Memory usage: 2.1GB peak</li>
+                                                <li>• CPU utilization: 85%</li>
+                                            </ul>
+                                        </div>
+                                        
+                                        <div class="bg-green-50 rounded-lg p-4">
+                                            <h5 class="font-medium text-green-800 mb-2">After Optimization</h5>
+                                            <ul class="text-sm text-green-700 space-y-1">
+                                                <li>• Analysis time: ~27 seconds</li>
+                                                <li>• Memory usage: 1.4GB peak</li>
+                                                <li>• CPU utilization: 62%</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="space-y-4 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-2">Key Optimizations</h5>
+                                            <ul class="text-gray-600 text-sm space-y-2">
+                                                <li>• Implemented parallel processing for query pattern analysis</li>
+                                                <li>• Optimized memory allocation and garbage collection</li>
+                                                <li>• Added intelligent caching for frequently analyzed queries</li>
+                                                <li>• Improved database connection pooling</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                        <p class="text-yellow-800 text-sm">
+                                            <i class="bi bi-info-circle mr-2"></i>
+                                            These improvements are especially noticeable on databases with over 100GB of data and complex query patterns.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#performance</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#optimization</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 3 -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="3">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-plus-circle"></i>
+                                        <span>Feature</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2023-12-20">December 20, 2023</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">New Auto-Tuning Algorithm</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Introduced machine learning-based auto-tuning that adapts to your database workload patterns and provides intelligent optimization suggestions.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Auto-Tuning Algorithm Details</h4>
+                                    
+                                    <div class="space-y-6 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">How It Works</h5>
+                                            <div class="grid md:grid-cols-3 gap-4">
+                                                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                                    <i class="bi bi-graph-up text-blue-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-gray-800 mb-1">Learn</h6>
+                                                    <p class="text-xs text-gray-600">Analyzes your workload patterns over time</p>
+                                                </div>
+                                                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                                    <i class="bi bi-cpu text-blue-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-gray-800 mb-1">Process</h6>
+                                                    <p class="text-xs text-gray-600">ML algorithms identify optimization opportunities</p>
+                                                </div>
+                                                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                                    <i class="bi bi-lightning-charge text-blue-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-gray-800 mb-1">Optimize</h6>
+                                                    <p class="text-xs text-gray-600">Applies safe, tested configuration changes</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Supported Parameters</h5>
+                                            <div class="grid md:grid-cols-2 gap-4">
+                                                <ul class="text-sm text-gray-600 space-y-1">
+                                                    <li>• shared_buffers</li>
+                                                    <li>• effective_cache_size</li>
+                                                    <li>• work_mem</li>
+                                                    <li>• maintenance_work_mem</li>
+                                                </ul>
+                                                <ul class="text-sm text-gray-600 space-y-1">
+                                                    <li>• max_connections</li>
+                                                    <li>• checkpoint_completion_target</li>
+                                                    <li>• wal_buffers</li>
+                                                    <li>• random_page_cost</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                                        <h5 class="font-medium text-blue-800 mb-2">Usage Example</h5>
+                                        <code class="text-sm text-blue-700 block">pgtuner auto-tune --database mydb --mode conservative</code>
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-between text-sm text-gray-500">
+                                        <span><i class="bi bi-shield-check mr-1"></i>Safe mode enabled by default</span>
+                                        <span><i class="bi bi-clock mr-1"></i>Results in 24-48 hours</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#ai</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#auto-tuning</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#machine-learning</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 4 - UI Update -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="4">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-palette"></i>
+                                        <span>UI Update</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2023-12-10">December 10, 2023</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">Dashboard Redesign & Mobile App Launch</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Complete redesign of the web dashboard with improved user experience, dark mode support, and launch of our new mobile application for iOS and Android.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">UI/UX Improvements</h4>
+                                    
+                                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Web Dashboard</h5>
+                                            <ul class="text-sm text-gray-600 space-y-2">
+                                                <li>• <strong>Modern Design:</strong> Clean, minimalist interface with improved typography</li>
+                                                <li>• <strong>Dark Mode:</strong> Full dark theme support with automatic switching</li>
+                                                <li>• <strong>Responsive Layout:</strong> Optimized for tablets and mobile devices</li>
+                                                <li>• <strong>Interactive Charts:</strong> New D3.js-powered visualizations</li>
+                                                <li>• <strong>Customizable Widgets:</strong> Drag-and-drop dashboard customization</li>
+                                            </ul>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Mobile Application</h5>
+                                            <ul class="text-sm text-gray-600 space-y-2">
+                                                <li>• <strong>Native Apps:</strong> iOS and Android native applications</li>
+                                                <li>• <strong>Push Notifications:</strong> Real-time alerts for performance issues</li>
+                                                <li>• <strong>Offline Mode:</strong> View cached reports without internet</li>
+                                                <li>• <strong>Touch Optimized:</strong> Gesture-based navigation and controls</li>
+                                                <li>• <strong>Biometric Auth:</strong> Fingerprint and Face ID support</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 mb-4">
+                                        <h5 class="font-medium text-gray-800 mb-2">New Features</h5>
+                                        <div class="grid md:grid-cols-3 gap-4">
+                                            <div class="text-center">
+                                                <i class="bi bi-speedometer2 text-purple-600 text-2xl mb-2"></i>
+                                                <p class="text-sm font-medium">Performance Heatmaps</p>
+                                            </div>
+                                            <div class="text-center">
+                                                <i class="bi bi-bell text-purple-600 text-2xl mb-2"></i>
+                                                <p class="text-sm font-medium">Smart Alerts</p>
+                                            </div>
+                                            <div class="text-center">
+                                                <i class="bi bi-share text-purple-600 text-2xl mb-2"></i>
+                                                <p class="text-sm font-medium">Report Sharing</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-between text-sm text-gray-500">
+                                        <span><i class="bi bi-download mr-1"></i>Mobile app: 2,500+ downloads</span>
+                                        <span><i class="bi bi-star mr-1"></i>4.8/5 rating on app stores</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#ui-ux</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#mobile-app</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#dark-mode</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 5 - Configuration Update -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="5">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-orange-100 text-orange-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-gear-fill"></i>
+                                        <span>Configuration</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2023-11-28">November 28, 2023</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">Enhanced Configuration Management</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Introduced advanced configuration profiles, environment-specific settings, and automated backup/restore functionality for PostgreSQL configurations.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Configuration Features</h4>
+                                    
+                                    <div class="space-y-6 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Configuration Profiles</h5>
+                                            <div class="grid md:grid-cols-3 gap-4">
+                                                <div class="bg-blue-50 rounded-lg p-4 text-center">
+                                                    <i class="bi bi-server text-blue-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-blue-800">Production</h6>
+                                                    <p class="text-xs text-blue-600">High-performance, stability-focused</p>
+                                                </div>
+                                                <div class="bg-green-50 rounded-lg p-4 text-center">
+                                                    <i class="bi bi-code-slash text-green-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-green-800">Development</h6>
+                                                    <p class="text-xs text-green-600">Debug-friendly, flexible settings</p>
+                                                </div>
+                                                <div class="bg-yellow-50 rounded-lg p-4 text-center">
+                                                    <i class="bi bi-lightning text-yellow-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-yellow-800">Testing</h6>
+                                                    <p class="text-xs text-yellow-600">Optimized for test workloads</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">New Configuration Options</h5>
+                                            <div class="grid md:grid-cols-2 gap-4">
+                                                <ul class="text-sm text-gray-600 space-y-2">
+                                                    <li>• <strong>Auto-scaling:</strong> Dynamic connection pool sizing</li>
+                                                    <li>• <strong>Memory management:</strong> Intelligent buffer allocation</li>
+                                                    <li>• <strong>Backup scheduling:</strong> Automated configuration snapshots</li>
+                                                    <li>• <strong>Health checks:</strong> Continuous configuration validation</li>
+                                                </ul>
+                                                <ul class="text-sm text-gray-600 space-y-2">
+                                                    <li>• <strong>Environment sync:</strong> Multi-environment configuration sync</li>
+                                                    <li>• <strong>Version control:</strong> Git-based configuration tracking</li>
+                                                    <li>• <strong>Rollback support:</strong> One-click configuration restoration</li>
+                                                    <li>• <strong>Compliance checks:</strong> Security and best practice validation</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-orange-50 rounded-lg p-4 mb-4">
+                                        <h5 class="font-medium text-orange-800 mb-2">Configuration CLI</h5>
+                                        <div class="space-y-2">
+                                            <code class="text-sm text-orange-700 block">pgtuner config create --profile production --template high-performance</code>
+                                            <code class="text-sm text-orange-700 block">pgtuner config backup --name "pre-upgrade-backup"</code>
+                                            <code class="text-sm text-orange-700 block">pgtuner config validate --environment staging</code>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-green-50 border-l-4 border-green-400 p-4">
+                                        <p class="text-green-800 text-sm">
+                                            <i class="bi bi-check-circle mr-2"></i>
+                                            Configuration changes are now 3x faster to deploy and include automatic rollback on failure.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#configuration</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#automation</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#devops</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 6 - Algorithm Update -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="6">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-indigo-100 text-indigo-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-cpu"></i>
+                                        <span>Algorithm</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2023-11-15">November 15, 2023</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">Advanced Query Optimization Engine</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Completely rewritten query optimization engine using advanced machine learning techniques, improving recommendation accuracy by 65% and supporting complex multi-table queries.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Algorithm Improvements</h4>
+                                    
+                                    <div class="space-y-6 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Machine Learning Enhancements</h5>
+                                            <div class="grid md:grid-cols-2 gap-6">
+                                                <div class="space-y-3">
+                                                    <div class="flex items-start space-x-3">
+                                                        <i class="bi bi-brain text-indigo-600 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="font-medium text-gray-800">Neural Network Architecture</h6>
+                                                            <p class="text-sm text-gray-600">Deep learning model with 12 layers, trained on 50M+ query patterns</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-start space-x-3">
+                                                        <i class="bi bi-graph-up text-indigo-600 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="font-medium text-gray-800">Predictive Analytics</h6>
+                                                            <p class="text-sm text-gray-600">Forecasts performance impact before applying optimizations</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="space-y-3">
+                                                    <div class="flex items-start space-x-3">
+                                                        <i class="bi bi-lightning text-indigo-600 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="font-medium text-gray-800">Real-time Learning</h6>
+                                                            <p class="text-sm text-gray-600">Continuously adapts to your database's unique patterns</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-start space-x-3">
+                                                        <i class="bi bi-shield-check text-indigo-600 mt-1"></i>
+                                                        <div>
+                                                            <h6 class="font-medium text-gray-800">Safety Validation</h6>
+                                                            <p class="text-sm text-gray-600">Multi-layer validation prevents harmful recommendations</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Performance Metrics</h5>
+                                            <div class="grid md:grid-cols-3 gap-4">
+                                                <div class="bg-green-50 rounded-lg p-4 text-center">
+                                                    <div class="text-2xl font-bold text-green-600 mb-1">65%</div>
+                                                    <p class="text-sm text-green-700">Accuracy Improvement</p>
+                                                </div>
+                                                <div class="bg-blue-50 rounded-lg p-4 text-center">
+                                                    <div class="text-2xl font-bold text-blue-600 mb-1">3.2x</div>
+                                                    <p class="text-sm text-blue-700">Faster Processing</p>
+                                                </div>
+                                                <div class="bg-purple-50 rounded-lg p-4 text-center">
+                                                    <div class="text-2xl font-bold text-purple-600 mb-1">89%</div>
+                                                    <p class="text-sm text-purple-700">Success Rate</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">New Optimization Types</h5>
+                                            <ul class="text-sm text-gray-600 space-y-2">
+                                                <li>• <strong>Join Optimization:</strong> Advanced algorithms for complex multi-table joins</li>
+                                                <li>• <strong>Partition Pruning:</strong> Intelligent partition selection for large tables</li>
+                                                <li>• <strong>Index Recommendations:</strong> AI-powered index creation and optimization</li>
+                                                <li>• <strong>Query Rewriting:</strong> Automatic query restructuring for better performance</li>
+                                                <li>• <strong>Materialized Views:</strong> Smart suggestions for view materialization</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-indigo-50 rounded-lg p-4 mb-4">
+                                        <h5 class="font-medium text-indigo-800 mb-2">Algorithm Testing</h5>
+                                        <code class="text-sm text-indigo-700 block mb-2">pgtuner analyze --algorithm v3 --benchmark</code>
+                                        <p class="text-xs text-indigo-600">Run comprehensive benchmarks with the new optimization engine</p>
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-between text-sm text-gray-500">
+                                        <span><i class="bi bi-database mr-1"></i>Tested on 1,000+ production databases</span>
+                                        <span><i class="bi bi-award mr-1"></i>Peer-reviewed algorithm</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#algorithm</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#machine-learning</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#optimization</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 7 - Security Update -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="7">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-red-100 text-red-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-shield-check"></i>
+                                        <span>Security</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2023-11-02">November 2, 2023</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">Security Enhancements & Compliance</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Major security update with end-to-end encryption, SOC 2 compliance, advanced audit logging, and enhanced authentication mechanisms.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Security Improvements</h4>
+                                    
+                                    <div class="space-y-6 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Encryption & Data Protection</h5>
+                                            <div class="grid md:grid-cols-2 gap-4">
+                                                <ul class="text-sm text-gray-600 space-y-2">
+                                                    <li>• <strong>AES-256 Encryption:</strong> All data encrypted at rest and in transit</li>
+                                                    <li>• <strong>Key Management:</strong> Hardware security module (HSM) integration</li>
+                                                    <li>• <strong>Zero-Knowledge:</strong> Client-side encryption for sensitive data</li>
+                                                    <li>• <strong>Secure Backups:</strong> Encrypted configuration and data backups</li>
+                                                </ul>
+                                                <ul class="text-sm text-gray-600 space-y-2">
+                                                    <li>• <strong>TLS 1.3:</strong> Latest transport layer security protocol</li>
+                                                    <li>• <strong>Certificate Pinning:</strong> Enhanced connection security</li>
+                                                    <li>• <strong>Data Masking:</strong> Automatic PII detection and masking</li>
+                                                    <li>• <strong>Secure Deletion:</strong> Cryptographic data wiping</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Authentication & Access Control</h5>
+                                            <div class="grid md:grid-cols-3 gap-4">
+                                                <div class="bg-red-50 rounded-lg p-4 text-center">
+                                                    <i class="bi bi-person-check text-red-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-red-800">Multi-Factor Auth</h6>
+                                                    <p class="text-xs text-red-600">TOTP, SMS, and hardware keys</p>
+                                                </div>
+                                                <div class="bg-red-50 rounded-lg p-4 text-center">
+                                                    <i class="bi bi-building text-red-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-red-800">SSO Integration</h6>
+                                                    <p class="text-xs text-red-600">SAML, OAuth 2.0, OpenID</p>
+                                                </div>
+                                                <div class="bg-red-50 rounded-lg p-4 text-center">
+                                                    <i class="bi bi-key text-red-600 text-2xl mb-2"></i>
+                                                    <h6 class="font-medium text-red-800">API Security</h6>
+                                                    <p class="text-xs text-red-600">JWT tokens, rate limiting</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Compliance & Auditing</h5>
+                                            <div class="bg-gray-50 rounded-lg p-4">
+                                                <div class="grid md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <h6 class="font-medium text-gray-800 mb-2">Certifications</h6>
+                                                        <ul class="text-sm text-gray-600 space-y-1">
+                                                            <li>• SOC 2 Type II certified</li>
+                                                            <li>• GDPR compliant</li>
+                                                            <li>• HIPAA ready</li>
+                                                            <li>• ISO 27001 aligned</li>
+                                                        </ul>
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="font-medium text-gray-800 mb-2">Audit Features</h6>
+                                                        <ul class="text-sm text-gray-600 space-y-1">
+                                                            <li>• Comprehensive audit logs</li>
+                                                            <li>• Real-time monitoring</li>
+                                                            <li>• Automated compliance reports</li>
+                                                            <li>• Incident response workflows</li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-red-50 border-l-4 border-red-400 p-4">
+                                        <p class="text-red-800 text-sm">
+                                            <i class="bi bi-exclamation-triangle mr-2"></i>
+                                            <strong>Action Required:</strong> Please update your API keys and review new security settings in your dashboard.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#security</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#compliance</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#encryption</span>
+                            </div>
+                        </article>
+
+                        <!-- Devlog Entry 8 - Bug Fix -->
+                        <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="8">
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-gray-100 text-gray-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-bug"></i>
+                                        <span>Bug Fix</span>
+                                    </span>
+                                    <div class="flex items-center text-gray-500">
+                                        <i class="bi bi-calendar3 mr-2"></i>
+                                        <time datetime="2023-10-25">October 25, 2023</time>
+                                    </div>
+                                </div>
+                                <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-4">Critical Bug Fixes & Stability Improvements</h3>
+                            <p class="text-gray-600 mb-6 leading-relaxed">
+                                Resolved 23 critical bugs, improved system stability by 40%, and fixed memory leaks affecting long-running analysis sessions.
+                            </p>
+                            
+                            <!-- Expandable Details -->
+                            <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+                                <div class="border-t border-gray-200 pt-6 mt-6">
+                                    <h4 class="text-lg font-semibold text-gray-800 mb-4">Bug Fixes & Improvements</h4>
+                                    
+                                    <div class="space-y-6 mb-6">
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Critical Issues Resolved</h5>
+                                            <div class="space-y-3">
+                                                <div class="flex items-start space-x-3 p-3 bg-red-50 rounded-lg">
+                                                    <i class="bi bi-exclamation-triangle text-red-600 mt-1"></i>
+                                                    <div>
+                                                        <h6 class="font-medium text-red-800">Memory Leak in Analysis Engine</h6>
+                                                        <p class="text-sm text-red-700">Fixed memory leak causing crashes during long-running analysis sessions (>4 hours)</p>
+                                                        <span class="text-xs text-red-600">#PGT-2847 • Affected: 15% of users</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
+                                                    <i class="bi bi-exclamation-circle text-yellow-600 mt-1"></i>
+                                                    <div>
+                                                        <h6 class="font-medium text-yellow-800">Incorrect Index Recommendations</h6>
+                                                        <p class="text-sm text-yellow-700">Fixed algorithm bug causing suboptimal index suggestions for composite queries</p>
+                                                        <span class="text-xs text-yellow-600">#PGT-2834 • Affected: 8% of recommendations</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
+                                                    <i class="bi bi-info-circle text-blue-600 mt-1"></i>
+                                                    <div>
+                                                        <h6 class="font-medium text-blue-800">Dashboard Loading Issues</h6>
+                                                        <p class="text-sm text-blue-700">Resolved slow loading times for dashboards with large datasets (>1M rows)</p>
+                                                        <span class="text-xs text-blue-600">#PGT-2821 • Improved load time by 75%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Performance Improvements</h5>
+                                            <div class="grid md:grid-cols-2 gap-4">
+                                                <div class="space-y-2">
+                                                    <h6 class="font-medium text-gray-700">System Stability</h6>
+                                                    <ul class="text-sm text-gray-600 space-y-1">
+                                                        <li>• 40% reduction in system crashes</li>
+                                                        <li>• 60% faster error recovery</li>
+                                                        <li>• Improved connection pooling</li>
+                                                        <li>• Better resource cleanup</li>
+                                                    </ul>
+                                                </div>
+                                                <div class="space-y-2">
+                                                    <h6 class="font-medium text-gray-700">User Experience</h6>
+                                                    <ul class="text-sm text-gray-600 space-y-1">
+                                                        <li>• Faster report generation (30% improvement)</li>
+                                                        <li>• Smoother UI interactions</li>
+                                                        <li>• Better error messages</li>
+                                                        <li>• Reduced API response times</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium text-gray-800 mb-3">Additional Fixes</h5>
+                                            <div class="bg-gray-50 rounded-lg p-4">
+                                                <ul class="text-sm text-gray-600 space-y-1">
+                                                    <li>• Fixed timezone handling in scheduled reports</li>
+                                                    <li>• Resolved CSV export formatting issues</li>
+                                                    <li>• Fixed authentication timeout problems</li>
+                                                    <li>• Corrected chart rendering on mobile devices</li>
+                                                    <li>• Fixed notification delivery delays</li>
+                                                    <li>• Resolved configuration sync issues</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="bg-green-50 border-l-4 border-green-400 p-4">
+                                        <p class="text-green-800 text-sm">
+                                            <i class="bi bi-check-circle mr-2"></i>
+                                            All fixes have been thoroughly tested and are now available in production. No action required from users.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#bug-fix</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#stability</span>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#performance</span>
+                            </div>
+                        </article>
+
+                    <div class="text-center mt-12">
+                        <a href="https://github.com/pgtuner/pgtuner/releases" target="_blank" rel="noopener noreferrer" 
+                           class="inline-flex items-center space-x-3 bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition-colors duration-200 font-semibold text-lg shadow-lg">
+                            <i class="bi bi-github text-xl"></i>
+                            <span>View All Releases on GitHub</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="text-center">
+                <div class="flex items-center justify-center space-x-3 mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+                        <i class="bi bi-database text-white"></i>
+                    </div>
+                    <span class="font-bold text-xl">PGTuner</span>
+                </div>
+                <p class="text-gray-400 mb-6">Optimize your PostgreSQL database performance</p>
+                <div class="flex justify-center space-x-6">
+                    <a href="https://github.com/pgtuner/pgtuner" target="_blank" rel="noopener noreferrer" 
+                       class="text-gray-400 hover:text-white transition-colors">
+                        <i class="bi bi-github text-2xl"></i>
+                    </a>
+                </div>
+                <div class="mt-8 pt-8 border-t border-gray-800">
+                    <p class="text-gray-500">&copy; 2024 PGTuner. Open source PostgreSQL performance tuning tool.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Mobile menu functionality
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileMenuIcon = mobileMenuBtn.querySelector('i');
+
+        mobileMenuBtn.addEventListener('click', function() {
+            mobileMenu.classList.toggle('hidden');
+            
+            // Toggle icon between hamburger and X
+            if (mobileMenu.classList.contains('hidden')) {
+                mobileMenuIcon.className = 'bi bi-list text-2xl';
+            } else {
+                mobileMenuIcon.className = 'bi bi-x text-2xl';
+            }
+        });
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                    
+                    // Close mobile menu if open
+                    if (!mobileMenu.classList.contains('hidden')) {
+                        mobileMenu.classList.add('hidden');
+                        mobileMenuIcon.className = 'bi bi-list text-2xl';
+                    }
+                }
+            });
+        });
+
+        // Add scroll effect to navigation
+        window.addEventListener('scroll', function() {
+            const nav = document.querySelector('nav');
+            if (window.scrollY > 100) {
+                nav.classList.add('bg-white/90');
+            } else {
+                nav.classList.remove('bg-white/90');
+            }
+        });
+
+        // Intersection Observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe elements for animation
+        document.querySelectorAll('.animate-slide-up').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            observer.observe(el);
+        });
+
+        // Devlog entry expansion functionality
+        document.querySelectorAll('.devlog-entry').forEach(entry => {
+            entry.addEventListener('click', function(e) {
+                // Prevent expansion if clicking on links
+                if (e.target.tagName === 'A' || e.target.closest('a')) {
+                    return;
+                }
+                
+                const details = this.querySelector('.devlog-details');
+                const icon = this.querySelector('.expand-icon');
+                const isExpanded = !details.classList.contains('hidden');
+                
+                // Close all other entries
+                document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
+                    if (otherEntry !== this) {
+                        const otherDetails = otherEntry.querySelector('.devlog-details');
+                        const otherIcon = otherEntry.querySelector('.expand-icon');
+                        
+                        otherDetails.classList.add('hidden');
+                        otherIcon.style.transform = 'rotate(0deg)';
+                        otherEntry.classList.remove('ring-2', 'ring-blue-200');
+                    }
+                });
+                
+                // Toggle current entry
+                if (isExpanded) {
+                    details.classList.add('hidden');
+                    icon.style.transform = 'rotate(0deg)';
+                    this.classList.remove('ring-2', 'ring-blue-200');
+                } else {
+                    details.classList.remove('hidden');
+                    icon.style.transform = 'rotate(180deg)';
+                    this.classList.add('ring-2', 'ring-blue-200');
+                    
+                    // Smooth scroll to show the expanded content
+                    setTimeout(() => {
+                        details.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'nearest' 
+                        });
+                    }, 100);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

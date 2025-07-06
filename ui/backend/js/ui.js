@@ -1,4 +1,4 @@
-// This JS file is dedicated for the UI display only
+// ----------------- UI Sync Functions -----------------
 function syncNumberToSlider(id) {
     const slider = document.getElementById(id + "_range");
     const numberInput = document.getElementById(id);
@@ -91,3 +91,109 @@ function downloadResponse() {
     a.click();
     URL.revokeObjectURL(url);
 }
+
+// ----------------- Show Advanced Settings -----------------
+function showHiddenDiv(idButton, idShow) {
+    const divShow = document.getElementById(idShow);
+    const toggleButton = document.getElementById(idButton);
+
+    if (divShow.classList.contains('hidden')) {
+        divShow.classList.remove('hidden');
+        toggleButton.textContent = 'Hide Advanced Settings';
+    } else {
+        divShow.classList.add('hidden');
+        toggleButton.textContent = 'Show Advanced Settings';
+    }
+}
+
+//------------------ Devlog Animation -----------------
+// Devlog entry expansion functionality
+document.querySelectorAll('.devlog-entry').forEach(entry => {
+    entry.addEventListener('click', function(e) {
+        // Prevent expansion if clicking on links
+        if (e.target.tagName === 'A' || e.target.closest('a')) {
+            return;
+        }
+
+        const details = this.querySelector('.devlog-details');
+        const icon = this.querySelector('.expand-icon');
+        const isExpanded = !details.classList.contains('hidden');
+
+        // Close all other entries
+        document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
+            if (otherEntry !== this) {
+                const otherDetails = otherEntry.querySelector('.devlog-details');
+                const otherIcon = otherEntry.querySelector('.expand-icon');
+
+                otherDetails.classList.add('hidden');
+                otherIcon.style.transform = 'rotate(0deg)';
+                otherEntry.classList.remove('ring-2', 'ring-blue-200');
+            }
+        });
+
+        // Toggle current entry
+        if (isExpanded) {
+            details.classList.add('hidden');
+            icon.style.transform = 'rotate(0deg)';
+            this.classList.remove('ring-2', 'ring-blue-200');
+        } else {
+            details.classList.remove('hidden');
+            icon.style.transform = 'rotate(180deg)';
+            this.classList.add('ring-2', 'ring-blue-200');
+
+            // Smooth scroll to show the expanded content
+            setTimeout(() => {
+                details.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest'
+                });
+            }, 100);
+        }
+    });
+});
+
+//------------------ Tooltip Animation -----------------
+// Setup tooltips
+function setupTooltips() {
+    const tooltipTriggers = document.querySelectorAll('.tooltip-trigger');
+    const tooltip = document.getElementById('tooltip');
+    const tooltipContent = document.getElementById('tooltip-content');
+    const tooltipHeader = document.getElementById('tooltip-header');
+
+    tooltipTriggers.forEach(trigger => {
+        trigger.addEventListener('mouseenter', (e) => {
+            const content = trigger.getAttribute('data-tooltip');
+            const header = trigger.getAttribute('data-tooltip-header');
+
+            tooltipContent.textContent = content;
+            tooltipHeader.textContent = header;
+
+            const rect = trigger.getBoundingClientRect();
+            const tooltipHeight = tooltip.offsetHeight;
+
+            tooltip.style.top = `${rect.top - tooltipHeight - 10}px`;
+            tooltip.style.left = `${rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+            tooltip.classList.add('show');
+        });
+
+        trigger.addEventListener('mouseleave', () => {
+            tooltip.classList.remove('show');
+        });
+    });
+}
+// Reposition tooltips on scroll/resize
+window.addEventListener('scroll', function() {
+    const tooltip = document.getElementById('tooltip');
+    if (tooltip) tooltip.classList.remove('show');
+});
+
+window.addEventListener('resize', function() {
+    const tooltip = document.getElementById('tooltip');
+    if (tooltip) tooltip.classList.remove('show');
+});
+
+// ------------------- DOMContentLoaded-----------------
+// Initialize DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    setupTooltips();
+});

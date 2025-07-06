@@ -1,24 +1,57 @@
 <!-- Changelog Item (v0.1.2) -->
-<div class="accordion-item">
-    <h2 class="accordion-header" id="hdr000102">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse000102"
-                aria-expanded="true" aria-controls="collapse000102">
-            v0.1.2 (Alpha) - Date: Feb 14th, 2022
-        </button>
-    </h2>
-    <div id="collapse000102" class="accordion-collapse collapse" aria-labelledby="hdr000102"
-         data-bs-parent="#changelogAccordion">
-        <div class="accordion-body">
-            <ul>
-                <li>Cleanup development and legacy code.</li>
-                <li>VACUUM: Add vacuum_failsafe_age and vacuum_multixact_failsafe_age parameter into our tuning guideline. Push two '*_freeze_table_age' parameters into the correction tuning phase. These arguments require good estimation</li>
-                <li>MEMORY: Better performance on memory estimation phase with parallel estimation mode is applied in the correction phase</li>
-                <li>BGWRITER: Adjust the background writer parameters to match its use-case</li>
-                <li>VACUUM: Re-adjust the vacuum threshold and scale factor</li>
-                <li>Tune up some headers and meta tags for better SEO</li>
-                <li>Apply the HTML Jinja2 template for the web page</li>
-                <li>Extend the rate limit window for more requests</li>
-            </ul>
+<article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-shadow duration-300">
+    <div class="flex items-start justify-between mb-6">
+        <div class="flex items-center space-x-4">
+            <!-- Tag of the Update -->
+            <span class="flex items-center space-x-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-semibold">
+                <i class="bi bi-hourglass"></i>
+                <span>Release</span>
+            </span>
+            <!-- Date of update -->
+            <div class="flex items-center text-gray-500">
+                <i class="bi bi-calendar3 mr-2"></i>
+                <time datetime="2025-02-14">February 14, 2025</time>
+            </div>
+
+        </div>
+        <!-- Expand Icon -->
+        <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+    </div>
+
+    <!-- Title the Update-->
+    <h3 class="text-2xl font-bold text-gray-800 mb-4">PGTuner v0.1.2</h3>
+
+    <!-- Main Idea of the Update-->
+    <p class="text-gray-600 mb-6 leading-relaxed">
+        Cleanup development and legacy code.
+    </p>
+
+    <!-- Show Detail -->
+    <div class="devlog-details hidden overflow-hidden transition-all duration-500">
+        <div class="border-t border-gray-200 pt-6 mt-6">
+            <!-- Title -->
+            <h4 class="text-lg font-semibold text-gray-800 mb-4">What's New in v0.1.2</h4>
+            <!-- Details -->
+            <div class="space-y-4 mb-6">
+                <!-- Info 1 -->
+                <div>
+                    <h5 class="font-medium text-gray-800 mb-3">Details</h5>
+                    <ul class="text-sm text-gray-600 space-y-2">
+                        <li>• <strong>VACUUM:</strong> Add <code class="font-bold">vacuum_failsafe_age</code> and <code class="font-bold">vacuum_multixact_failsafe_age</code> parameter into our tuning guideline. Push two <code class="font-bold">*_freeze_table_age</code> parameters into the correction tuning phase. These arguments require good estimation.</li>
+                        <li>• <strong>MEMORY:</strong> Better performance on memory estimation phase with parallel estimation mode is applied in the correction phase.</li>
+                        <li>• <strong>BGWRITER:</strong> Adjust the background writer parameters to match its use-case.</li>
+                        <li>• <strong>VACUUM:</strong> Re-adjust the vacuum threshold and scale factor.</li>
+                        <li>• Tune up some headers and meta tags for better SEO.</li>
+                        <li>• Apply the HTML Jinja2 template for the web page.</li>
+                        <li>• Extend the rate limit window for more requests.</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
-</div>
+
+    <!-- HashTag -->
+    <div class="flex flex-wrap gap-2">
+        <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#release</span>
+    </div>
+</article>

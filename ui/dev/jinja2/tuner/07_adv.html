@@ -1,28 +1,33 @@
-<div class="my-4">
-    <h4 class="mb-3">Advanced Tuning Parameters</h4>
-    <p>
-        These advanced parameters allowed you to have more control over the PostgreSQL database settings, such as
-        higher memory utilization per connection, connection scaling, future-proofing your server against multiple
-        profiles, and more.
-        Some benefits of these advanced settings are:
-        - Reduce fine-grained memory control (session-based memory tuning) by application.
-        - Higher WAL utilization for high-transactional databases.
-        - ...
+<div class="mb-2 border-t border-gray-300 pt-2">
+    <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+        <i class="bi bi-code-square text-blue-600 mr-3"></i>
+        Advanced Tuning Parameters
+    </h2>
+    <ul>
+        These advanced parameters allowed you to have more control over the PostgreSQL database settings, such as higher memory utilization per connection, connection scaling, future-proofing your server against multiple profiles, and more. Some benefits of these advanced settings are:
+        <li>• Reduce fine-grained memory control (session-based memory tuning) by application.</li>
+        <li>• Higher WAL utilization for high-transactional databases.</li>
+        <li>• Furthermore</li>
+    </ul>
+</div>
 
-    </p>
-
-    <button aria-controls="advancedSettings" aria-expanded="false" class="btn btn-secondary"
-            data-bs-target="#advancedSettings"
-            data-bs-toggle="collapse" type="button">
-        Show Advanced Settings
-    </button>
-    <div class="collapse" id="advancedSettings">
-        <div class="card card-body my-3">
-            {% include './tuner/advance/adv.conn.min.html' %}
-            {% include './tuner/advance/adv.mem.min.html' %}
-            {% include './tuner/advance/adv.log.min.html' %}
-            {% include './tuner/advance/adv.wal.min.html' %}
-            {% include './tuner/advance/adv.autovacuum.min.html' %}
-        </div>
+<div >
+    <!-- Auto Calibration Profile -->
+    <div class="flex gap-2 mb-4">
+        <button class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold" type="button" onclick="showHiddenDiv('show-advanced-settings', 'advancedSettings')" id="show-advanced-settings">
+            Show Advanced Settings
+        </button>
+        <button type="button" class="tooltip-trigger bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold" data-tooltip="PGTuner would automatically calibrate the advanced optimization parameters for you based on the workload type" data-tooltip-header="Memory Pool Optimization Mode" onclick="_AutoCalibrateProfile()" id="auto-calibrate">
+            Auto Calibration Settings
+        </button>
     </div>
+
+    <div id="advancedSettings" class="hidden rounded-lg p-6 shadow-md border border-blue-100">
+        {% include './tuner/advance/adv.conn.min.html' %}
+        {% include './tuner/advance/adv.mem.min.html' %}
+        {% include './tuner/advance/adv.log.min.html' %}
+        {% include './tuner/advance/adv.wal.min.html' %}
+        {% include './tuner/advance/adv.autovacuum.min.html' %}
+    </div>
+
 </div>

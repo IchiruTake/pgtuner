@@ -16,10 +16,7 @@ _logger = logging.getLogger(APP_NAME_UPPER)
 # =============================================================================
 # The collection of advanced tuning options
 class PG_TUNE_USR_KWARGS(BaseModel):
-    """
-    This class stored some tuning user|app-defined keywords that could be used to adjust the tuning phase.
-    Parameters:
-    """
+    # This class stored some tuning user|app-defined keywords that could be used to adjust the tuning phase.
     # Connection
     user_max_connections: int = Field(
         default=0, ge=0, le=1000, frozen=True,
@@ -39,6 +36,13 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'based on the number of CPU cores. The higher value means more connections can be handled by the '
                     'server. From modern perspective, the good ratio is between 4-6, but default to 5 for balanced ' \
                     'performance with less risk for idle connection overhead.'
+    )
+    cpu_to_parallel_scale_ratio: PositiveFloat = Field(
+        default=2.0, ge=1.5, le=3.0, frozen=True,
+        description='The scale ratio of the CPU to the number of parallel workers. The supported range is [1.5, 3.0], '
+                    'default is 2.0. Since with later version and Linux kernel, the performance of parallelism under '
+                    'IO-bound workload is improved, especially the asynchronous parallelism of IO (io_uring), the '
+                    'default scale factor may seems weird at first glance, but it is there for a reason. '
     )
     superuser_reserved_connections_scale_ratio: PositiveFloat = Field(
         default=1.5, ge=1, le=3, frozen=True,
@@ -77,10 +81,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'enable the correction_tuning, you should ignore this value.'
     )
     max_work_buffer_ratio: PositiveFloat = Field(
-        default=0.1, gt=0, le=0.50, frozen=False,
+        default=0.125, gt=0, le=0.50, frozen=False,
         description='The starting ratio of the maximum PostgreSQL available memory (after excluding shared_buffers and '
                     'others) to be used in the session-based variable: temp_buffers and work_mem (globally managed). '
-                    'The supported range is (0, 0.50], default is 0.1. The algorithm is temp_buffers + work_mem = '
+                    'The supported range is (0, 0.50], default is 0.125. The algorithm is temp_buffers + work_mem = '
                     '(pgmem_available * max_work_buffer_ratio) / active_user_connections. However, if you enable the '
                     'correction_tuning, you can adjust this value *slowly* to increase the memory budget for query '
                     'operation. Under correction tuning, the absolute difference between :attr:`shared_buffers_ratio` '
@@ -105,10 +109,10 @@ class PG_TUNE_USR_KWARGS(BaseModel):
 
     # Memory Utilization (Advanced)
     max_normal_memory_usage: PositiveFloat = Field(
-        default=0.45, ge=0.35, le=0.80,
+        default=0.55, ge=0.35, le=0.80,
         description='The maximum memory usage under normal PostgreSQL operation over the usable memory. This holds as '
                     'the upper bound to increase the variable before reaching the limit. The supported range is [0.35, '
-                    '0.80], default is 0.45. Increase this ratio meant you are expecting your server would have more '
+                    '0.80], default is 0.50. Increase this ratio meant you are expecting your server would have more '
                     'headroom for the tuning and thus for database workload. It is not recommended to set this value '
                     'too high, as there are multiple constraints that prevent further tuning to keep your server '
                     'function properly without unknown incident such as parallelism, maintenance, and other '
@@ -117,20 +121,20 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     mem_pool_tuning_ratio: float = Field(
         default=0.45, ge=0.0, le=1.0, frozen=True,
         description='The memory tuning ratio in correction tuning between shared_buffers and work_buffers. Supported '
-                    'value is [0, 1] and default is 0.4; Higher value meant that the tuning would prefer the '
+                    'value is [0, 1] and default is 0.45; Higher value meant that the tuning would prefer the '
                     ':arg`shared_buffers` over the :arg:`work_buffers`, and vice versa.'
     )
     # A too small or too large bound can lead to number overflow
-    hash_mem_usage_level: int = Field(
-        default=-5, ge=-50, le=50, frozen=True,
+    hash_mem_usage_level: int | float = Field(
+        default=-3, ge=-50, le=50, frozen=True,
         description='The *average* hash memory usage level to determine the average work_mem in use by multiply with '
                     ':func:`generalized_mean(1, hash_mem, level=hash_mem_usage_level)`. Higher value would assume that '
                     'all PostgreSQL connections, on average, do more hash-based operations than normal operations, and '
-                    'vice versa. The supported range is [-50, 50], default is -6. The recommended range is around '
-                    '-10 to 6, as beyond this level results in incorrect estimation and so on.'
+                    'vice versa. The supported range is [-50, 50], default is -3. The recommended range is around '
+                    '-10 to 6, as beyond this level results in trivial increment/decrement.'
     )   # Maximum float allowed is [-60, 60] under 64-bit system
     mem_pool_parallel_estimate: bool = Field(
-        default=True, frozen=True,
+        default=True, frozen=False,
         description='Set to True (default) will switch the memory consumption estimation in parallelism by assuming '
                     'all *query* workers are consumed (based on number of available workers per connection). This '
                     'would result a lower :arg:`max_work_buffer_ratio` can get.'
@@ -162,7 +166,6 @@ class PG_TUNE_USR_KWARGS(BaseModel):
     # WAL control parameters -> Change this when you initdb with custom wal_segment_size (not recommended)
     # https://postgrespro.com/list/thread-id/1898949
     # TODO: Whilst PostgreSQL allows up to 2 GiB, my recommendation is to limited below 128 MiB
-    # Either I enforce constraint to prevent non optimal configuration or I let user to do it.
     # TODO: Update docs
     wal_segment_size: PositiveInt = Field(
         default=BASE_WAL_SEGMENT_SIZE, ge=BASE_WAL_SEGMENT_SIZE, le=BASE_WAL_SEGMENT_SIZE * (2 ** 7), frozen=True,
@@ -196,43 +199,66 @@ class PG_TUNE_USR_KWARGS(BaseModel):
                     'of 64 WAL files or 4 GiB (prevent the default running too frequently during burst, causing the '
                     'WAL spike); and the upper bound of 64 GiB to ensure fast recovery on burst at large scale.'
     )
-    wal_keep_size_ratio: PositiveFloat = (
-        Field(default=0.05, ge=0.0, le=0.20, frozen=True,
-              description='The ratio of the wal_keep_size against the total WAL volume. The supported range is '
-                          '[0.0, 0.20], default to 0.04 (4% of WAL volume). This value is used to ensure that the '
-                          'WAL archive is kept for a certain period of time before it is removed. Azure uses 400 MiB '
-                          'of WAL which is 25 WAL files. Internally, the wal_keep_size has an internal lower bound '
-                          'of 32 WAL files or 2 GiB to ensure a good time for retrying the WAL streaming and an upper '
-                          'bound of 64 GiB. Beyond this value, whilst you cannot retry downstream connections but can '
-                          'recovery from the WAL archive disk, beyond our upper bound; it is best to re-use a later '
-                          'base backup and retry the WAL streaming from the beginning to avoid headache of fixing '
-                          'the server (usually when dealing that large server.')
+    wal_keep_size_ratio: PositiveFloat = Field(
+        default=0.04, ge=0.0, le=0.20, frozen=True,
+        description='The ratio of the wal_keep_size against the total WAL volume. The supported range is [0.0, 0.20], '
+                    'default to 0.04 (4% of WAL volume). This value is used to ensure that the  WAL archive is kept '
+                    'for a certain period of time before it is removed. Azure uses 400 MiB of WAL which is 25 WAL '
+                    'files. Internally, the wal_keep_size has an internal lower bound of 32 WAL files or 2 GiB to '
+                    'ensure a good time for retrying the WAL streaming and an upper bound of 64 GiB. Beyond this value, '
+                    'whilst you cannot retry downstream connections but can recovery from the WAL archive disk, beyond '
+                    'our upper bound; it is best to re-use a later base backup and retry the WAL streaming from the '
+                    'beginning to avoid headache of fixing the server (usually when dealing that large server).'
     )
 
     # Vacuum Tuning
-    autovacuum_utilization_ratio: PositiveFloat = (
-        Field(default=0.80, ge=0.30, le=0.95, frozen=True,
-              description='The utilization ratio of the random IOPS of data volume used for the autovacuum process. '
-                          'Note that this is based on the efficient estimated READ/WRITE IOPs and may not be reflected '
-                          'in your real-world scenario. Our intention is to reduce the un-necessary time of running '
-                          'autovacuum, but be able to serve a small portion of user who want to fetch the data from '
-                          'database. Unless you are using the NVME as data disk (and currently have lots of IOPS), '
-                          'it is not recommended to set this beyond 0.90. The supported range is (0.30, 0.95], default '
-                          'is 0.80.')
+    autovacuum_utilization_ratio: PositiveFloat = Field(
+        default=0.80, ge=0.30, le=0.95, frozen=True,
+        description='The utilization ratio of the random IOPS of data volume used for the autovacuum process. Note '
+                    'that this is based on the efficient estimated READ/WRITE IOPs and may not be reflected in your '
+                    'real-world scenario. Our intention is to reduce the un-necessary time of running autovacuum, but '
+                    'be able to serve a small portion of user who want to fetch the data from database. Unless you '
+                    'are using the NVME as data disk (and currently have lots of IOPS), it is not recommended to set '
+                    'this beyond 0.90. The supported range is (0.30, 0.95], default is 0.80.'
     )
-    vacuum_safety_level: PositiveInt = (
-        Field(default=2, ge=0, le=12, frozen=True,
-              description='The safety level of the vacuum process. Higher level would increase the risk during vacuum '
-                          'process (by pushing its limit). Non-zero value would not protect from pure READ page during '
-                          'the vacuum process, but ensuring never throttle on WRITE page(s) during VACUUM, and protect '
-                          'the server under balanced distribution of READ/WRITE page from disks. Unless you lower the '
-                          ':var:`autovacuum_utilization_ratio`, it is recommended to set this value low to zero to when '
-                          'you do not know how your application access pattern and VACUUM behaves. The supported range '
-                          'is [0, 12], default is 2. This parameter is feasible only due to the use of optimized '
-                          'autovacuum configuration and visibility map, and is recommended a zero value if your '
-                          'PostgreSQL is at version 12 or older.')
+    vacuum_safety_level: PositiveInt = Field(
+        default=2, ge=0, le=12, frozen=True,
+        description='The safety level of the vacuum process. Higher level would increase the risk during vacuum '
+                    'process (by pushing its limit). Non-zero value would not protect from pure READ page during the '
+                    'vacuum process, but ensuring never throttle on WRITE page(s) during VACUUM, and protect the '
+                    'server under balanced distribution of READ/WRITE page from disks. Unless you lower the '
+                    ':var:`autovacuum_utilization_ratio`, it is recommended to set this value low to zero to when '
+                    'you do not know how your application access pattern and VACUUM behaves. The supported range is '
+                    '[0, 12], default is 2. This parameter is feasible only due to the use of optimized autovacuum '
+                    'configuration and visibility map, and is recommended a zero value if your PostgreSQL is at '
+                    'version 12 or older.'
     )
 
+auto_calibrate_profiles: dict[PG_WORKLOAD, dict[str, Any]] = {
+    PG_WORKLOAD.OLAP: {
+        'cpu_to_connection_scale_ratio': 2.5,
+        'hash_mem_usage_level': -2.0,
+        'shared_buffers_ratio': 0.33,
+        'max_work_buffer_ratio': 0.175,
+        'max_normal_memory_usage': 0.60,
+    },
+    PG_WORKLOAD.HTAP: {
+        'cpu_to_connection_scale_ratio': 4.0,
+        'hash_mem_usage_level': -2.5,
+        'shared_buffers_ratio': 0.30,
+        'max_work_buffer_ratio': 0.15,
+        'max_normal_memory_usage': 0.60,
+    },
+    PG_WORKLOAD.VECTOR: {
+        'shared_buffers_ratio': 0.33,
+        'temp_buffers_ratio': 0.125,
+    },
+    PG_WORKLOAD.TSR_IOT: {
+        'cpu_to_connection_scale_ratio': 6.0,
+        'temp_buffers_ratio': 0.20,
+        'hash_mem_usage_level': -4.0,
+    },
+}
 
 
 # =============================================================================
@@ -349,7 +375,6 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         default='linux', frozen=True,
         description='The operating system that the PostgreSQL server is running on. Default is Linux.'
     )
-
     vcpu: PositiveInt = Field(
         default=4, ge=1, frozen=True,
         description='The number of vCPU (logical CPU) that the PostgreSQL server is running on. Default is 4 vCPUs.'
@@ -408,6 +433,12 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
         description='This is the index used to pick the value during number alignment. Default is 0 meant a lower '
                     'value is preferred. Set to 1 would prefer a higher value. '
     )
+    automatic_calibration: bool = Field(
+        default=False, frozen=False,
+        description='Set to True would enable the automatic calibration of the PostgreSQL server. This would '
+                    'enable the automatic calibration of the PostgreSQL server based on the workload type and '
+                    'the hardware profile.'
+    )
 
     # ========================================================================
     # Revert some invalid options as described in :attr:`is_os_user_managed`
@@ -462,6 +493,13 @@ class PG_TUNE_USR_OPTIONS(BaseModel):
             _logger.warning(f'The database size {self.database_size_in_gib} GiB is larger than the data volume. The '
                             f'database size is silently capped at 90% of the data volume.')
             self.database_size_in_gib = _database_limit
+
+        # Enable the automatic calibration
+        if self.automatic_calibration and self.workload_type in auto_calibrate_profiles:
+            kw = self.tuning_kwargs.model_dump()
+            for k, v in auto_calibrate_profiles[self.workload_type].items():
+                if k in kw:
+                    self.tuning_kwargs[k] = v
 
         return None
 

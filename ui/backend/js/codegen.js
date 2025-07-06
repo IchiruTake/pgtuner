@@ -16,7 +16,7 @@
  */
 
 // Application Information
-const __version__ = '0.1.5';
+const __version__ = '0.1.6';
 const __VERSION__ = __version__;
 const __AUTHOR__ = 'Ichiru Take';
 
@@ -1301,19 +1301,20 @@ class PG_TUNE_USR_KWARGS {
         // Connection
         this.user_max_connections = options.user_max_connections ?? 0;
         this.cpu_to_connection_scale_ratio = options.cpu_to_connection_scale_ratio ?? 5;
+        this.cpu_to_parallel_scale_ratio = options.cpu_to_parallel_scale_ratio ?? 2;
         this.superuser_reserved_connections_scale_ratio = options.superuser_reserved_connections_scale_ratio ?? 1.5;
         this.single_memory_connection_overhead = options.single_memory_connection_overhead ?? (5 * Mi);
         this.memory_connection_to_dedicated_os_ratio = options.memory_connection_to_dedicated_os_ratio ?? 0.7;
         // Memory Utilization (Basic)
         this.effective_cache_size_available_ratio = options.effective_cache_size_available_ratio ?? 0.985;
         this.shared_buffers_ratio = options.shared_buffers_ratio ?? 0.25;
-        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.10;
+        this.max_work_buffer_ratio = options.max_work_buffer_ratio ?? 0.125;
         this.effective_connection_ratio = options.effective_connection_ratio ?? 0.75;
         this.temp_buffers_ratio = options.temp_buffers_ratio ?? 0.25;
         // Memory Utilization (Advanced)
-        this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.45;
+        this.max_normal_memory_usage = options.max_normal_memory_usage ?? 0.55;
         this.mem_pool_tuning_ratio = options.mem_pool_tuning_ratio ?? 0.45;
-        this.hash_mem_usage_level = options.hash_mem_usage_level ?? -5;
+        this.hash_mem_usage_level = options.hash_mem_usage_level ?? -3;
         this.mem_pool_parallel_estimate = options.mem_pool_parallel_estimate ?? true;
         // Tune logging behaviour
         this.max_query_length_in_bytes = options.max_query_length_in_bytes ?? (2 * Ki);
@@ -1591,7 +1592,8 @@ function _GetMaxConns(options, group_cache, min_user_conns, max_user_conns) {
     let _upscale = options.tuning_kwargs.cpu_to_connection_scale_ratio;
     console.debug(`The max_connections variable is determined by the number of logical CPU count with the scale factor of ${_upscale.toFixed(1)}x.`);
     let _minimum = Math.max(min_user_conns, total_reserved_connections);
-    let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections;
+    let max_connections = cap_value(Math.ceil(options.vcpu * _upscale), _minimum, max_user_conns);
+    max_connections = realign_value(max_connections, 5)[1] + total_reserved_connections; // Align to 5
     console.debug(`max_connections: ${max_connections}`);
     return max_connections;
 }
@@ -1667,11 +1669,11 @@ _DB_CONN_PROFILE = {
     },
     'max_connections': {
         'instructions': {
-            'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 30),
-            'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 65),
-            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 20, 100),
-            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 25, 175),
-            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 30, 250),
+            'mini': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 5, 30),
+            'medium': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 5, 65),
+            'large': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 10, 100),
+            'mall': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 175),
+            'bigt': (group_cache, global_cache, options, response) => _GetMaxConns(options, group_cache, 15, 250),
         },
         'default': 30,
     },
@@ -1809,28 +1811,32 @@ _DB_BGWRITER_PROFILE = {
 _DB_ASYNC_DISK_PROFILE = {
     'effective_io_concurrency': { 'default': 16, },
     'maintenance_io_concurrency': { 'default': 10, },
-    'backend_flush_after': { 'default': 0, },
+    'backend_flush_after': { 'default': 0, 'partial_func': (value) => `${Math.floor(value / Ki)}kB`, },
 }
 
 _DB_ASYNC_CPU_PROFILE = {
     'max_worker_processes': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            cap_value(Math.ceil(options.vcpu * 1.5) + 2, 4, 512),
+            cap_value(Math.ceil(options.vcpu * (0.5 + options.tuning_kwargs.cpu_to_parallel_scale_ratio)) + 2,
+            4, 512),
         'default': 8,
     },
     'max_parallel_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
+            Math.min(cap_value(Math.ceil(options.vcpu * options.tuning_kwargs.cpu_to_parallel_scale_ratio) + 1,
+            4, 512), group_cache['max_worker_processes']),
         'default': 8,
     },
     'max_parallel_workers_per_gather': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 3),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'max_parallel_maintenance_workers': {
         'tune_op': (group_cache, global_cache, options, response) =>
-            Math.min(cap_value(Math.ceil(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+            Math.min(cap_value(Math.ceil(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 2.5),
+            2, 32), Math.min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
     },
     'min_parallel_table_scan_size': {
@@ -3437,7 +3443,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
             PG_DISK_SIZING.matchDiskSeriesInRange(wal_tput, THROUGHPUT, 'ssd', 'nvme')) {
             after_wal_writer_flush_after = 2 * Mi
-            if (request.options.workload_profile >= PG_SIZING.LARGE) {
+            if (request.options.workload_profile >= PG_SIZING.MALL) {
                 after_wal_writer_flush_after *= 2
             }
         }
@@ -3457,9 +3463,9 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the bgwriter_delay.
     // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     let after_bgwriter_delay = Math.floor(Math.max(
-        150, // Don't want too small to have too many frequent context switching
+        200, // Don't want too small to have too many frequent context switching
         // Don't use the number from general tuning since we want a smoothing IO stabilizer
-        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
+        Math.floor(400 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
         ));
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
@@ -3476,7 +3482,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     }
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high
-        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
+        Math.floor(40 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
         100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
@@ -4177,7 +4183,18 @@ function _wrk_mem_tune(request, response) {
         .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
         .join('; ');
     console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
+    return null;
+}
 
+function _checkpoint_tune(request, response) {
+    // Tune the shared_buffers and work_mem by boost the scale factor (we don't change heuristic connection
+    // as it represented their real-world workload). Similarly, with the ratio between temp_buffers and work_mem
+    // Enable extra tuning to increase the memory usage if not meet the expectation.
+    // Note that at this phase, we don't trigger auto-tuning from other function
+
+    // Additional workload for specific workload
+    console.info(`===== Checkpoint Tuning =====\nImpacted attributes: checkpoint_timeout, checkpoint_completion_target, checkpoint_warning`)
+    const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
     // and expected RTO.
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
@@ -4232,7 +4249,6 @@ function _wrk_mem_tune(request, response) {
     _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
         PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
     )
-
     return null;
 }
 
@@ -4301,6 +4317,9 @@ function correction_tune(request, response) {
     // Working Memory Tuning
     _wrk_mem_tune(request, response)
 
+    // Checkpoint Tuning
+    _checkpoint_tune(request, response)
+
     // -------------------------------------------------------------------------
     // Version Adaptation Tuning
     _stune_v18(request, response)
@@ -4324,6 +4343,29 @@ function _get_text_element(element) {
     return '';
 }
 
+function _set_text_element(element, value) {
+    let el = document.getElementById(element)
+    // console.log(element, el);
+    if (el.type === 'range' || el.type === 'number') {
+        // parseFloat if element.step in string has dot, parseInt
+        el.value = el.step.includes('.') ? parseFloat(value) : parseInt(value);
+    } else if (el.type === 'text') {
+        el.value = value;
+    } else if (el.type === 'select-one') {
+        el.value = value;
+    }
+
+    // If the element has an sliding (or _range) element, update it as well
+    try {
+        const range_el = document.getElementById(`${element}_range`);
+        if (range_el) {
+            range_el.value = el.value;
+        }
+    } catch (e) {
+        console.warn(`Error updating range element for ${element}: ${e}`);
+    }
+}
+
 function _get_checkbox_element(element) {
     let el = document.getElementById(element)
     // console.log(element, el);
@@ -4338,9 +4380,9 @@ function _build_disk_from_backend(data) {
     return new PG_DISK_PERF(
         {
             'random_iops_spec': data.random_iops_spec,
-            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 1.0,
+            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 0.9,
             'throughput_spec': data.throughput_spec,
-            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 1.0,
+            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 0.9,
             'disk_usable_size': data.disk_usable_size,
             'num_disks': data.num_disks !== null ? data.num_disks : 1,
             'per_scale_in_raid': data.per_scale_in_raid !== null ? data.per_scale_in_raid : 0.75
@@ -4351,8 +4393,11 @@ function _build_disk_from_backend(data) {
 function _build_disk_from_html(name = 'data_index_spec') {
     return {
         'random_iops_spec': _get_text_element(`${name}.random_iops`),
+        'random_iops_scale_factor': 0.95,
         'throughput_spec': _get_text_element(`${name}.throughput`),
+        'throughput_scale_factor': 0.95,
         'disk_usable_size': _get_text_element(`${name}.disk_usable_size_in_gib`) * Gi,
+        'num_disks': 1,
     };
 }
 
@@ -4363,6 +4408,7 @@ function _build_keywords_from_backend(data) {
             // Connection
             user_max_connections: data.user_max_connections,
             cpu_to_connection_scale_ratio: data.cpu_to_connection_scale_ratio,
+            cpu_to_parallel_scale_ratio: data.cpu_to_parallel_scale_ratio,
             superuser_reserved_connections_scale_ratio: data.superuser_reserved_connections_scale_ratio,
             single_memory_connection_overhead: data.single_memory_connection_overhead,
             memory_connection_to_dedicated_os_ratio: data.memory_connection_to_dedicated_os_ratio,
@@ -4390,6 +4436,7 @@ function _build_keywords_from_backend(data) {
             min_wal_size_ratio: data.min_wal_size_ratio,
             max_wal_size_ratio: data.max_wal_size_ratio,
             wal_keep_size_ratio: data.wal_keep_size_ratio,
+
             // Vacuum Tuning
             autovacuum_utilization_ratio: data.autovacuum_utilization_ratio,
             vacuum_safety_level: data.vacuum_safety_level
@@ -4402,6 +4449,7 @@ function _build_keywords_from_html(name = 'keywords') {
         // Connection or ./tuner/adv.conn.html
         'user_max_connections': _get_text_element(`${name}.user_max_connections`),
         'cpu_to_connection_scale_ratio': _get_text_element(`${name}.cpu_to_connection_scale_ratio`),
+        'cpu_to_parallel_scale_ratio': _get_text_element(`${name}.cpu_to_parallel_scale_ratio`),
         'superuser_reserved_connections_scale_ratio': _get_text_element(`${name}.superuser_reserved_connections_scale_ratio`),
         'single_memory_connection_overhead': _get_text_element(`${name}.single_memory_connection_overhead_in_kib`) * Ki,
         'memory_connection_to_dedicated_os_ratio': _get_text_element(`${name}.memory_connection_to_dedicated_os_ratio`),
@@ -4417,7 +4465,7 @@ function _build_keywords_from_html(name = 'keywords') {
         'max_normal_memory_usage': _get_text_element(`${name}.max_normal_memory_usage`),
         'mem_pool_tuning_ratio': _get_text_element(`${name}.mem_pool_tuning_ratio`),
         'hash_mem_usage_level': _get_text_element(`${name}.hash_mem_usage_level`),
-        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? true,
+        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? 'auto',
 
         // Logging behaviour (query size, and query runtime)
         'max_query_length_in_bytes': _get_text_element(`${name}.max_query_length_in_bytes`),
@@ -4606,4 +4654,41 @@ function web_optimize(request) {
         'response': response,
     }
 }
+
+
+const _CalibrationProfile = {
+    [PG_WORKLOAD.OLAP]: {
+        'cpu_to_connection_scale_ratio': 2.5,
+        'hash_mem_usage_level': -2.0,
+        'shared_buffers_ratio': 0.33,
+        'max_work_buffer_ratio': 0.175,
+        'max_normal_memory_usage': 0.60,
+    },
+    [PG_WORKLOAD.HTAP]: {
+        'cpu_to_connection_scale_ratio': 4.0,
+        'hash_mem_usage_level': -2.5,
+        'shared_buffers_ratio': 0.30,
+        'max_work_buffer_ratio': 0.15,
+        'max_normal_memory_usage': 0.60,
+    },
+    [PG_WORKLOAD.VECTOR]: {
+        'shared_buffers_ratio': 0.33,
+        'temp_buffers_ratio': 0.125,
+    },
+    [PG_WORKLOAD.TSR_IOT]: {
+        'cpu_to_connection_scale_ratio': 6.0,
+        'temp_buffers_ratio': 0.20,
+        'hash_mem_usage_level': -4.0,
+    },
+}
+
+function _AutoCalibrateProfile() {
+    const workload_type = PG_WORKLOAD[_get_text_element(`workload_type`).toUpperCase()];
+    if (_CalibrationProfile.hasOwnProperty(workload_type)) {
+        for (const [key, value] of Object.entries(_CalibrationProfile[workload_type])) {
+            _set_text_element(`keywords.${key}`, value);
+        }
+    }
+}
+
 

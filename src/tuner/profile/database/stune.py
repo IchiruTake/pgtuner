@@ -5,7 +5,6 @@ This module is to perform specific tuning on the PostgreSQL database server.
 
 import logging
 from math import ceil, sqrt, floor, log2
-from pprint import pprint
 from typing import Callable, Any
 
 from pydantic import ValidationError
@@ -335,7 +334,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
         if (PG_DISK_SIZING.match_disk_series(wal_tput, THROUGHPUT, 'san', interval='strong') or
                 PG_DISK_SIZING.match_disk_series_in_range(wal_tput, THROUGHPUT, 'ssd', 'nvme')):
             after_wal_writer_flush_after = 2 * Mi
-            if request.options.workload_profile >= PG_SIZING.LARGE:
+            if request.options.workload_profile >= PG_SIZING.MALL:
                 after_wal_writer_flush_after *= 2
         _ApplyItmTune('wal_writer_flush_after', after_wal_writer_flush_after,
                      scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response=response, _log_pool=_logs)
@@ -356,9 +355,9 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     # Tune the bgwriter_delay.
     # The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     after_bgwriter_delay = floor(max(
-        150,    # Don't want too small to have too many frequent context switching
+        200,    # Don't want too small to have too many frequent context switching
         # Don't use the number from general tuning since we want a smoothing IO stabilizer
-        350 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
+        400 - 30 * request.options.workload_profile.num() - 5 * data_iops // K10
     ))
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, scope=PG_SCOPE.OTHERS, 
                  response=response, _log_pool=_logs)
@@ -377,7 +376,7 @@ def _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(
     assert 0 < bg_io_per_cycle <= 0.10, 'The bg_io_per_cycle should be between 0 and 0.10 to not trash out the bgwriter.'
     after_bgwriter_lru_maxpages = cap_value(
         # Should not be too high
-        30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1),
+        40 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1),
         100 + 30 * request.options.workload_profile.num(), 4000
     )
     _ApplyItmTune('bgwriter_lru_maxpages', after=after_bgwriter_lru_maxpages, scope=PG_SCOPE.OTHERS,
@@ -1137,6 +1136,17 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     _mem_check_string = '; '.join([f'{scope}={bytesize_to_hr(func(request.options, response))}'
                                    for scope, func in _get_wrk_mem_func().items()])
     _logs.append(f'The working memory usage based on memory profile on all profiles are {_mem_check_string}.')
+    return _FlushLog(_logs)
+
+def _checkpoint_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
+    # Tune the checkpoint_timeout and checkpoint_completion_target based on the disk throughput and data amount
+    # This is to ensure that the checkpoint is not too frequent or too long
+    _logs = [
+        '\n ===== Checkpoint Tuning =====',
+        'Start tuning the checkpoint timeout and completion target based on the disk throughput and data amount. '
+        'Impacted attributes: checkpoint_timeout, checkpoint_completion_target, checkpoint_warning'
+    ]
+    managed_cache = response.get_managed_cache(_TARGET_SCOPE)
 
     # Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
     # and expected RTO.
@@ -1154,7 +1164,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     elif request.options.workload_type == PG_WORKLOAD.VECTOR:
         _shared_buffers_ratio = 0.02
     elif request.options.workload_type == PG_WORKLOAD.TSR_IOT:
-        # This workload requires a lot of INSERT operations at large where as the monitoring don't perform 
+        # This workload requires a lot of INSERT operations at large where as the monitoring don't perform
         # an equivalent amount of SELECT operations
         _shared_buffers_ratio = 0.99
 
@@ -1173,7 +1183,7 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
     # WAL Sync Time: Time to flush additional dirty pages during the checkpoint from the first-byte-to-modify
     # to let the data files keep up with the WAL files
     total_ckpt_time += int(
-        max(32 * Mi + 64 * Mi * request.options.workload_profile.num(),
+        max(32 * Mi + 48 * Mi * request.options.workload_profile.num(),
             4 * request.options.tuning_kwargs.wal_segment_size) / Mi * (1 / _data_trans_tput + 1 / _wal_tput)
     )
     after_checkpoint_timeout = realign_value(
@@ -1184,12 +1194,11 @@ def _wrk_mem_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE) -> None:
                  f'minimum estimated time is {total_ckpt_time:.1f} seconds.')
 
     _ApplyItmTune('checkpoint_timeout', after_checkpoint_timeout, scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
-                 response=response, _log_pool=_logs)
+                  response=response, _log_pool=_logs)
     _ApplyItmTune('checkpoint_warning', int(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
-                  scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, 
-                 response=response, _log_pool=_logs)
+                  scope=PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE,
+                  response=response, _log_pool=_logs)
     return _FlushLog(_logs)
-
 
 # =============================================================================
 @time_decorator
@@ -1275,6 +1284,9 @@ def correction_tune(request: PG_TUNE_REQUEST, response: PG_TUNE_RESPONSE):
     # -------------------------------------------------------------------------
     # Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    # Checkpoint Tuning
+    _checkpoint_tune(request, response)
 
     # -------------------------------------------------------------------------
     # Version Adaptation Tuning

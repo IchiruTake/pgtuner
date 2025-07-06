@@ -271,7 +271,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
         if (PG_DISK_SIZING.matchDiskSeries(wal_tput, THROUGHPUT, 'san', 'strong') ||
             PG_DISK_SIZING.matchDiskSeriesInRange(wal_tput, THROUGHPUT, 'ssd', 'nvme')) {
             after_wal_writer_flush_after = 2 * Mi
-            if (request.options.workload_profile >= PG_SIZING.LARGE) {
+            if (request.options.workload_profile >= PG_SIZING.MALL) {
                 after_wal_writer_flush_after *= 2
             }
         }
@@ -291,9 +291,9 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     // Tune the bgwriter_delay.
     // The HIBERNATE_FACTOR of 50 in bgwriter.c and 25 of walwriter.c to reduce the electricity consumption
     let after_bgwriter_delay = Math.floor(Math.max(
-        150, // Don't want too small to have too many frequent context switching
+        200, // Don't want too small to have too many frequent context switching
         // Don't use the number from general tuning since we want a smoothing IO stabilizer
-        Math.floor(350 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
+        Math.floor(400 - 30 * request.options.workload_profile.num() - 5 * data_iops / K10)
         ));
     _ApplyItmTune('bgwriter_delay', after_bgwriter_delay, PG_SCOPE.OTHERS, response);
 
@@ -310,7 +310,7 @@ function _generic_disk_bgwriter_vacuum_wraparound_vacuum_tune(request, response)
     }
     const after_bgwriter_lru_maxpages = cap_value(
         // Should not be too high
-        Math.floor(30 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
+        Math.floor(40 * request.options.workload_profile.num() + data_iops * cap_value(bg_io_per_cycle, 1e-3, 1e-1)),
         100 + 30 * request.options.workload_profile.num(), 4000
     );
     _ApplyItmTune('bgwriter_lru_maxpages', after_bgwriter_lru_maxpages, PG_SCOPE.OTHERS, response);
@@ -1011,7 +1011,18 @@ function _wrk_mem_tune(request, response) {
         .map(([scope, func]) => `${scope}=${bytesize_to_hr(func(request.options, response))}`)
         .join('; ');
     console.info(`The working memory usage based on memory profile on all profiles are ${_mem_check_string}.`);
+    return null;
+}
 
+function _checkpoint_tune(request, response) {
+    // Tune the shared_buffers and work_mem by boost the scale factor (we don't change heuristic connection
+    // as it represented their real-world workload). Similarly, with the ratio between temp_buffers and work_mem
+    // Enable extra tuning to increase the memory usage if not meet the expectation.
+    // Note that at this phase, we don't trigger auto-tuning from other function
+
+    // Additional workload for specific workload
+    console.info(`===== Checkpoint Tuning =====\nImpacted attributes: checkpoint_timeout, checkpoint_completion_target, checkpoint_warning`)
+    const managed_cache = response.get_managed_cache(_TARGET_SCOPE)
     // Checkpoint Timeout: Hard to tune as it mostly depends on the amount of data change, disk strength,
     // and expected RTO.
     // See the method BufferSync() at line 2909 of src/backend/storage/buffer/bufmgr.c; the fsync is happened at
@@ -1066,7 +1077,6 @@ function _wrk_mem_tune(request, response) {
     _ApplyItmTune('checkpoint_warning', Math.floor(after_checkpoint_timeout * 0.90 * (1 - managed_cache['checkpoint_completion_target'])),
         PG_SCOPE.ARCHIVE_RECOVERY_BACKUP_RESTORE, response
     )
-
     return null;
 }
 
@@ -1134,6 +1144,9 @@ function correction_tune(request, response) {
     // -------------------------------------------------------------------------
     // Working Memory Tuning
     _wrk_mem_tune(request, response)
+
+    // Checkpoint Tuning
+    _checkpoint_tune(request, response)
 
     // -------------------------------------------------------------------------
     // Version Adaptation Tuning

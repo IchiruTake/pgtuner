@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PGTuner - PostgreSQL Performance Tuner</title>
+    <meta name="description" content="Optimize your PostgreSQL database performance with intelligent tuning recommendations and real-time monitoring">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.6s ease-out'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Custom slider styles */
+        .slider {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            border-radius: 5px;
+            background: #e5e7eb;
+            outline: none;
+            transition: background 0.3s;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            background: #2563eb;
+            transform: scale(1.1);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .tooltip {
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip.show {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Yes/No Toggle Styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ef4444;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #22c55e;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        .question-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .question-card:hover {
+            border-color: #e5e7eb;
+            transform: translateY(-2px);
+        }
+
+        .question-card.answered-yes {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+        }
+
+        .question-card.answered-no {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+<!-- Navigation Bar -->
+<nav class="glass-effect border-b border-white/20 sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4">
+        <div class="flex items-center justify-between">
+            <!-- Logo/Brand -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center shadow-lg">
+                    <i class="bi bi-database text-white text-lg"></i>
+                </div>
+                <span class="font-bold text-xl text-gray-800">PGTuner</span>
+            </div>
+
+            <!-- Desktop Navigation Links -->
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="#home" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-house"></i>
+                    <span>Home</span>
+                </a>
+                <a href="#tuner" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-gear"></i>
+                    <span>Tuner</span>
+                </a>
+                <a href="#devlog" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-journal-code"></i>
+                    <span>Devlog</span>
+                </a>
+                <a href="https://github.com/pgtuner/pgtuner" target="_blank" rel="noopener noreferrer" class="nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-github"></i>
+                    <span>GitHub</span>
+                </a>
+            </div>
+
+            <!-- Mobile Menu Button -->
+            <button id="mobile-menu-btn" class="md:hidden text-gray-700 hover:text-blue-600 transition-colors">
+                <i class="bi bi-list text-2xl"></i>
+            </button>
+        </div>
+
+        <!-- Mobile Navigation Menu -->
+        <div id="mobile-menu" class="md:hidden mt-4 pb-4 border-t border-white/20 hidden">
+            <div class="flex flex-col space-y-4 pt-4">
+                <a href="#home" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-house"></i>
+                    <span>Home</span>
+                </a>
+                <a href="#tuner" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-gear"></i>
+                    <span>Tuner</span>
+                </a>
+                <a href="#devlog" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-journal-code"></i>
+                    <span>Devlog</span>
+                </a>
+                <a href="https://github.com/pgtuner/pgtuner" target="_blank" rel="noopener noreferrer" class="mobile-nav-link flex items-center space-x-2 text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium">
+                    <i class="bi bi-github"></i>
+                    <span>GitHub</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<main>
+    <!-- Hero Section -->
+    <section id="home" class="container mx-auto px-4 py-16">
+        <div class="flex flex-col items-center text-center space-y-8 animate-fade-in">
+            <!-- PostgreSQL Logo Section -->
+            <div class="flex items-center space-x-4 animate-slide-up">
+                <div class="relative">
+                    <!-- PostgreSQL Logo -->
+                    <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center shadow-2xl">
+                        <i class="bi bi-database text-white text-3xl"></i>
+                    </div>
+                    <!-- Performance indicator -->
+                    <div class="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg">
+                        <i class="bi bi-lightning-charge text-yellow-800 text-sm"></i>
+                    </div>
+                </div>
+                <div class="text-left">
+                    <div class="text-lg text-gray-600 font-semibold">PostgreSQL</div>
+                    <div class="text-sm text-gray-500">Performance Tuner</div>
+                </div>
+            </div>
+
+            <!-- Main Title -->
+            <div class="space-y-6 animate-slide-up">
+                <h1 class="text-6xl md:text-7xl font-bold gradient-text">
+                    PGTuner
+                </h1>
+
+                <!-- Main Description -->
+                <p class="text-2xl md:text-3xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
+                    Optimize your PostgreSQL database performance with intelligent tuning recommendations and real-time monitoring
+                </p>
+
+                <!-- Secondary Description -->
+                <p class="text-lg text-gray-500 max-w-3xl mx-auto leading-relaxed">
+                    Automatically analyze your database configuration, identify bottlenecks, and get actionable insights to boost your PostgreSQL performance by up to 10x
+                </p>
+            </div>
+
+            <!-- Feature Highlights -->
+            <div class="flex flex-wrap justify-center gap-6 mt-12 animate-slide-up">
+                <div class="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg border border-white/30">
+                    <i class="bi bi-graph-up text-green-600 text-lg"></i>
+                    <span class="font-medium text-gray-700">Performance Analytics</span>
+                </div>
+                <div class="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg border border-white/30">
+                    <i class="bi bi-lightning-charge text-yellow-600 text-lg"></i>
+                    <span class="font-medium text-gray-700">Auto-Tuning</span>
+                </div>
+                <div class="flex items-center space-x-2 bg-white/70 backdrop-blur-sm rounded-full px-6 py-3 shadow-lg border border-white/30">
+                    <i class="bi bi-database text-blue-600 text-lg"></i>
+                    <span class="font-medium text-gray-700">Query Optimization</span>
+                </div>
+            </div>
+
+            <!-- CTA Button -->
+            <div class="mt-8">
+                <a href="#tuner" class="inline-flex items-center space-x-3 bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition-colors duration-200 font-semibold text-lg shadow-lg">
+                    <i class="bi bi-gear text-xl"></i>
+                    <span>Start Tuning Now</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- PostgreSQL Tuner Form Section -->
+    <section id="tuner" class="py-20 bg-white/80">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <!-- Section Header -->
+                <div class="text-center mb-12">
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mb-6">PostgreSQL Configuration Tuner</h2>
+                    <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                        Provide your system specifications and workload details to get personalized PostgreSQL configuration recommendations
+                    </p>
+                </div>
+
+                <!-- Tuning Form -->
+                <form id="tuning-form" class="bg-white rounded-3xl shadow-2xl p-8 md:p-12 border border-gray-200">
+                    <!-- Progress Indicator -->
+                    <div class="mb-8">
+                        <div class="flex items-center justify-between text-sm text-gray-500 mb-2">
+                            <span>Configuration Progress</span>
+                            <span id="progress-text">0% Complete</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: System Information -->
+                    <div class="form-step active" id="step-1">
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                                <i class="bi bi-server text-blue-600 mr-3"></i>
+                                System Information
+                            </h3>
+                            <p class="text-gray-600">Tell us about your server hardware and operating system</p>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-8">
+                            <!-- Operating System -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Operating System
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Select your server's operating system">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <select id="operating-system" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                    <option value="">Select Operating System</option>
+                                    <option value="linux" selected>Linux</option>
+                                    <option value="windows">Windows</option>
+                                    <option value="macos">macOS</option>
+                                    <option value="freebsd">FreeBSD</option>
+                                </select>
+                            </div>
+
+                            <!-- PostgreSQL Version -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    PostgreSQL Version
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Choose your PostgreSQL version for optimal compatibility">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <select id="postgresql-version" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                    <option value="">Select Version</option>
+                                    <option value="17" selected>PostgreSQL 17</option>
+                                    <option value="16">PostgreSQL 16</option>
+                                    <option value="15">PostgreSQL 15</option>
+                                    <option value="14">PostgreSQL 14</option>
+                                    <option value="13">PostgreSQL 13</option>
+                                </select>
+                            </div>
+
+                            <!-- CPU Cores -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Number of CPU Cores
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Total number of CPU cores available to PostgreSQL">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="cpu-cores" class="slider w-full" min="1" max="128" value="4" step="1">
+                                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                        <span>1 Core</span>
+                                        <span id="cpu-cores-value" class="font-semibold text-blue-600">4 Cores</span>
+                                        <span>128 Cores</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Total RAM -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Total RAM (GB)
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Total system memory available">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="total-ram" class="slider w-full" min="1" max="1024" value="16" step="1">
+                                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                        <span>1 GB</span>
+                                        <span id="total-ram-value" class="font-semibold text-blue-600">16 GB</span>
+                                        <span>1024 GB</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end mt-8">
+                            <button type="button" class="next-step bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+                                Next: Workload Details
+                                <i class="bi bi-arrow-right ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Workload Configuration -->
+                    <div class="form-step hidden" id="step-2">
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                                <i class="bi bi-activity text-blue-600 mr-3"></i>
+                                Workload Configuration
+                            </h3>
+                            <p class="text-gray-600">Describe your database workload and usage patterns</p>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-8">
+                            <!-- Workload Type -->
+                            <div class="form-group md:col-span-2">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Workload Type
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Choose the workload pattern that best matches your use case">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="grid md:grid-cols-3 gap-4">
+                                    <label class="workload-option cursor-pointer">
+                                        <input type="radio" name="workload-type" value="oltp" class="sr-only">
+                                        <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                                            <div class="flex items-center mb-2">
+                                                <i class="bi bi-lightning text-blue-600 text-xl mr-2"></i>
+                                                <h4 class="font-semibold">OLTP</h4>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Online Transaction Processing - High concurrency, short queries</p>
+                                        </div>
+                                    </label>
+                                    <label class="workload-option cursor-pointer">
+                                        <input type="radio" name="workload-type" value="olap" class="sr-only">
+                                        <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                                            <div class="flex items-center mb-2">
+                                                <i class="bi bi-graph-up text-green-600 text-xl mr-2"></i>
+                                                <h4 class="font-semibold">OLAP</h4>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Online Analytical Processing - Complex queries, data warehousing</p>
+                                        </div>
+                                    </label>
+                                    <label class="workload-option cursor-pointer">
+                                        <input type="radio" name="workload-type" value="htap" class="sr-only" checked>
+                                        <div class="border-2 border-blue-500 bg-blue-50 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                                            <div class="flex items-center mb-2">
+                                                <i class="bi bi-cpu text-purple-600 text-xl mr-2"></i>
+                                                <h4 class="font-semibold">HTAP</h4>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Hybrid Transactional/Analytical - Mixed workload</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Workload Scale -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Workload Scale
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Expected scale and size of your database workload">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <select id="workload-scale" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                    <option value="">Select Scale</option>
+                                    <option value="small">Small: Startup/Development</option>
+                                    <option value="medium">Medium: Growing Business</option>
+                                    <option value="large">Large: Enterprise</option>
+                                    <option value="bigtech" selected>BigTech: Multinational Scale</option>
+                                </select>
+                            </div>
+
+                            <!-- Connection Count -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Expected Concurrent Connections
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Maximum number of simultaneous database connections">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="max-connections" class="slider w-full" min="10" max="1000" value="100" step="10">
+                                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                        <span>10</span>
+                                        <span id="max-connections-value" class="font-semibold text-blue-600">100 Connections</span>
+                                        <span>1000</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="prev-step bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
+                                <i class="bi bi-arrow-left mr-2"></i>
+                                Previous
+                            </button>
+                            <button type="button" class="next-step bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+                                Next: Usage Patterns
+                                <i class="bi bi-arrow-right ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Usage Patterns (Yes/No Questions) -->
+                    <div class="form-step hidden" id="step-3">
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                                <i class="bi bi-question-circle text-blue-600 mr-3"></i>
+                                Usage Patterns & Requirements
+                            </h3>
+                            <p class="text-gray-600">Answer these questions to help us optimize your PostgreSQL configuration</p>
+                        </div>
+
+                        <div class="space-y-6">
+                            <!-- Performance Questions -->
+                            <div class="bg-blue-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-blue-800 mb-4 flex items-center">
+                                    <i class="bi bi-speedometer2 mr-2"></i>
+                                    Performance & Load
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 1 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you expect high concurrent read operations?</h5>
+                                                <p class="text-sm text-gray-600">Multiple users reading data simultaneously</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="high-concurrent-reads" data-question="high-concurrent-reads">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 2 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you have frequent write-heavy operations?</h5>
+                                                <p class="text-sm text-gray-600">Lots of INSERT, UPDATE, DELETE operations</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="write-heavy-operations" data-question="write-heavy-operations">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 3 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you run complex analytical queries?</h5>
+                                                <p class="text-sm text-gray-600">Long-running queries with JOINs, aggregations, etc.</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="complex-analytical-queries" data-question="complex-analytical-queries">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Storage Questions -->
+                            <div class="bg-green-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-green-800 mb-4 flex items-center">
+                                    <i class="bi bi-hdd mr-2"></i>
+                                    Storage & Data
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 4 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Are you using SSD storage?</h5>
+                                                <p class="text-sm text-gray-600">Solid State Drives vs traditional HDDs</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="ssd-storage" data-question="ssd-storage">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 5 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you have large tables (>1GB)?</h5>
+                                                <p class="text-sm text-gray-600">Tables with millions of rows or significant data size</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="large-tables" data-question="large-tables">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 6 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you need point-in-time recovery?</h5>
+                                                <p class="text-sm text-gray-600">Ability to restore database to any specific time</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="point-in-time-recovery" data-question="point-in-time-recovery">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Availability Questions -->
+                            <div class="bg-purple-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-purple-800 mb-4 flex items-center">
+                                    <i class="bi bi-shield-check mr-2"></i>
+                                    Availability & Reliability
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 7 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Is high availability critical?</h5>
+                                                <p class="text-sm text-gray-600">Database must be available 24/7 with minimal downtime</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="high-availability" data-question="high-availability">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 8 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you use database replication?</h5>
+                                                <p class="text-sm text-gray-600">Master-slave or streaming replication setup</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="database-replication" data-question="database-replication">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 9 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you need automatic failover?</h5>
+                                                <p class="text-sm text-gray-600">Automatic switching to backup server on failure</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="automatic-failover" data-question="automatic-failover">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Monitoring Questions -->
+                            <div class="bg-orange-50 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-orange-800 mb-4 flex items-center">
+                                    <i class="bi bi-graph-up mr-2"></i>
+                                    Monitoring & Maintenance
+                                </h4>
+                                <div class="space-y-4">
+                                    <!-- Question 10 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you use query performance monitoring?</h5>
+                                                <p class="text-sm text-gray-600">Tools like pg_stat_statements, monitoring slow queries</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="query-monitoring" data-question="query-monitoring">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 11 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you run automated maintenance tasks?</h5>
+                                                <p class="text-sm text-gray-600">Scheduled VACUUM, ANALYZE, index maintenance</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="automated-maintenance" data-question="automated-maintenance">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question 12 -->
+                                    <div class="question-card bg-white rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-800 mb-1">Do you need detailed logging?</h5>
+                                                <p class="text-sm text-gray-600">Comprehensive logs for debugging and auditing</p>
+                                            </div>
+                                            <div class="flex items-center space-x-3 ml-4">
+                                                <span class="text-sm text-gray-500">No</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" name="detailed-logging" data-question="detailed-logging">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                                <span class="text-sm text-gray-500">Yes</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="prev-step bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
+                                <i class="bi bi-arrow-left mr-2"></i>
+                                Previous
+                            </button>
+                            <button type="button" class="next-step bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+                                Next: Memory Settings
+                                <i class="bi bi-arrow-right ml-2"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Memory Configuration -->
+                    <div class="form-step hidden" id="step-4">
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                                <i class="bi bi-memory text-blue-600 mr-3"></i>
+                                Memory Configuration
+                            </h3>
+                            <p class="text-gray-600">Configure memory allocation and optimization settings</p>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-8">
+                            <!-- Optimization Mode -->
+                            <div class="form-group md:col-span-2">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Memory Optimization Mode
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Choose optimization strategy based on your priorities">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="grid md:grid-cols-3 gap-4">
+                                    <label class="optimization-option cursor-pointer">
+                                        <input type="radio" name="optimization-mode" value="performance" class="sr-only">
+                                        <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                                            <div class="flex items-center mb-2">
+                                                <i class="bi bi-speedometer2 text-red-600 text-xl mr-2"></i>
+                                                <h4 class="font-semibold">Performance</h4>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Maximum performance, higher memory usage</p>
+                                        </div>
+                                    </label>
+                                    <label class="optimization-option cursor-pointer">
+                                        <input type="radio" name="optimization-mode" value="balanced" class="sr-only" checked>
+                                        <div class="border-2 border-blue-500 bg-blue-50 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                                            <div class="flex items-center mb-2">
+                                                <i class="bi bi-balance text-blue-600 text-xl mr-2"></i>
+                                                <h4 class="font-semibold">Balanced</h4>
+                                            </div>
+                                            <p class="text-sm text-gray-600">General optimization, recommended for most cases</p>
+                                        </div>
+                                    </label>
+                                    <label class="optimization-option cursor-pointer">
+                                        <input type="radio" name="optimization-mode" value="conservative" class="sr-only">
+                                        <div class="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                                            <div class="flex items-center mb-2">
+                                                <i class="bi bi-shield-check text-green-600 text-xl mr-2"></i>
+                                                <h4 class="font-semibold">Conservative</h4>
+                                            </div>
+                                            <p class="text-sm text-gray-600">Safe settings, lower resource usage</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Kernel Memory -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Kernel Memory Usage (MB)
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Memory reserved for operating system kernel">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="kernel-memory" class="slider w-full" min="100" max="4096" value="924" step="50">
+                                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                        <span>100 MB</span>
+                                        <span id="kernel-memory-value" class="font-semibold text-blue-600">924 MB</span>
+                                        <span>4096 MB</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Monitoring Memory -->
+                            <div class="form-group">
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                                    Monitoring Memory Usage (MB)
+                                    <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Memory allocated for monitoring and logging tools">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </label>
+                                <div class="slider-container">
+                                    <input type="range" id="monitoring-memory" class="slider w-full" min="500" max="8192" value="4074" step="100">
+                                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                                        <span>500 MB</span>
+                                        <span id="monitoring-memory-value" class="font-semibold text-blue-600">4074 MB</span>
+                                        <span>8192 MB</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Usable RAM Display -->
+                            <div class="form-group md:col-span-2">
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-semibold text-blue-800">Available RAM for PostgreSQL</h4>
+                                            <p class="text-sm text-blue-600">Memory available after system and monitoring overhead</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <div id="usable-ram-gb" class="text-2xl font-bold text-blue-800">14.1 GB</div>
+                                            <div id="usable-ram-mb" class="text-sm text-blue-600">14,438 MB</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mt-8">
+                            <button type="button" class="prev-step bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors font-semibold">
+                                <i class="bi bi-arrow-left mr-2"></i>
+                                Previous
+                            </button>
+                            <button type="submit" class="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold">
+                                <i class="bi bi-gear mr-2"></i>
+                                Generate Configuration
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Results Section (Initially Hidden) -->
+                <div id="results-section" class="hidden mt-12">
+                    <div class="bg-white rounded-3xl shadow-2xl p-8 md:p-12 border border-gray-200">
+                        <div class="text-center mb-8">
+                            <h3 class="text-3xl font-bold text-gray-800 mb-4">
+                                <i class="bi bi-check-circle text-green-600 mr-3"></i>
+                                Configuration Generated Successfully!
+                            </h3>
+                            <p class="text-gray-600">Here are your optimized PostgreSQL settings based on your requirements</p>
+                        </div>
+
+                        <div id="configuration-output" class="space-y-6">
+                            <!-- Configuration will be populated here -->
+                        </div>
+
+                        <div class="flex justify-center space-x-4 mt-8">
+                            <button type="button" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+                                <i class="bi bi-download mr-2"></i>
+                                Download Config
+                            </button>
+                            <button type="button" class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-semibold">
+                                <i class="bi bi-clipboard mr-2"></i>
+                                Copy to Clipboard
+                            </button>
+                            <button type="button" id="new-configuration" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold">
+                                <i class="bi bi-plus-circle mr-2"></i>
+                                New Configuration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="container mx-auto px-4 py-16">
+        <div class="max-w-6xl mx-auto">
+            <div class="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-12 border border-white/30">
+                <div class="grid md:grid-cols-3 gap-8 text-center">
+                    <div class="space-y-4">
+                        <div class="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto">
+                            <i class="bi bi-database text-blue-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800">Database Analysis</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Deep dive into your PostgreSQL configuration and identify optimization opportunities with comprehensive analysis
+                        </p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="w-16 h-16 bg-yellow-100 rounded-xl flex items-center justify-center mx-auto">
+                            <i class="bi bi-lightning-charge text-yellow-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800">Smart Tuning</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            AI-powered recommendations tailored to your specific workload patterns and database requirements
+                        </p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mx-auto">
+                            <i class="bi bi-graph-up text-green-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800">Performance Boost</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Measure and track performance improvements with detailed metrics and real-time monitoring dashboards
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Devlog Section -->
+    <section id="devlog" class="py-20 bg-white/50">
+        <div class="container mx-auto px-4">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl md:text-5xl font-bold text-gray-800 mb-6">Development Log</h2>
+                    <p class="text-xl text-gray-600">Stay updated with the latest features, improvements, and releases</p>
+                </div>
+
+                <div class="space-y-8">
+                    <!-- Devlog Entry 1 -->
+                    <article class="devlog-entry bg-white rounded-2xl shadow-lg border border-gray-200 p-8 hover:shadow-xl transition-all duration-300 cursor-pointer" data-entry="1">
+                        <div class="flex items-start justify-between mb-6">
+                            <div class="flex items-center space-x-4">
+                                    <span class="flex items-center space-x-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-semibold">
+                                        <i class="bi bi-tag"></i>
+                                        <span>Release</span>
+                                    </span>
+                                <div class="flex items-center text-gray-500">
+                                    <i class="bi bi-calendar3 mr-2"></i>
+                                    <time datetime="2024-01-15">January 15, 2024</time>
+                                </div>
+                            </div>
+                            <i class="bi bi-chevron-down expand-icon text-gray-400 text-xl transition-transform duration-300"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4">PGTuner v2.1.0 Released</h3>
+                        <p class="text-gray-600 mb-6 leading-relaxed">
+                            Added support for PostgreSQL 16, improved query analysis algorithms, and introduced real-time monitoring dashboard with enhanced visualization capabilities.
+                        </p>
+
+                        <div class="flex flex-wrap gap-2 mt-4">
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#release</span>
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#postgresql-16</span>
+                            <span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg font-medium">#monitoring</span>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="text-center mt-12">
+                    <a href="https://github.com/pgtuner/pgtuner/releases" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center space-x-3 bg-blue-600 text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition-colors duration-200 font-semibold text-lg shadow-lg">
+                        <i class="bi bi-github text-xl"></i>
+                        <span>View All Releases on GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Tooltip -->
+<div id="tooltip" class="tooltip absolute bg-gray-800 text-white text-sm px-3 py-2 rounded-lg shadow-lg z-50 max-w-xs">
+    <div id="tooltip-content"></div>
+    <div class="tooltip-arrow absolute w-2 h-2 bg-gray-800 transform rotate-45"></div>
+</div>
+
+<!-- Footer -->
+<footer class="bg-gray-900 text-white py-12">
+    <div class="container mx-auto px-4">
+        <div class="text-center">
+            <div class="flex items-center justify-center space-x-3 mb-4">
+                <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+                    <i class="bi bi-database text-white"></i>
+                </div>
+                <span class="font-bold text-xl">PGTuner</span>
+            </div>
+            <p class="text-gray-400 mb-6">Optimize your PostgreSQL database performance</p>
+            <div class="flex justify-center space-x-6">
+                <a href="https://github.com/pgtuner/pgtuner" target="_blank" rel="noopener noreferrer"
+                   class="text-gray-400 hover:text-white transition-colors">
+                    <i class="bi bi-github text-2xl"></i>
+                </a>
+            </div>
+            <div class="mt-8 pt-8 border-t border-gray-800">
+                <p class="text-gray-500">&copy; 2024 PGTuner. Open source PostgreSQL performance tuning tool.</p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- JavaScript -->
+<script>
+    // Form state management
+    let currentStep = 1;
+    const totalSteps = 4; // Updated to 4 steps
+    const yesNoAnswers = {};
+
+    // Initialize form
+    document.addEventListener('DOMContentLoaded', function() {
+        updateProgress();
+        setupSliders();
+        setupTooltips();
+        setupFormNavigation();
+        setupWorkloadOptions();
+        setupYesNoQuestions();
+        calculateUsableRAM();
+    });
+
+    // Progress bar update
+    function updateProgress() {
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        document.getElementById('progress-bar').style.width = progress + '%';
+        document.getElementById('progress-text').textContent = Math.round(progress) + '% Complete';
+    }
+
+    // Setup Yes/No questions
+    function setupYesNoQuestions() {
+        document.querySelectorAll('input[data-question]').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const questionId = this.getAttribute('data-question');
+                const questionCard = this.closest('.question-card');
+
+                // Update answer state
+                yesNoAnswers[questionId] = this.checked;
+
+                // Update visual feedback
+                questionCard.classList.remove('answered-yes', 'answered-no');
+                if (this.checked) {
+                    questionCard.classList.add('answered-yes');
+                } else {
+                    questionCard.classList.add('answered-no');
+                }
+
+                // Update progress for step 3
+                if (currentStep === 3) {
+                    updateQuestionProgress();
+                }
+            });
+        });
+    }
+
+    // Update question progress
+    function updateQuestionProgress() {
+        const totalQuestions = document.querySelectorAll('input[data-question]').length;
+        const answeredQuestions = Object.keys(yesNoAnswers).length;
+        const questionProgress = (answeredQuestions / totalQuestions) * 100;
+
+        // You could add a separate progress indicator for questions here if desired
+    }
+
+    // Setup sliders with real-time updates
+    function setupSliders() {
+        const sliders = [
+            { id: 'cpu-cores', valueId: 'cpu-cores-value', suffix: ' Cores' },
+            { id: 'total-ram', valueId: 'total-ram-value', suffix: ' GB' },
+            { id: 'kernel-memory', valueId: 'kernel-memory-value', suffix: ' MB' },
+            { id: 'monitoring-memory', valueId: 'monitoring-memory-value', suffix: ' MB' },
+            { id: 'max-connections', valueId: 'max-connections-value', suffix: ' Connections' }
+        ];
+
+        sliders.forEach(slider => {
+            const element = document.getElementById(slider.id);
+            const valueElement = document.getElementById(slider.valueId);
+
+            if (element && valueElement) {
+                element.addEventListener('input', function() {
+                    valueElement.textContent = this.value + slider.suffix;
+                    if (slider.id === 'total-ram' || slider.id === 'kernel-memory' || slider.id === 'monitoring-memory') {
+                        calculateUsableRAM();
+                    }
+                });
+            }
+        });
+    }
+
+    // Calculate usable RAM
+    function calculateUsableRAM() {
+        const totalRAM = parseInt(document.getElementById('total-ram').value) * 1024; // Convert to MB
+        const kernelMemory = parseInt(document.getElementById('kernel-memory').value);
+        const monitoringMemory = parseInt(document.getElementById('monitoring-memory').value);
+
+        const usableRAM = totalRAM - kernelMemory - monitoringMemory;
+        const usableRAMGB = (usableRAM / 1024).toFixed(1);
+
+        document.getElementById('usable-ram-gb').textContent = usableRAMGB + ' GB';
+        document.getElementById('usable-ram-mb').textContent = usableRAM.toLocaleString() + ' MB';
+    }
+
+    // Setup tooltips
+    function setupTooltips() {
+        const tooltip = document.getElementById('tooltip');
+        const tooltipContent = document.getElementById('tooltip-content');
+
+        document.querySelectorAll('.tooltip-trigger').forEach(trigger => {
+            trigger.addEventListener('mouseenter', function(e) {
+                const tooltipText = this.getAttribute('data-tooltip');
+                tooltipContent.textContent = tooltipText;
+                tooltip.classList.add('show');
+
+                const rect = this.getBoundingClientRect();
+                tooltip.style.left = rect.left + 'px';
+                tooltip.style.top = (rect.top - tooltip.offsetHeight - 10) + 'px';
+            });
+
+            trigger.addEventListener('mouseleave', function() {
+                tooltip.classList.remove('show');
+            });
+        });
+    }
+
+    // Setup form navigation
+    function setupFormNavigation() {
+        document.querySelectorAll('.next-step').forEach(button => {
+            button.addEventListener('click', function() {
+                if (validateCurrentStep()) {
+                    nextStep();
+                }
+            });
+        });
+
+        document.querySelectorAll('.prev-step').forEach(button => {
+            button.addEventListener('click', function() {
+                prevStep();
+            });
+        });
+
+        document.getElementById('tuning-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            generateConfiguration();
+        });
+
+        document.getElementById('new-configuration').addEventListener('click', function() {
+            resetForm();
+        });
+    }
+
+    // Setup workload option selection
+    function setupWorkloadOptions() {
+        document.querySelectorAll('.workload-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.workload-option div').forEach(div => {
+                    div.classList.remove('border-blue-500', 'bg-blue-50');
+                    div.classList.add('border-gray-200');
+                });
+
+                this.querySelector('div').classList.remove('border-gray-200');
+                this.querySelector('div').classList.add('border-blue-500', 'bg-blue-50');
+                this.querySelector('input').checked = true;
+            });
+        });
+
+        document.querySelectorAll('.optimization-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.optimization-option div').forEach(div => {
+                    div.classList.remove('border-blue-500', 'bg-blue-50');
+                    div.classList.add('border-gray-200');
+                });
+
+                this.querySelector('div').classList.remove('border-gray-200');
+                this.querySelector('div').classList.add('border-blue-500', 'bg-blue-50');
+                this.querySelector('input').checked = true;
+            });
+        });
+    }
+
+    // Form navigation functions
+    function nextStep() {
+        if (currentStep < totalSteps) {
+            document.getElementById(`step-${currentStep}`).classList.add('hidden');
+            currentStep++;
+            document.getElementById(`step-${currentStep}`).classList.remove('hidden');
+            updateProgress();
+        }
+    }
+
+    function prevStep() {
+        if (currentStep > 1) {
+            document.getElementById(`step-${currentStep}`).classList.add('hidden');
+            currentStep--;
+            document.getElementById(`step-${currentStep}`).classList.remove('hidden');
+            updateProgress();
+        }
+    }
+
+    // Form validation
+    function validateCurrentStep() {
+        const currentStepElement = document.getElementById(`step-${currentStep}`);
+        const requiredFields = currentStepElement.querySelectorAll('select[required], input[required]');
+
+        for (let field of requiredFields) {
+            if (!field.value) {
+                field.focus();
+                alert('Please fill in all required fields.');
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Generate configuration
+    function generateConfiguration() {
+        // Collect form data
+        const formData = {
+            os: document.getElementById('operating-system').value,
+            pgVersion: document.getElementById('postgresql-version').value,
+            cpuCores: document.getElementById('cpu-cores').value,
+            totalRAM: document.getElementById('total-ram').value,
+            workloadType: document.querySelector('input[name="workload-type"]:checked').value,
+            workloadScale: document.getElementById('workload-scale').value,
+            maxConnections: document.getElementById('max-connections').value,
+            optimizationMode: document.querySelector('input[name="optimization-mode"]:checked').value,
+            kernelMemory: document.getElementById('kernel-memory').value,
+            monitoringMemory: document.getElementById('monitoring-memory').value,
+            yesNoAnswers: yesNoAnswers
+        };
+
+        // Generate configuration based on inputs
+        const config = generatePostgreSQLConfig(formData);
+
+        // Display results
+        displayConfiguration(config, formData);
+
+        // Show results section
+        document.getElementById('results-section').classList.remove('hidden');
+        document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Generate PostgreSQL configuration
+    function generatePostgreSQLConfig(data) {
+        const totalRAMGB = parseInt(data.totalRAM);
+        const totalRAMMB = totalRAMGB * 1024;
+        const usableRAM = totalRAMMB - parseInt(data.kernelMemory) - parseInt(data.monitoringMemory);
+
+        // Calculate shared_buffers (25% of usable RAM for balanced mode)
+        let sharedBuffersPercent = 0.25;
+        if (data.optimizationMode === 'performance') sharedBuffersPercent = 0.4;
+        if (data.optimizationMode === 'conservative') sharedBuffersPercent = 0.15;
+
+        const sharedBuffers = Math.floor(usableRAM * sharedBuffersPercent);
+
+        // Calculate effective_cache_size (75% of usable RAM)
+        const effectiveCacheSize = Math.floor(usableRAM * 0.75);
+
+        // Calculate work_mem based on connections and workload
+        const maxConnections = parseInt(data.maxConnections);
+        let workMemBase = Math.floor(usableRAM * 0.1 / maxConnections);
+        if (data.workloadType === 'olap') workMemBase *= 4;
+        if (data.workloadType === 'htap') workMemBase *= 2;
+
+        // Adjust based on yes/no answers
+        const answers = data.yesNoAnswers;
+
+        const config = {
+            'shared_buffers': `${Math.floor(sharedBuffers / 1024)}GB`,
+            'effective_cache_size': `${Math.floor(effectiveCacheSize / 1024)}GB`,
+            'work_mem': `${Math.max(4, workMemBase)}MB`,
+            'maintenance_work_mem': `${Math.min(2048, Math.floor(usableRAM * 0.05))}MB`,
+            'max_connections': data.maxConnections,
+            'checkpoint_completion_target': data.workloadType === 'oltp' ? '0.7' : '0.9',
+            'wal_buffers': `${Math.min(64, Math.max(1, Math.floor(sharedBuffers * 0.03)))}MB`,
+            'default_statistics_target': data.workloadType === 'olap' ? '500' : '100',
+            'random_page_cost': answers['ssd-storage'] ? '1.1' : '4.0',
+            'effective_io_concurrency': data.os === 'linux' && answers['ssd-storage'] ? '200' : '1'
+        };
+
+        // Add conditional settings based on yes/no answers
+        if (answers['high-concurrent-reads']) {
+            config['max_worker_processes'] = Math.min(parseInt(data.cpuCores), 8);
+            config['max_parallel_workers'] = Math.min(parseInt(data.cpuCores), 8);
+            config['max_parallel_workers_per_gather'] = Math.min(Math.floor(parseInt(data.cpuCores) / 2), 4);
+        }
+
+        if (answers['write-heavy-operations']) {
+            config['checkpoint_timeout'] = '15min';
+            config['max_wal_size'] = '4GB';
+            config['min_wal_size'] = '1GB';
+        }
+
+        if (answers['complex-analytical-queries']) {
+            config['work_mem'] = `${Math.max(parseInt(config['work_mem'].replace('MB', '')), 256)}MB`;
+            config['hash_mem_multiplier'] = '2.0';
+        }
+
+        if (answers['point-in-time-recovery']) {
+            config['wal_level'] = 'replica';
+            config['archive_mode'] = 'on';
+            config['archive_command'] = "'cp %p /path/to/archive/%f'";
+        }
+
+        if (answers['database-replication']) {
+            config['max_wal_senders'] = '10';
+            config['wal_keep_size'] = '1GB';
+        }
+
+        if (answers['query-monitoring']) {
+            config['shared_preload_libraries'] = "'pg_stat_statements'";
+            config['pg_stat_statements.track'] = 'all';
+            config['log_min_duration_statement'] = '1000';
+        }
+
+        if (answers['detailed-logging']) {
+            config['log_destination'] = "'csvlog'";
+            config['logging_collector'] = 'on';
+            config['log_statement'] = 'all';
+            config['log_duration'] = 'on';
+        }
+
+        return config;
+    }
+
+    // Display configuration
+    function displayConfiguration(config, formData) {
+        const output = document.getElementById('configuration-output');
+        output.innerHTML = '';
+
+        // Configuration Summary
+        const summarySection = document.createElement('div');
+        summarySection.className = 'bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6';
+        summarySection.innerHTML = `
+                <h4 class="text-lg font-semibold text-blue-800 mb-4">
+                    <i class="bi bi-info-circle mr-2"></i>Configuration Summary
+                </h4>
+                <div class="grid md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p><strong>System:</strong> ${formData.os} with PostgreSQL ${formData.pgVersion}</p>
+                        <p><strong>Hardware:</strong> ${formData.cpuCores} cores, ${formData.totalRAM}GB RAM</p>
+                        <p><strong>Workload:</strong> ${formData.workloadType.toUpperCase()} (${formData.workloadScale})</p>
+                    </div>
+                    <div>
+                        <p><strong>Optimization:</strong> ${formData.optimizationMode} mode</p>
+                        <p><strong>Connections:</strong> ${formData.maxConnections} max concurrent</p>
+                        <p><strong>Questions answered:</strong> ${Object.keys(formData.yesNoAnswers).length}/12</p>
+                    </div>
+                </div>
+            `;
+        output.appendChild(summarySection);
+
+        const configSection = document.createElement('div');
+        configSection.className = 'bg-gray-50 rounded-lg p-6';
+
+        const title = document.createElement('h4');
+        title.className = 'text-lg font-semibold text-gray-800 mb-4';
+        title.textContent = 'PostgreSQL Configuration (postgresql.conf)';
+        configSection.appendChild(title);
+
+        const configText = document.createElement('pre');
+        configText.className = 'bg-gray-800 text-green-400 p-4 rounded-lg overflow-x-auto text-sm font-mono';
+
+        let configContent = '# PostgreSQL Configuration Generated by PGTuner\n';
+        configContent += '# Generated on: ' + new Date().toLocaleString() + '\n';
+        configContent += '# Based on your system specifications and usage patterns\n\n';
+
+        for (const [key, value] of Object.entries(config)) {
+            configContent += `${key} = ${value}\n`;
+        }
+
+        configText.textContent = configContent;
+        configSection.appendChild(configText);
+
+        output.appendChild(configSection);
+
+        // Add performance tips based on answers
+        const tipsSection = document.createElement('div');
+        tipsSection.className = 'bg-green-50 border border-green-200 rounded-lg p-6';
+
+        let tips = [
+            'Always test configuration changes in a staging environment first',
+            'Monitor performance metrics after applying changes',
+            'Consider your specific workload patterns when fine-tuning',
+            'Regular maintenance tasks like VACUUM and ANALYZE are crucial'
+        ];
+
+        // Add specific tips based on yes/no answers
+        if (formData.yesNoAnswers['ssd-storage']) {
+            tips.push('SSD detected: Consider enabling synchronous_commit for better durability');
+        }
+        if (formData.yesNoAnswers['large-tables']) {
+            tips.push('Large tables detected: Consider partitioning for better performance');
+        }
+        if (formData.yesNoAnswers['high-availability']) {
+            tips.push('High availability required: Set up streaming replication and monitoring');
+        }
+
+        tipsSection.innerHTML = `
+                <h4 class="text-lg font-semibold text-green-800 mb-4">
+                    <i class="bi bi-lightbulb mr-2"></i>Performance Tips
+                </h4>
+                <ul class="text-green-700 space-y-2">
+                    ${tips.map(tip => `<li>• ${tip}</li>`).join('')}
+                </ul>
+            `;
+
+        output.appendChild(tipsSection);
+    }
+
+    // Reset form
+    function resetForm() {
+        currentStep = 1;
+        document.querySelectorAll('.form-step').forEach(step => step.classList.add('hidden'));
+        document.getElementById('step-1').classList.remove('hidden');
+        document.getElementById('results-section').classList.add('hidden');
+        document.getElementById('tuning-form').reset();
+
+        // Reset yes/no answers
+        Object.keys(yesNoAnswers).forEach(key => delete yesNoAnswers[key]);
+        document.querySelectorAll('.question-card').forEach(card => {
+            card.classList.remove('answered-yes', 'answered-no');
+        });
+
+        updateProgress();
+        calculateUsableRAM();
+    }
+
+    // Mobile menu functionality
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const mobileMenuIcon = mobileMenuBtn.querySelector('i');
+
+    mobileMenuBtn.addEventListener('click', function() {
+        mobileMenu.classList.toggle('hidden');
+
+        if (mobileMenu.classList.contains('hidden')) {
+            mobileMenuIcon.className = 'bi bi-list text-2xl';
+        } else {
+            mobileMenuIcon.className = 'bi bi-x text-2xl';
+        }
+    });
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+
+                if (!mobileMenu.classList.contains('hidden')) {
+                    mobileMenu.classList.add('hidden');
+                    mobileMenuIcon.className = 'bi bi-list text-2xl';
+                }
+            }
+        });
+    });
+
+    // Devlog entry expansion functionality
+    document.querySelectorAll('.devlog-entry').forEach(entry => {
+        entry.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' || e.target.closest('a')) {
+                return;
+            }
+
+            const details = this.querySelector('.devlog-details');
+            const icon = this.querySelector('.expand-icon');
+
+            if (details && icon) {
+                const isExpanded = !details.classList.contains('hidden');
+
+                document.querySelectorAll('.devlog-entry').forEach(otherEntry => {
+                    if (otherEntry !== this) {
+                        const otherDetails = otherEntry.querySelector('.devlog-details');
+                        const otherIcon = otherEntry.querySelector('.expand-icon');
+
+                        if (otherDetails && otherIcon) {
+                            otherDetails.classList.add('hidden');
+                            otherIcon.style.transform = 'rotate(0deg)';
+                            otherEntry.classList.remove('ring-2', 'ring-blue-200');
+                        }
+                    }
+                });
+
+                if (isExpanded) {
+                    details.classList.add('hidden');
+                    icon.style.transform = 'rotate(0deg)';
+                    this.classList.remove('ring-2', 'ring-blue-200');
+                } else {
+                    details.classList.remove('hidden');
+                    icon.style.transform = 'rotate(180deg)';
+                    this.classList.add('ring-2', 'ring-blue-200');
+
+                    setTimeout(() => {
+                        details.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest'
+                        });
+                    }, 100);
+                }
+            }
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,66 +1,74 @@
-<h5 class="mb-3">Logging</h5>
-<div class="row">
-  <!-- max_query_length_in_bytes -->
-  <div class="col-4 mb-3">
-    <div class="d-flex justify-content-between align-items-center">
-      <label class="form-label" for="keywords.max_query_length_in_bytes">
-        Max Query Length (Bytes) </label>
-      <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-         data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-         data-bs-content="The maximum allowed query length in bytes for logging."
-         title="Max Query Length (Bytes)">
-      </i>
+<div class="mb-6 border-t border-gray-300 pt-2">
+    <!-- Title 1: Logging -->
+    <div class="mb-6">
+        <h3 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+            <i class="bi bi-journal text-blue-600 mr-3"></i>
+            Logging
+        </h3>
     </div>
-    <div class="d-flex align-items-center">
-      <input class="form-range me-3" name="keywords.max_query_length_in_bytes"
-             id="keywords.max_query_length_in_bytes_range"
-             max="67108864" min="64" step="64" value="2048" type="range"
-             onchange="syncSliderToNumber('keywords.max_query_length_in_bytes')">
-      <input class="form-control w-auto" id="keywords.max_query_length_in_bytes"
-             max="67108864" min="64" step="64" value="2048" type="number"
-             onchange="syncNumberToSlider('keywords.max_query_length_in_bytes')">
+
+    <!-- Details 1: Logging -->
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- max_query_length_in_bytes -->
+        <div class="md:col-span-2">
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.max_query_length_in_bytes">
+                Max Query Length (Bytes)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The maximum allowed query length in bytes for logging." data-tooltip-header="Max Query Length (Bytes)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.max_query_length_in_bytes" id="keywords.max_query_length_in_bytes_range" max="67108864" min="64" step="64" value="2048" type="range" onchange="syncSliderToNumber('keywords.max_query_length_in_bytes')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>64 MiB</span>
+                        <span>67108864 MiB</span>
+                    </div>
+                </div>
+                <input id="keywords.max_query_length_in_bytes" max="67108864" min="64" step="64" value="2048" type="number" onchange="syncNumberToSlider('keywords.max_query_length_in_bytes')" class="w-28 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- max_runtime_ms_to_log_slow_query -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.max_runtime_ms_to_log_slow_query">
+                Max Runtime to Log Slow Query (ms)
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The maximum runtime in milliseconds to consider a query slow and log it." data-tooltip-header="Max Runtime to Log Slow Query (ms)">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.max_runtime_ms_to_log_slow_query" id="keywords.max_runtime_ms_to_log_slow_query_range" max="100000" min="20" step="10" value="2000" type="range" onchange="syncSliderToNumber('keywords.max_runtime_ms_to_log_slow_query')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>20 ms</span>
+                        <span>100000 ms</span>
+                    </div>
+                </div>
+                <input id="keywords.max_runtime_ms_to_log_slow_query" max="100000" min="20" step="10" value="2000" type="number" onchange="syncNumberToSlider('keywords.max_runtime_ms_to_log_slow_query')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
+        <!-- max_runtime_ratio_to_explain_slow_query -->
+        <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="keywords.max_runtime_ratio_to_explain_slow_query">
+                Max Runtime Ratio to Explain Slow Query
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="The ratio of runtime for automatically explaining slow queries." data-tooltip-header="Max Runtime Ratio to Explain Slow Query">
+                    <i class="bi bi-info-circle"></i>
+                </button>
+            </label>
+            <div class="flex items-start space-x-4">
+                <div class="flex-1 w-full">
+                    <input name="keywords.max_runtime_ratio_to_explain_slow_query" id="keywords.max_runtime_ratio_to_explain_slow_query_range" max="10.0" min="0.1" step="0.1" value="1.5" type="range" onchange="syncSliderToNumber('keywords.max_runtime_ratio_to_explain_slow_query')" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-sm text-gray-500 mt-2">
+                        <span>0.1</span>
+                        <span>10.0</span>
+                    </div>
+                </div>
+                <input id="keywords.max_runtime_ratio_to_explain_slow_query" max="10.0" min="0.1" step="0.1" value="1.5" type="number" onchange="syncNumberToSlider('keywords.max_runtime_ratio_to_explain_slow_query')" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+        </div>
+
     </div>
-  </div>
-  <!-- max_runtime_ms_to_log_slow_query -->
-  <div class="col-4 mb-3">
-    <div class="d-flex justify-content-between align-items-center">
-      <label class="form-label" for="keywords.max_runtime_ms_to_log_slow_query">
-        Max Runtime to Log Slow Query (ms) </label>
-      <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-         data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-         data-bs-content="The maximum runtime in milliseconds to consider a query slow and log it."
-         title="Max Runtime to Log Slow Query (ms)">
-      </i>
-    </div>
-    <div class="d-flex align-items-center">
-      <input class="form-range me-3" name="keywords.max_runtime_ms_to_log_slow_query"
-             id="keywords.max_runtime_ms_to_log_slow_query_range"
-             max="100000" min="20" step="10" value="2000" type="range"
-             onchange="syncSliderToNumber('keywords.max_runtime_ms_to_log_slow_query')">
-      <input class="form-control w-auto" id="keywords.max_runtime_ms_to_log_slow_query"
-             max="100000" min="20" step="10" value="2000" type="number"
-             onchange="syncNumberToSlider('keywords.max_runtime_ms_to_log_slow_query')">
-    </div>
-  </div>
-  <!-- max_runtime_ratio_to_explain_slow_query -->
-  <div class="col-4 mb-3">
-    <div class="d-flex justify-content-between align-items-center">
-      <label class="form-label" for="keywords.max_runtime_ratio_to_explain_slow_query">
-        Max Runtime Ratio to Explain Slow Query </label>
-      <i class="bi bi-info-circle text-primary" data-bs-toggle="popover"
-         data-bs-trigger="hover focus" role="button" tabindex="0" data-bs-placement="auto"
-         data-bs-content="The ratio of runtime for automatically explaining slow queries."
-         title="Max Runtime Ratio to Explain Slow Query">
-      </i>
-    </div>
-    <div class="d-flex align-items-center">
-      <input class="form-range me-3" name="keywords.max_runtime_ratio_to_explain_slow_query"
-             id="keywords.max_runtime_ratio_to_explain_slow_query_range"
-             max="10.0" min="0.1" step="0.1" value="1.5" type="range"
-             onchange="syncSliderToNumber('keywords.max_runtime_ratio_to_explain_slow_query')">
-      <input class="form-control w-auto" id="keywords.max_runtime_ratio_to_explain_slow_query"
-             max="10.0" min="0.1" step="0.1" value="1.5" type="number"
-             onchange="syncNumberToSlider('keywords.max_runtime_ratio_to_explain_slow_query')">
-    </div>
-  </div>
+
 </div>

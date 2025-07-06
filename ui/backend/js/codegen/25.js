@@ -12,6 +12,29 @@ function _get_text_element(element) {
     return '';
 }
 
+function _set_text_element(element, value) {
+    let el = document.getElementById(element)
+    // console.log(element, el);
+    if (el.type === 'range' || el.type === 'number') {
+        // parseFloat if element.step in string has dot, parseInt
+        el.value = el.step.includes('.') ? parseFloat(value) : parseInt(value);
+    } else if (el.type === 'text') {
+        el.value = value;
+    } else if (el.type === 'select-one') {
+        el.value = value;
+    }
+
+    // If the element has an sliding (or _range) element, update it as well
+    try {
+        const range_el = document.getElementById(`${element}_range`);
+        if (range_el) {
+            range_el.value = el.value;
+        }
+    } catch (e) {
+        console.warn(`Error updating range element for ${element}: ${e}`);
+    }
+}
+
 function _get_checkbox_element(element) {
     let el = document.getElementById(element)
     // console.log(element, el);
@@ -26,9 +49,9 @@ function _build_disk_from_backend(data) {
     return new PG_DISK_PERF(
         {
             'random_iops_spec': data.random_iops_spec,
-            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 1.0,
+            'random_iops_scale_factor': data.random_iops_scale_factor !== null ? data.random_iops_scale_factor : 0.9,
             'throughput_spec': data.throughput_spec,
-            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 1.0,
+            'throughput_scale_factor': data.throughput_scale_factor !== null ? data.throughput_scale_factor : 0.9,
             'disk_usable_size': data.disk_usable_size,
             'num_disks': data.num_disks !== null ? data.num_disks : 1,
             'per_scale_in_raid': data.per_scale_in_raid !== null ? data.per_scale_in_raid : 0.75
@@ -39,8 +62,11 @@ function _build_disk_from_backend(data) {
 function _build_disk_from_html(name = 'data_index_spec') {
     return {
         'random_iops_spec': _get_text_element(`${name}.random_iops`),
+        'random_iops_scale_factor': 0.95,
         'throughput_spec': _get_text_element(`${name}.throughput`),
+        'throughput_scale_factor': 0.95,
         'disk_usable_size': _get_text_element(`${name}.disk_usable_size_in_gib`) * Gi,
+        'num_disks': 1,
     };
 }
 
@@ -51,6 +77,7 @@ function _build_keywords_from_backend(data) {
             // Connection
             user_max_connections: data.user_max_connections,
             cpu_to_connection_scale_ratio: data.cpu_to_connection_scale_ratio,
+            cpu_to_parallel_scale_ratio: data.cpu_to_parallel_scale_ratio,
             superuser_reserved_connections_scale_ratio: data.superuser_reserved_connections_scale_ratio,
             single_memory_connection_overhead: data.single_memory_connection_overhead,
             memory_connection_to_dedicated_os_ratio: data.memory_connection_to_dedicated_os_ratio,
@@ -78,6 +105,7 @@ function _build_keywords_from_backend(data) {
             min_wal_size_ratio: data.min_wal_size_ratio,
             max_wal_size_ratio: data.max_wal_size_ratio,
             wal_keep_size_ratio: data.wal_keep_size_ratio,
+
             // Vacuum Tuning
             autovacuum_utilization_ratio: data.autovacuum_utilization_ratio,
             vacuum_safety_level: data.vacuum_safety_level
@@ -90,6 +118,7 @@ function _build_keywords_from_html(name = 'keywords') {
         // Connection or ./tuner/adv.conn.html
         'user_max_connections': _get_text_element(`${name}.user_max_connections`),
         'cpu_to_connection_scale_ratio': _get_text_element(`${name}.cpu_to_connection_scale_ratio`),
+        'cpu_to_parallel_scale_ratio': _get_text_element(`${name}.cpu_to_parallel_scale_ratio`),
         'superuser_reserved_connections_scale_ratio': _get_text_element(`${name}.superuser_reserved_connections_scale_ratio`),
         'single_memory_connection_overhead': _get_text_element(`${name}.single_memory_connection_overhead_in_kib`) * Ki,
         'memory_connection_to_dedicated_os_ratio': _get_text_element(`${name}.memory_connection_to_dedicated_os_ratio`),
@@ -105,7 +134,7 @@ function _build_keywords_from_html(name = 'keywords') {
         'max_normal_memory_usage': _get_text_element(`${name}.max_normal_memory_usage`),
         'mem_pool_tuning_ratio': _get_text_element(`${name}.mem_pool_tuning_ratio`),
         'hash_mem_usage_level': _get_text_element(`${name}.hash_mem_usage_level`),
-        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? true,
+        'mem_pool_parallel_estimate': _get_checkbox_element(`${name}.mem_pool_parallel_estimate`) ?? 'auto',
 
         // Logging behaviour (query size, and query runtime)
         'max_query_length_in_bytes': _get_text_element(`${name}.max_query_length_in_bytes`),
@@ -292,5 +321,41 @@ function web_optimize(request) {
         'content': content,
         'mem_report': mem_report,
         'response': response,
+    }
+}
+
+
+const _CalibrationProfile = {
+    [PG_WORKLOAD.OLAP]: {
+        'cpu_to_connection_scale_ratio': 2.5,
+        'hash_mem_usage_level': -2.0,
+        'shared_buffers_ratio': 0.33,
+        'max_work_buffer_ratio': 0.175,
+        'max_normal_memory_usage': 0.60,
+    },
+    [PG_WORKLOAD.HTAP]: {
+        'cpu_to_connection_scale_ratio': 4.0,
+        'hash_mem_usage_level': -2.5,
+        'shared_buffers_ratio': 0.30,
+        'max_work_buffer_ratio': 0.15,
+        'max_normal_memory_usage': 0.60,
+    },
+    [PG_WORKLOAD.VECTOR]: {
+        'shared_buffers_ratio': 0.33,
+        'temp_buffers_ratio': 0.125,
+    },
+    [PG_WORKLOAD.TSR_IOT]: {
+        'cpu_to_connection_scale_ratio': 6.0,
+        'temp_buffers_ratio': 0.20,
+        'hash_mem_usage_level': -4.0,
+    },
+}
+
+function _AutoCalibrateProfile() {
+    const workload_type = PG_WORKLOAD[_get_text_element(`workload_type`).toUpperCase()];
+    if (_CalibrationProfile.hasOwnProperty(workload_type)) {
+        for (const [key, value] of Object.entries(_CalibrationProfile[workload_type])) {
+            _set_text_element(`keywords.${key}`, value);
+        }
     }
 }

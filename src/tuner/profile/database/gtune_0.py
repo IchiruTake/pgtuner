@@ -59,8 +59,8 @@ def _GetNumConnections(
         total_connections: int = managed_cache['max_connections']
         reserved_connections = managed_cache['reserved_connections'] + managed_cache['superuser_reserved_connections']
     except (IndexError, ValueError, KeyError) as e:
-        _logger.error(
-            f"This function required the connection must be triggered and placed in the managed cache: See error \n{e}.")
+        _logger.error(f"This function required the connection must be triggered and placed in the "
+                      f"managed cache: See error \n{e}.")
         return -1
     if not use_reserved_connection:
         total_connections -= reserved_connections
@@ -188,7 +188,10 @@ def _GetMaxConns(options: PG_TUNE_USR_OPTIONS, group_cache: dict, min_user_conns
     _logger.debug(f'The max_connections variable is determined by the number of logical CPU count with the scale '
                   f'factor of {_upscale:.1f}x.')
     _minimum = max(min_user_conns, total_reserved_connections)
-    max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns) + total_reserved_connections
+    max_connections = cap_value(ceil(options.vcpu * _upscale), _minimum, max_user_conns)
+
+    # Rounded up by a factor of 5 for easy division
+    max_connections = realign_value(max_connections, page_size=5)[1] + total_reserved_connections
     _logger.debug(f'max_connections: {max_connections}')
     return max_connections
 
@@ -238,7 +241,6 @@ def _CalcWalBuffers(group_cache, global_cache, options: PG_TUNE_USR_OPTIONS, res
     wal_buffers = max(oldstyle_wal_buffers, fn(usable_ram_noswap / Gi) * Ki) # Measured in bytes
     return realign_value(cap_value(ceil(wal_buffers), minimum, maximum), page_size=DB_PAGE_SIZE)[options.align_index]
 
-
 # =============================================================================
 _DB_CONN_PROFILE = {
     # Connections
@@ -257,8 +259,8 @@ _DB_CONN_PROFILE = {
     'reserved_connections': {
         'instructions': {
             'mini': lambda group_cache, global_cache, options, response:
-            _GetReservedConns(options, 0, 3, superuser_mode=False,
-                                   base_reserved_connection=1),
+                _GetReservedConns(options, 0, 3, superuser_mode=False,
+                                  base_reserved_connection=1),
             'medium': lambda group_cache, global_cache, options, response:
             _GetReservedConns(options, 0, 5, superuser_mode=False,
                                    base_reserved_connection=2),
@@ -270,11 +272,11 @@ _DB_CONN_PROFILE = {
     },
     'max_connections': {
         'instructions': {
-            'mini': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 10, 30),
-            'medium': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 65),
-            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 20, 100),
-            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 25, 175),
-            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 30, 250),
+            'mini': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 5, 30),
+            'medium': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 5, 65),
+            'large': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 10, 100),
+            'mall': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 175),
+            'bigt': lambda group_cache, global_cache, options, response: _GetMaxConns(options, group_cache, 15, 250),
         },
         'default': 30,
         'comment': "The maximum number of client connections allowed. The default is 50. But by testing and some "
@@ -662,9 +664,11 @@ _DB_ASYNC_DISK_PROFILE = {
 }
 
 _DB_ASYNC_CPU_PROFILE = {
+    # This function is
     'max_worker_processes': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        cap_value(int(options.vcpu * 1.5) + 2, 4, 512),
+        cap_value(int(options.vcpu * (0.5 + options.tuning_kwargs.cpu_to_parallel_scale_ratio)) + 2,
+                  4, 512),
         'default': 8,
         'comment': 'Sets the maximum number of background processes that the system can support. The supported range '
                    'is [4, 512], with default to 1.5x + 2 of the logical CPU count (8 by official documentation). We do '
@@ -673,7 +677,8 @@ _DB_ASYNC_CPU_PROFILE = {
     },
     'max_parallel_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu * 1.25) + 1, 4, 512), group_cache['max_worker_processes']),
+        min(cap_value(int(options.vcpu * options.tuning_kwargs.cpu_to_parallel_scale_ratio) + 1,
+                      4, 512), group_cache['max_worker_processes']),
         'default': 8,
         'comment': 'Sets the maximum number of workers that the cluster can support for parallel operations. The '
                    'supported range is [4, 512], with default to 1.125x of the logical CPU count (8 by official '
@@ -682,9 +687,12 @@ _DB_ASYNC_CPU_PROFILE = {
                    'workers are retrieved from max_parallel_workers so higher value than max_worker_processes will '
                    'have no effect. See Ref [05] for more information.',
     },
+    # A too large number get diminish returns due to the algorithm, lock contention and memory usage.
+    # and peak performance for CPU-bound task is the number of vCPUs
     'max_parallel_workers_per_gather': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu / 2.5), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 3),
+                      2, 32), min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
         'comment': 'Sets the maximum number of workers that can be started by a single Gather or Gather Merge node. '
                    'Parallel workers are taken from the pool of processes established by max_worker_processes, limited '
@@ -694,10 +702,10 @@ _DB_ASYNC_CPU_PROFILE = {
                    '*Gather* queries to be run. The supported range is [2, 32], with default to 1/3x of the logical '
                    'CPU count (2 by official documentation).',
     },
-
     'max_parallel_maintenance_workers': {
         'tune_op': lambda group_cache, global_cache, options, response:
-        min(cap_value(int(options.vcpu / 2), 2, 32), group_cache['max_parallel_workers']),
+        min(cap_value(int(options.vcpu * (options.tuning_kwargs.cpu_to_parallel_scale_ratio - 0.25) / 2.5),
+                      2, 32), min(options.vcpu, group_cache['max_parallel_workers'])),
         'default': 2,
         'comment': "Sets the maximum number of parallel workers that can be started by a single utility command. "
                    "Currently, the parallel utility commands that support the use of parallel workers are CREATE INDEX "
@@ -710,7 +718,7 @@ _DB_ASYNC_CPU_PROFILE = {
                    "apply per worker process. Parallel utility commands treat the resource limit maintenance_work_mem "
                    "as a limit to be applied to the entire utility command, regardless of the number of parallel worker "
                    "processes. However, parallel utility commands may still consume substantially more CPU resources "
-                   "and I/O bandwidth. The supported range is [2, 16], with default to 1/2x of the logical CPU count "
+                   "and I/O bandwidth. The supported range is [2, 32], with default to 1/2x of the logical CPU count "
                    "(2 by official documentation). See Ref [05] for more information.",
     },
     'min_parallel_table_scan_size': {
