@@ -192,8 +192,26 @@ window.addEventListener('resize', function() {
     if (tooltip) tooltip.classList.remove('show');
 });
 
+// ----------------- Ram Bar Visualization -----------------
+// Ram Bar Visualization
+const colors = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f','#ff7f00','#cab2d6','#6a3d9a','#ffff99','#b15928']
+const ramUsageElement = [1, 4, 2, 2, 1]; // Example RAM usage in GiB
+function createRamBar(totalRam, ramUsageElements) {
+    const ramBar = document.getElementById('ram-bar');
+    let content = '';
+    let sum = 0;
+    for (let i = 0; i < ramUsageElements.length; i++) {
+        sum += ramUsageElements[i];
+        if (sum > totalRam) break;
+        const percentage = (ramUsageElements[i] / totalRam) * 100;
+        content += `<div class="ram-bar h-full transition-all duration-300" style="width: ${percentage}%; background-color: ${colors[i % colors.length]}"></div>`;
+    }
+    ramBar.innerHTML = content;
+}
+
 // ------------------- DOMContentLoaded-----------------
 // Initialize DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     setupTooltips();
+    createRamBar(10, ramUsageElement);
 });
