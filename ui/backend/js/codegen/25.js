@@ -1,3 +1,8 @@
+/*
+This file is the code snippet to make interaction with the HTML elements.
+
+*/
+
 function _get_text_element(element) {
     let el = document.getElementById(element)
     // console.log(element, el);
