@@ -58,7 +58,7 @@ function _EstimateMonitoringInUseMemory() {
     return monitoring_memory;
 }
 
-function ram_calculator() {
+function _RamCalculator() {
     let kernel_memory = _EstimateKernelInUseMemory()
     let monitoring_memory = _EstimateMonitoringInUseMemory()
     let total_ram = document.getElementById("total_ram_in_gib").value * 1024;
