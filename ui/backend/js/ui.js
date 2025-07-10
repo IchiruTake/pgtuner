@@ -214,4 +214,5 @@ function createRamBar(totalRam, ramUsageElements) {
 document.addEventListener('DOMContentLoaded', () => {
     setupTooltips();
     createRamBar(10, ramUsageElement);
+    _RamCalculator();
 });
