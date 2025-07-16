@@ -1331,6 +1331,51 @@ class PG_TUNE_USR_KWARGS {
     }
 }
 
+
+// ==================================================================================
+function _EstimateKernelInUseMemory(kernel_memory, operating_system) {
+    if (kernel_memory === -1) {
+        kernel_memory = 768;
+        if (operating_system === "containerd" || operating_system === "macos") {
+            kernel_memory = 64;
+        } else if (operating_system === "windows") {
+            kernel_memory = 2048;
+        } else if (operating_system === "PaaS") {
+            kernel_memory = 0;
+        }
+    }
+    return kernel_memory;
+}
+
+function _EstimateMonitoringInUseMemory(monitoring_memory, operating_system) {
+    if (monitoring_memory === -1) {
+        monitoring_memory = 256;
+        if (operating_system === "containerd") {
+            monitoring_memory = 64;
+        } else if (operating_system === "PaaS") {
+            monitoring_memory = 0;
+        }
+    }
+    return monitoring_memory;
+}
+
+function _RamCalculator() {
+    let kernel_memory = _EstimateKernelInUseMemory(
+        document.getElementById("base_kernel_memory_usage_in_mib").value * 1,
+        document.getElementById("operating_system").value
+    )
+    let monitoring_memory = _EstimateMonitoringInUseMemory(
+        document.getElementById("base_monitoring_memory_usage_in_mib").value * 1,
+        document.getElementById("operating_system").value
+    )
+    let total_ram = document.getElementById("total_ram_in_gib").value * 1024;
+    const final_ram = total_ram - kernel_memory - monitoring_memory;
+    const postgresql_ram_available_block = document.getElementById("total_usable_ram");
+    postgresql_ram_available_block.value = final_ram;
+    return final_ram;
+}
+
+
 // PG_TUNE_USR_OPTIONS defines the advanced tuning options.
 class PG_TUNE_USR_OPTIONS {
     constructor(options = {}) {
@@ -1384,37 +1429,21 @@ class PG_TUNE_USR_OPTIONS {
         }
 
         // Set base monitoring memory usage if not provided.
-        if (this.base_monitoring_memory_usage === -1) {
-            this.base_monitoring_memory_usage = 256 * Mi;
-            if (this.operating_system === 'containerd') {
-                this.base_monitoring_memory_usage = 64 * Mi;
-            } else if (this.operating_system === 'PaaS') {
-                this.base_monitoring_memory_usage = 0;
-            }
-            console.debug(`Set the monitoring memory usage to ${bytesize_to_hr(this.base_monitoring_memory_usage, false, ' ')}`);
-        }
+        this.base_monitoring_memory_usage = _EstimateMonitoringInUseMemory(
+            this.base_monitoring_memory_usage > 0 ? this.base_monitoring_memory_usage / Mi : this.base_monitoring_memory_usage,
+            this.operating_system) * Mi;
 
-        // Set base kernel memory usage if not provided.
-        if (this.base_kernel_memory_usage === -1) {
-            this.base_kernel_memory_usage = 768 * Mi;
-            if (this.operating_system === 'containerd') {
-                this.base_kernel_memory_usage = 64 * Mi;
-            } else if (this.operating_system === 'windows') {
-                this.base_kernel_memory_usage = 2 * Gi;
-            } else if (this.operating_system === 'PaaS') {
-                this.base_kernel_memory_usage = 0;
-            }
-            console.debug(`Set the kernel memory usage to ${bytesize_to_hr(this.base_kernel_memory_usage, false, ' ')}`);
-        }
+        this.base_kernel_memory_usage = _EstimateKernelInUseMemory(
+        	this.base_kernel_memory_usage > 0 ? this.base_kernel_memory_usage / Mi : this.base_kernel_memory_usage,
+        	this.operating_system) * Mi;
 
         // Check minimal usable RAM.
         this.usable_ram = this.total_ram - this.base_kernel_memory_usage - this.base_monitoring_memory_usage
+        console.debug(`The usable RAM is ${bytesize_to_hr(this.usable_ram)}`);
         if (this.usable_ram < 4 * Gi) {
             const _sign = (this.usable_ram >= 0) ? '+' : '-';
             const _msg = `The usable RAM ${_sign}${bytesize_to_hr(this.usable_ram, false, ' ')} is less than 4 GiB. Tuning may not be accurate.`;
             console.warn(_msg);
-        } else {
-            console.debug(`The usable RAM is ${bytesize_to_hr(this.usable_ram)}`);
         }
 
         // Adjust database size based on data volume.

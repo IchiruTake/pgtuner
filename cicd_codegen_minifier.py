@@ -139,25 +139,25 @@ def migrate(src_path: str, tgt_path: str,
 
 
 if __name__ == "__main__":
+    gh_page_dirpath = './docs'  # The empty target deployment folder (GitHub Pages) so that a full refresh is OK
+    gh_page_js_dirpath = f'{gh_page_dirpath}/js'
+    if os.path.exists(gh_page_dirpath):
+        print(f'GitHub pages directory {gh_page_dirpath} already exists, removing it ...')
+        shutil.rmtree(gh_page_dirpath)
+    t_src = perf_counter()
+
+    # ----------------------------------------------------------------------------------------------------
+    # [00]: Copy assets to deployed environment
+    print('Copying assets to the deployed environment ...')
+    assets_directory = 'ui/assets'
+    shutil.copytree(assets_directory, gh_page_dirpath)
+    os.makedirs(gh_page_js_dirpath, exist_ok=True) # In case assets/js is already present
+
+    # ----------------------------------------------------------------------------------------------------
+    # [01]: Javascript-backend CodeGen Merging and Minification
     codegen_input_dirpath = 'ui/backend/js/codegen'
     codegen_output_filepath = 'ui/backend/js/codegen.js'
-    dev_path = 'ui/dev'
-    prod_path = 'ui/prod'
-    jinja_src_path = 'ui/dev/jinja2'
-    jinja_tgt_path = 'ui/frontend'
-    jinja_files = [
-        ('tuner.html', 'tuner.html'),
-        ('error/index.html', 'error.html'),
-        ('changelog.html', 'changelog.html'),
 
-    ]
-    jinja_cleanup_file = True   # Set to False to keep up the intermediate files
-
-    jinja_js_min_dirpath = f'{jinja_tgt_path}/js'
-    jinja_js_min_files = ['ui/backend/js/pgtuner.js', 'ui/backend/js/ui.js']
-
-    # --------------------------------------------------
-    # [01]: Javascript-backend CodeGen Merging and Minification
     t = perf_counter()
     print('Start merging the codegen files ...')
     if not os.path.exists(codegen_input_dirpath):
@@ -182,69 +182,83 @@ if __name__ == "__main__":
     cleanup_js_local(codegen_output_filepath)
     print(f'Codegen merging and minification completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
-    # --------------------------------------------------
-    # [02]: Assets Minification
+    # ----------------------------------------------------------------------------------------------------
+    # [02]: Assets Minification (Minify HTML and JS first, then compile the Jinja2 template later
+    dev_path = 'ui/dev'
+    prod_path = 'ui/prod'
+
     t = perf_counter()
     print('-' * 40)
     print(f'Start minifying the assets from {dev_path} to {prod_path} ...')
     migrate(dev_path, prod_path, old_html_treatment='remove', old_js_treatment='remove')
     print(f'Assets minification from {dev_path} to {prod_path} completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
-    t = perf_counter()
-    print('-' * 40)
-    print(f'Start minifying the assets from {dev_path} to {dev_path} ...')
-    migrate(dev_path, dev_path, old_html_treatment='skip', old_js_treatment='skip')
-    print(f'Assets minification from {dev_path} to {dev_path} completed in {1e3 * (perf_counter() - t):.2f} ms.')
+    # t = perf_counter()
+    # print('-' * 40)
+    # print(f'Start minifying the assets from {dev_path} to {dev_path} ...')
+    # migrate(dev_path, dev_path, old_html_treatment='skip', old_js_treatment='skip')
+    # print(f'Assets minification from {dev_path} to {dev_path} completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
-    # --------------------------------------------------
-    # [03]: Compile the Jinja2 template
+    # ----------------------------------------------------------------------------------------------------
+    # [03]: Compile the Jinja2 template of HTML files
+    jinja_src_path = f'{prod_path}/jinja2'
+    jinja_files = [
+        ('tuner.min.html', ('tuner.html', 'index.html')),
+        ('changelog.min.html', ('changelog.html', )),
+    ]
+    jinja_cleanup_file = True   # Set to False to keep up the intermediate files
+
     t = perf_counter()
     print('-' * 40)
-    print(f'Start compiling the Jinja2 template from {jinja_src_path} to {jinja_tgt_path} ...')
-    os.makedirs(jinja_tgt_path, exist_ok=True)
-    env = Environment(loader=FileSystemLoader(jinja_src_path), cache_size=400 * 10)
-    for jinja_src_file, jinja_tgt_file in jinja_files:
-        template = env.get_template(jinja_src_file)
-        jinja_tgt_filepath = os.path.join(jinja_tgt_path, jinja_tgt_file)
+    print(f'Start compiling the Jinja2 template from {jinja_src_path} to {gh_page_dirpath} ...')
+    env = Environment(loader=FileSystemLoader(jinja_src_path), cache_size=4096)
+    for jinja_src_file, jinja_tgt_files in jinja_files:
+        template = env.get_template(jinja_src_file)     # No need to join here
+        jinja_tgt_filepath = os.path.join(gh_page_dirpath, jinja_tgt_files[0])
         if os.path.exists(jinja_tgt_filepath):
             os.remove(jinja_tgt_filepath)
+        # Render and Minify the HTML template
         with open(jinja_tgt_filepath, "w", encoding='utf8') as fh:
             fh.write(template.render())
-        jinja_tgt_min_filepath = cleanup_html_local(jinja_tgt_filepath)
+        jinja_tgt_min_filepath = cleanup_html_local(jinja_tgt_filepath) # The result file (files[0]) always has .min.html extension
         if jinja_cleanup_file:
             # Remove the intermediate file
             os.remove(jinja_tgt_filepath) # Cleanup to free up some space
-        if jinja_tgt_file.startswith('tuner'):
-            # Copy it to index.html (tuner.min.html -> index.html)
-            shutil.copy(jinja_tgt_min_filepath, os.path.join(jinja_tgt_path, 'index.html'))
-        print('Compiled Jinja2 template:', jinja_src_file, '->', jinja_tgt_file, '->', jinja_tgt_min_filepath)
+
+        for jinja_tgt_file in jinja_tgt_files[1:]:
+            # Doing the file copy to avoid cache trashing
+            replica_file_path = os.path.join(gh_page_dirpath, jinja_tgt_file)
+            if os.path.exists(replica_file_path):
+                os.remove(replica_file_path)
+            shutil.copy(jinja_tgt_min_filepath, replica_file_path)
+
+        print(f'Compiled Jinja2 template: {jinja_src_file}')
     print(f'Jinja2 template compilation completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
-    # -------------------------------------------------
+    # ----------------------------------------------------------------------------------------------------
     # [04]: Minify and Copy the JS to frontend
+    jinja_js_min_files = ['ui/backend/js/pgtuner.js', 'ui/backend/js/ui.js']
     t = perf_counter()
     print('-' * 40)
-    print(f'Start minifying the JS files to {jinja_js_min_dirpath}')
+    print(f'Start minifying the JS files for deployment ...')
     jinja_js_min_files.append(codegen_output_filepath)
-    os.makedirs(jinja_js_min_dirpath, exist_ok=True)
     for jinja_js_file in jinja_js_min_files:
         jinja_js_min_filepath = cleanup_js_local(jinja_js_file)
         # Move the file to the target directory
         if jinja_js_min_filepath is None:
             print('Error: Failed to minify the JS file:', jinja_js_file)
             continue
-        shutil.copy(jinja_js_min_filepath, jinja_js_min_dirpath)
+        shutil.copy(jinja_js_min_filepath, gh_page_js_dirpath)
         if os.path.exists(jinja_js_min_filepath):
             os.remove(jinja_js_min_filepath)
-        print(f'The JS backend file {jinja_js_file} has been minified and copied to: {jinja_js_min_dirpath}')
+        print(f'The JS backend file {jinja_js_file} has been minified and copied to: {gh_page_js_dirpath}')
+    print(f'JS files minification and copying completed in {1e3 * (perf_counter() - t):.2f} ms.')
 
-    # -------------------------------------------------
-    # [05]: Deploy to GitHub pages
-    t = perf_counter()
+    # ----------------------------------------------------------------------------------------------------
+    # [05]: Cleanup leftover files
     print('-' * 40)
-    print(f'Start deploying to GitHub pages ...')
-    gh_page_dirpath = './docs'
-    if os.path.exists(gh_page_dirpath):
-        shutil.rmtree(gh_page_dirpath)
-    shutil.copytree(jinja_tgt_path, gh_page_dirpath)
-    print(f'GitHub pages deployment completed in {1e3 * (perf_counter() - t):.2f} ms.')
+    print('Removing intermediate path to free up some space ...')
+    shutil.rmtree(prod_path)
+
+    print('-' * 40)
+    print(f'GitHub pages deployment completed in {1e3 * (perf_counter() - t_src):.2f} ms.')
