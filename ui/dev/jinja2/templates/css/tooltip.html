@@ -1,0 +1,91 @@
+<style>
+    /* Tooltip styles */
+    .tooltip {
+        visibility: hidden;
+        opacity: 0;
+        position: fixed;
+        z-index: 1000;
+        transition: opacity 0.2s, visibility 0.2s;
+        pointer-events: none;
+    }
+
+    .tooltip.show {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    /* Custom styles for the range input */
+    @layer components {
+        input[type="range"] {
+            @apply h-2 w-full bg-gray-200 rounded-lg appearance-none cursor-pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            @apply appearance-none w-6 h-6 bg-blue-600 rounded-full hover:bg-blue-700;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            @apply w-6 h-6 bg-blue-600 border-0 rounded-full hover:bg-blue-700;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            @apply bg-blue-600 h-2 rounded-lg;
+        }
+
+        input[type="range"]::-moz-range-track {
+            @apply bg-blue-600 h-2 rounded-lg;
+        }
+    }
+    /* Yes/No Toggle Styles */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ef4444;
+        transition: .4s;
+        border-radius: 34px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+        background-color: #22c55e;
+    }
+
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+</style>
+<!-- Tooltips -->
+<div id="tooltip" class="tooltip absolute bg-slate-50 text-black text-base px-3 py-2 rounded-lg shadow-lg z-50 max-w-xs border border-gray-500">
+    <div id="tooltip-header" class="font-bold mb-1"></div>
+    <div class="border-t border-gray-20">
+        <div id="tooltip-content" class="font-normal"></div>
+    </div>
+</div>
