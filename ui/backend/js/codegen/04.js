@@ -66,23 +66,6 @@ function _EstimateMonitoringInUseMemory(monitoring_memory, operating_system) {
     return monitoring_memory;
 }
 
-function _RamCalculator() {
-    let kernel_memory = _EstimateKernelInUseMemory(
-        document.getElementById("base_kernel_memory_usage_in_mib").value * 1,
-        document.getElementById("operating_system").value
-    )
-    let monitoring_memory = _EstimateMonitoringInUseMemory(
-        document.getElementById("base_monitoring_memory_usage_in_mib").value * 1,
-        document.getElementById("operating_system").value
-    )
-    let total_ram = document.getElementById("total_ram_in_gib").value * 1024;
-    const final_ram = total_ram - kernel_memory - monitoring_memory;
-    const postgresql_ram_available_block = document.getElementById("total_usable_ram");
-    postgresql_ram_available_block.value = final_ram;
-    return final_ram;
-}
-
-
 // PG_TUNE_USR_OPTIONS defines the advanced tuning options.
 class PG_TUNE_USR_OPTIONS {
     constructor(options = {}) {
