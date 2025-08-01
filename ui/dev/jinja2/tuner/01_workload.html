@@ -18,7 +18,7 @@
                     <i class="bi bi-info-circle"></i>
                 </button>
             </label>
-            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="operating_system" name="operating_system" onchange="ram_calculator()">
+            <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" id="operating_system" name="operating_system" onchange="_RamCalculator()">
                 <option selected value="linux">Linux</option>
                 <option value="windows">Windows</option>
                 <option value="macos">MacOS</option>
@@ -27,7 +27,7 @@
             </select>
         </div>
 
-        <!-- Postgre Version -->
+        <!-- PostgreSQL Version -->
         <div>
             <label class="block text-sm font-semibold text-gray-700 mb-3" for="pgsql_version">
                 PostgreSQL Version
@@ -75,13 +75,13 @@
             </label>
             <div class="flex items-start space-x-4">
                 <div class="flex-1 w-full">
-                    <input name="total_ram_in_gib" id="total_ram_in_gib_range" max="1024" min="2" step="0.25" value="16" type="range" onchange="syncSliderToNumber('total_ram_in_gib'); ram_calculator()" class="w-full accent-blue-600">
+                    <input name="total_ram_in_gib" id="total_ram_in_gib_range" max="1024" min="2" step="0.25" value="16" type="range" onchange="syncSliderToNumber('total_ram_in_gib'); _RamCalculator()" class="w-full accent-blue-600">
                     <div class="flex justify-between text-sm text-gray-500 mt-2">
                         <span>2 GiB</span>
                         <span>1024 GiB</span>
                     </div>
                 </div>
-                <input id="total_ram_in_gib" max="1024" min="2" step="0.25" value="16" type="number" onchange="syncNumberToSlider('total_ram_in_gib'); ram_calculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+                <input id="total_ram_in_gib" max="1024" min="2" step="0.25" value="16" type="number" onchange="syncNumberToSlider('total_ram_in_gib'); _RamCalculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
 
         </div>
@@ -168,21 +168,21 @@
 
         <!-- Kernel Memory Usage (MiB) -->
         <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-3"  for="base_kernel_memory_usage_in_mib">
+            <label class="block text-sm font-semibold text-gray-700 mb-3" for="base_kernel_memory_usage_in_mib">
                 Kernel Memory Usage (MiB)
-                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Input your basic kernel memory usage in MiB, and probably other applications. Default to -1 meant that the pgtuner would self estimate based on the OS. Ensure your RAM capacity must be larger than this option and monitoring memory usage." data-tooltip-header="Kernel Memory Usage">
+                <button type="button" class="tooltip-trigger ml-2 text-blue-500 hover:text-blue-700" data-tooltip="Input your basic kernel memory usage in MiB, and probably other applications. Default to -1 meant that the PGTuner would self estimate based on the OS. Ensure your RAM capacity must be larger than this option and monitoring memory usage." data-tooltip-header="Kernel Memory Usage">
                     <i class="bi bi-info-circle"></i>
                 </button>
             </label>
             <div class="flex items-start space-x-4">
                 <div class="flex-1 w-full">
-                    <input name="base_kernel_memory_usage_in_mib" id="base_kernel_memory_usage_in_mib_range" max="8192" min="-1" step="1" value="-1" type="range" onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib'); ram_calculator()" class="w-full accent-blue-600">
+                    <input name="base_kernel_memory_usage_in_mib" id="base_kernel_memory_usage_in_mib_range" max="8192" min="-1" step="1" value="-1" type="range" onchange="syncSliderToNumber('base_kernel_memory_usage_in_mib'); _RamCalculator()" class="w-full accent-blue-600">
                     <div class="flex justify-between text-sm text-gray-500 mt-2">
                         <span>1 MiB</span>
                         <span>8192 MiB</span>
                     </div>
                 </div>
-                <input id="base_kernel_memory_usage_in_mib" max="8192" min="-1" step="1" value="-1" type="number" onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib'); ram_calculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+                <input id="base_kernel_memory_usage_in_mib" max="8192" min="-1" step="1" value="-1" type="number" onchange="syncNumberToSlider('base_kernel_memory_usage_in_mib'); _RamCalculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
         </div>
 
@@ -196,13 +196,13 @@
             </label>
             <div class="flex items-start space-x-4">
                 <div class="flex-1 w-full">
-                    <input name="base_monitoring_memory_usage_in_mib" id="base_monitoring_memory_usage_in_mib_range" max="4096" min="-1" step="1" value="-1" type="range" onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); ram_calculator()" class="w-full accent-blue-600">
+                    <input name="base_monitoring_memory_usage_in_mib" id="base_monitoring_memory_usage_in_mib_range" max="4096" min="-1" step="1" value="-1" type="range" onchange="syncSliderToNumber('base_monitoring_memory_usage_in_mib'); _RamCalculator()" class="w-full accent-blue-600">
                     <div class="flex justify-between text-sm text-gray-500 mt-2">
                         <span>1 MiB</span>
                         <span>4096 MiB</span>
                     </div>
                 </div>
-                <input id="base_monitoring_memory_usage_in_mib" max="4096" min="-1" step="1" value="-1" type="number" onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); ram_calculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+                <input id="base_monitoring_memory_usage_in_mib" max="4096" min="-1" step="1" value="-1" type="number" onchange="syncNumberToSlider('base_monitoring_memory_usage_in_mib'); _RamCalculator()" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
             </div>
         </div>
 
@@ -219,7 +219,7 @@
                 <p class="text-sm text-blue-600">Usable memory after excluding system and monitoring overhead</p>
             </div>
             <div class="items-left">
-                <input id="total_usable_ram" disabled readonly value="???" onload="ram_calculator()" class="text-2xl font-bold w-26">
+                <input id="total_usable_ram" disabled readonly value="???" onload="_RamCalculator()" class="text-2xl font-bold w-26">
                 <span class="text-2xl text-blue-600">MiB</span>
             </div>
         </div>

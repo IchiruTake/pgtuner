@@ -1,0 +1,119 @@
+<div class="max-w-7xl mx-auto">
+    <!-- Header Section -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-6 border-gray-300 border">
+        <div class="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+            <!-- Generate Configuration Button -->
+            <button class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 font-medium transition-colors w-full sm:w-auto" id="generate-config" type="button" onclick="submitConfiguration()">
+                <i class="bi bi-gear-fill"></i>
+                Generate Configuration
+            </button>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                <button class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" type="button" onclick="copyToClipboard()">
+                    <i class="bi bi-clipboard"></i>
+                    <span class="text-sm">Copy to Clipboard</span>
+                </button>
+                <button class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors" type="button" onclick="downloadResponse()">
+                    <i class="bi bi-download"></i>
+                    <span class="text-sm">Download Report</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 ">
+        <!-- Memory Result Section -->
+        <div class="xl:col-span-1">
+            <div class="bg-white rounded-lg shadow-sm p-4 h-full border-gray-300 border">
+                <h3 class="text-lg font-semibold mb-3 text-gray-800 ">Memory Result</h3>
+                <textarea id="response-box" style="font-size: 13px" rows="32" readonly placeholder="Response will appear here..." class="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto w-full"></textarea>
+            </div>
+        </div>
+
+        <!-- Response Section -->
+        <div class="xl:col-span-1">
+            <div class="bg-white rounded-lg shadow-sm p-4 h-full border-gray-300 border">
+                <h3 class="text-lg font-semibold mb-3 text-gray-800">Response</h3>
+                <textarea id="mem-report" style="font-size: 13px" rows="32" readonly placeholder="Response will appear here..." class="bg-gray-50 rounded-lg p-4 h-64 w-full"></textarea>
+            </div>
+        </div>
+
+        <!-- RAM Column Section -->
+<!--        <div class="xl:col-span-1">-->
+<!--            <div class="bg-white rounded-lg shadow-sm p-4 h-full border-gray-300 border">-->
+<!--                <h3 class="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">-->
+<!--                    <i class="bi bi-memory"></i>-->
+<!--                    RAM Monitor-->
+<!--                </h3>-->
+<!--                <div class="space-y-4">-->
+<!--                    &lt;!&ndash; RAM Usage Bar &ndash;&gt;-->
+<!--                    <div class="bg-gray-200 rounded-full h-4 overflow-hidden">-->
+<!--                        <div class="bg-blue-500 h-full rounded-full transition-all duration-300" style="width: 65%"></div>-->
+<!--                    </div>-->
+<!--                    <div class="text-sm text-gray-600">-->
+<!--                        <div class="flex justify-between">-->
+<!--                            <span>Used: 6.5 GB</span>-->
+<!--                            <span>Total: 10 GB</span>-->
+<!--                        </div>-->
+<!--                    </div>-->
+
+<!--                    &lt;!&ndash; Additional RAM Info &ndash;&gt;-->
+<!--                    <div class="space-y-2 text-sm">-->
+<!--                        <div class="flex justify-between py-2 border-b border-gray-100">-->
+<!--                            <span class="text-gray-600">Available:</span>-->
+<!--                            <span class="font-medium">3.5 GB</span>-->
+<!--                        </div>-->
+<!--                        <div class="flex justify-between py-2 border-b border-gray-100">-->
+<!--                            <span class="text-gray-600">Usage:</span>-->
+<!--                            <span class="font-medium text-blue-600">65%</span>-->
+<!--                        </div>-->
+<!--                        <div class="flex justify-between py-2">-->
+<!--                            <span class="text-gray-600">Status:</span>-->
+<!--                            <span class="font-medium text-green-600">Normal</span>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--        </div>-->
+
+    </div>
+    <!-- RAM Visualize -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mt-6 border-gray-300 border">
+        <h3 class="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">
+            <i class="bi bi-memory"></i>
+            RAM Visualization
+        </h3>
+        <div class="space-y-4">
+            <!-- RAM Usage Bar -->
+            <div class="bg-gray-200 rounded-full h-4 overflow-hidden flex" id="ram-bar">
+
+            </div>
+            <div class="text-sm text-gray-600">
+                <div class="flex justify-between">
+                    <span id="used-ram">Used: 6.5 GB</span>
+                    <span id="total-ram">Total: 10 GB</span>
+                </div>
+            </div>
+
+            <!-- Additional RAM Info -->
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between py-2 border-b border-gray-100">
+                    <span class="text-gray-600">Available:</span>
+                    <span class="font-medium">3.5 GB</span>
+                </div>
+                <div class="flex justify-between py-2 border-b border-gray-100">
+                    <span class="text-gray-600">Usage:</span>
+                    <span class="font-medium text-blue-600">65%</span>
+                </div>
+                <div class="flex justify-between py-2">
+                    <span class="text-gray-600">Status:</span>
+                    <span class="font-medium text-green-600">Normal</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+</div>
